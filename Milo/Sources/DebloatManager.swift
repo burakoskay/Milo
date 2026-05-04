@@ -163,19 +163,26 @@ class DebloatManager: ObservableObject {
 
     /// Revert all applied tweaks across all categories
     func revertAllTweaks() {
-        let allApplied = categories.flatMap { $0.tweaks }.filter { tweakStates[$0.id] == true }
-        guard !allApplied.isEmpty else {
+        // We use .lazy to avoid multiple intermediate collection allocations during the
+        // traversal. We convert to Array once at the end to pass a stable, thread-safe
+        // snapshot to the background execution block.
+        let appliedArray = Array(categories
+            .lazy
+            .flatMap { $0.tweaks }
+            .filter { self.tweakStates[$0.id] == true })
+
+        guard !appliedArray.isEmpty else {
             toast("No tweaks to revert")
             return
         }
 
-        for tweak in allApplied {
+        for tweak in appliedArray {
             busyTweaks.insert(tweak.id)
         }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             var reverted = 0
-            for tweak in allApplied {
+            for tweak in appliedArray {
                 let ok = self?.execute(tweak.revertCommands, privileged: tweak.revertPrivileged) ?? false
                 let newState = tweak.detect()
                 DispatchQueue.main.async {
@@ -185,7 +192,7 @@ class DebloatManager: ObservableObject {
                 if ok && !newState { reverted += 1 }
             }
             DispatchQueue.main.async {
-                self?.toast("Reverted \(reverted)/\(allApplied.count) total tweaks")
+                self?.toast("Reverted \(reverted)/\(appliedArray.count) total tweaks")
             }
         }
     }
