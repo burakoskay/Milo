@@ -29,7 +29,7 @@ class ProcessManager: ObservableObject {
         guard !label.isEmpty, label.count <= 256 else { return nil }
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-_"))
         guard label.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
-            print("Milo: rejected unsafe launchd label: \(label)")
+            MiloLog.warning("Rejected unsafe launchd label: \(label)", category: .process)
             return nil
         }
         return label
@@ -40,7 +40,7 @@ class ProcessManager: ObservableObject {
         let standardized = URL(fileURLWithPath: expanded).standardizedFileURL.path
         guard standardized.hasSuffix(".plist") else { return nil }
         guard !standardized.unicodeScalars.contains(where: { CharacterSet.newlines.contains($0) || CharacterSet.controlCharacters.contains($0) }) else {
-            print("Milo: rejected unsafe plist path: \(path)")
+            MiloLog.warning("Rejected unsafe plist path: \(path)", category: .process)
             return nil
         }
         let userLaunchAgents = FileManager.default.homeDirectoryForCurrentUser
@@ -54,7 +54,7 @@ class ProcessManager: ObservableObject {
             userLaunchAgents
         ]
         guard allowedRoots.contains(where: { standardized == $0 || standardized.hasPrefix($0 + "/") }) else {
-            print("Milo: rejected plist outside LaunchAgents/LaunchDaemons: \(path)")
+            MiloLog.warning("Rejected plist outside LaunchAgents/LaunchDaemons: \(path)", category: .process)
             return nil
         }
         return standardized
@@ -71,14 +71,6 @@ class ProcessManager: ObservableObject {
             ? CommandRunner.runPrivileged("/bin/launchctl", arguments: arguments)
             : CommandRunner.run("/bin/launchctl", arguments: arguments)
         return result.succeeded
-    }
-
-    private func runMilo(signal: String, pattern: String, privileged: Bool = false) -> Bool {
-        let args = [signal, "-i", "-f", NSRegularExpression.escapedPattern(for: pattern)]
-        let result = privileged
-            ? CommandRunner.runPrivileged("/usr/bin/pkill", arguments: args)
-            : CommandRunner.run("/usr/bin/pkill", arguments: args)
-        return result.succeeded || result.status == 1
     }
 
     private func runKill(signal: String, pid: Int32, privileged: Bool = false) -> Bool {
@@ -215,15 +207,80 @@ class ProcessManager: ObservableObject {
         signature?.launchdDomain == .system || signature?.launchdDomain == .both
     }
 
-    private func bestMatchingTarget(in searchable: String, targets: [String]) -> MatchCandidate? {
-        let lowerSearchable = searchable.lowercased()
+    private func bestStaticTargetMatch(executablePath: String, executableName: String, command: String, targets: [String]) -> String? {
+        let pathTokens = staticPathTokens(from: executablePath)
+        let commandName = commandExecutableName(from: command)
+
         return targets.compactMap { target -> MatchCandidate? in
-            guard let range = lowerSearchable.range(of: target.lowercased()) else { return nil }
-            return MatchCandidate(target: target, location: lowerSearchable.distance(from: lowerSearchable.startIndex, to: range.lowerBound))
+            let normalizedTarget = normalizedStaticToken(target)
+            guard !normalizedTarget.isEmpty else { return nil }
+
+            if normalizedStaticToken(executableName) == normalizedTarget {
+                return MatchCandidate(target: target, location: 0)
+            }
+
+            if pathTokens.contains(normalizedTarget) {
+                return MatchCandidate(target: target, location: 1)
+            }
+
+            if commandName.map(normalizedStaticToken(_:)) == normalizedTarget {
+                return MatchCandidate(target: target, location: 2)
+            }
+
+            return nil
         }.sorted { lhs, rhs in
             if lhs.location != rhs.location { return lhs.location < rhs.location }
             return lhs.target.count > rhs.target.count
-        }.first
+        }.first?.target
+    }
+
+    private func staticPathTokens(from path: String) -> Set<String> {
+        let standardized = URL(fileURLWithPath: path).standardizedFileURL
+        let components = standardized.pathComponents
+
+        return Set(components.flatMap { component -> [String] in
+            let normalizedComponent = normalizedStaticToken(component)
+            guard !normalizedComponent.isEmpty else { return [] }
+
+            var tokens = [normalizedComponent]
+            if normalizedComponent.hasSuffix(".app") {
+                tokens.append(String(normalizedComponent.dropLast(4)))
+            }
+            if normalizedComponent.hasSuffix(".appex") {
+                tokens.append(String(normalizedComponent.dropLast(6)))
+            }
+            return tokens
+        })
+    }
+
+    private func commandExecutableName(from command: String) -> String? {
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let quotedName = quotedCommandExecutableName(from: trimmed) {
+            return quotedName
+        }
+
+        let firstToken = trimmed
+            .split(whereSeparator: { $0 == " " || $0 == "\t" })
+            .first
+            .map(String.init)
+        guard let firstToken, !firstToken.isEmpty else { return nil }
+        return executableName(from: firstToken)
+    }
+
+    private func quotedCommandExecutableName(from command: String) -> String? {
+        guard let first = command.first, first == "\"" || first == "'" else { return nil }
+        let delimiter = first
+        let remainder = command.dropFirst()
+        guard let closingIndex = remainder.firstIndex(of: delimiter) else { return nil }
+        let executable = String(remainder[..<closingIndex])
+        guard !executable.isEmpty else { return nil }
+        return executableName(from: executable)
+    }
+
+    private func normalizedStaticToken(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     private func heuristicTarget(executableName: String, command: String) -> TargetDetection? {
@@ -274,31 +331,11 @@ class ProcessManager: ObservableObject {
         let bloatTargets = ProcessData.bloatTargets
         let intelligenceTargets = ProcessData.intelligenceTargets
 
-        if let exactBloat = bestMatchingTarget(in: executablePath, targets: bloatTargets) {
-            return TargetDetection(kind: .bloat, name: exactBloat.target, telemetryMatch: nil)
+        if let exactBloat = bestStaticTargetMatch(executablePath: executablePath, executableName: executableName, command: command, targets: bloatTargets) {
+            return TargetDetection(kind: .bloat, name: exactBloat, telemetryMatch: nil)
         }
-        if let exactIntel = bestMatchingTarget(in: executablePath, targets: intelligenceTargets) {
-            return TargetDetection(kind: .intelligence, name: exactIntel.target, telemetryMatch: nil)
-        }
-
-        let bestCommandBloat = bestMatchingTarget(in: command, targets: bloatTargets)
-        let bestCommandIntel = bestMatchingTarget(in: command, targets: intelligenceTargets)
-
-        if let bloat = bestCommandBloat, let intel = bestCommandIntel {
-            if bloat.location != intel.location {
-                return bloat.location < intel.location
-                    ? TargetDetection(kind: .bloat, name: bloat.target, telemetryMatch: nil)
-                    : TargetDetection(kind: .intelligence, name: intel.target, telemetryMatch: nil)
-            }
-            return bloat.target.count >= intel.target.count
-                ? TargetDetection(kind: .bloat, name: bloat.target, telemetryMatch: nil)
-                : TargetDetection(kind: .intelligence, name: intel.target, telemetryMatch: nil)
-        }
-        if let bloat = bestCommandBloat {
-            return TargetDetection(kind: .bloat, name: bloat.target, telemetryMatch: nil)
-        }
-        if let intel = bestCommandIntel {
-            return TargetDetection(kind: .intelligence, name: intel.target, telemetryMatch: nil)
+        if let exactIntel = bestStaticTargetMatch(executablePath: executablePath, executableName: executableName, command: command, targets: intelligenceTargets) {
+            return TargetDetection(kind: .intelligence, name: exactIntel, telemetryMatch: nil)
         }
 
         if let heuristic = heuristicTarget(executableName: executableName, command: command) {
@@ -430,7 +467,7 @@ class ProcessManager: ObservableObject {
             return (bloatItems, intelItems)
 
         } catch {
-            print("Failed to scan processes: \(error)")
+            MiloLog.error("Failed to scan processes with resources: \(error.localizedDescription)", category: .process)
         }
 
         return ([], [])
@@ -476,7 +513,7 @@ class ProcessManager: ObservableObject {
                 return (Array(foundBloat).sorted(), Array(foundIntel).sorted())
             }
         } catch {
-            print("Failed to scan processes: \(error)")
+            MiloLog.error("Failed to scan processes: \(error.localizedDescription)", category: .process)
         }
 
         return ([], [])
@@ -503,8 +540,8 @@ class ProcessManager: ObservableObject {
     }
 
     /// Kill detected process items using their recorded match metadata. Signed
-    /// cloud rules are terminated by exact PID or launchd label; they never fall
-    /// back to broad substring `pkill`.
+    /// cloud rules are terminated by exact PID or launchd label; broad
+    /// command-line substring termination is intentionally forbidden.
     func killProcessesGracefully(items: [ProcessItem], completion: @escaping ([KillResult]) -> Void) {
         let names = items.map(\.name)
         guard !names.isEmpty else {
@@ -515,7 +552,7 @@ class ProcessManager: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [self] in
             var results: [KillResult] = []
 
-            var regularProcesses: [String] = []
+            var regularProcesses: [ProcessItem] = []
             var launchdProcesses: [(name: String, info: LaunchdProcess)] = []
             var telemetryProcesses: [ProcessItem] = []
 
@@ -525,18 +562,14 @@ class ProcessManager: ObservableObject {
                 } else if let info = getLaunchdInfo(item.name) {
                     launchdProcesses.append((item.name, info))
                 } else {
-                    regularProcesses.append(item.name)
+                    regularProcesses.append(item)
                 }
             }
 
-            if !regularProcesses.isEmpty {
-                for name in regularProcesses {
-                    _ = runMilo(signal: "-15", pattern: name)
-                }
-                Thread.sleep(forTimeInterval: 2.0)
-                for name in regularProcesses {
-                    _ = runMilo(signal: "-9", pattern: name)
-                }
+            let regularPIDResults = regularProcesses.map { item in
+                let pids = exactPIDs(forStaticTarget: item)
+                let success = terminatePIDs(pids, privileged: false)
+                return (item: item, success: success)
             }
 
             for (name, info) in launchdProcesses {
@@ -562,9 +595,16 @@ class ProcessManager: ObservableObject {
             let (remainingBloat, remainingIntel) = scanForRunningTargets()
             let remaining = Set((remainingBloat + remainingIntel).map { $0.lowercased() })
 
-            for name in regularProcesses {
-                let stillRunning = remaining.contains(name.lowercased())
-                results.append(KillResult(name: name, success: !stillRunning, isLaunchdManaged: false, requiresSIPDisabled: false))
+            for result in regularPIDResults {
+                let stillRunning = remaining.contains(result.item.name.lowercased())
+                results.append(
+                    KillResult(
+                        name: result.item.name,
+                        success: result.success && !stillRunning,
+                        isLaunchdManaged: false,
+                        requiresSIPDisabled: false
+                    )
+                )
             }
 
             DispatchQueue.main.async {
@@ -607,6 +647,53 @@ class ProcessManager: ObservableObject {
         }
 
         return accepted
+    }
+
+    private func exactPIDs(forStaticTarget item: ProcessItem) -> Set<Int32> {
+        if !item.matchedPIDs.isEmpty {
+            return item.matchedPIDs
+        }
+        return exactPIDs(matchingStaticTargetName: item.name)
+    }
+
+    private func exactPIDs(matchingStaticTargetName targetName: String) -> Set<Int32> {
+        let task = Process()
+        task.launchPath = "/bin/ps"
+        task.arguments = ["-Axo", "pid,comm,command"]
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+
+        do {
+            try task.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let output = String(data: data, encoding: .utf8) else { return [] }
+
+            return Set(output.components(separatedBy: .newlines).compactMap { line -> Int32? in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty else { return nil }
+
+                let parts = trimmed.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
+                guard parts.count == 3,
+                      let pid = Int32(String(parts[0])) else {
+                    return nil
+                }
+
+                let executable = resolvedExecutablePath(pid: pid, fallback: String(parts[1]))
+                let command = String(parts[2])
+                let executableName = executableName(from: executable)
+                return bestStaticTargetMatch(
+                    executablePath: executable,
+                    executableName: executableName,
+                    command: command,
+                    targets: [targetName]
+                ) == nil ? nil : pid
+            })
+        } catch {
+            MiloLog.error("Failed to enumerate exact process identifiers for \(targetName): \(error.localizedDescription)", category: .process)
+            return []
+        }
     }
 
     private func runTelemetryLaunchctl(label: String?, domain: TelemetryLaunchdDomain?, disableFirst: Bool) -> Bool {
@@ -673,7 +760,7 @@ class ProcessManager: ObservableObject {
             _ = runLaunchctl(["bootout", "gui/\(uid)/\(safeRelated)"])
         }
 
-        _ = runMilo(signal: "-9", pattern: info.processName, privileged: admin)
+        _ = terminatePIDs(exactPIDs(matchingStaticTargetName: info.processName), privileged: admin)
 
         return accepted && (!info.isSystem || !SIPChecker.isSIPEnabled())
     }
@@ -756,7 +843,7 @@ class ProcessManager: ObservableObject {
         }
 
         guard let finalLabel = label, !finalLabel.isEmpty else {
-            print("Failed to determine label for plist at: \(path)")
+            MiloLog.warning("Failed to determine label for plist at: \(path)", category: .process)
             return
         }
 
@@ -766,11 +853,11 @@ class ProcessManager: ObservableObject {
         let domain = isDaemon ? "system" : "gui/\(uid)"
 
         guard let safeLabel = Self.validateLaunchdLabel(finalLabel) else {
-            print("Milo: rejected toggle for unsafe label: \(finalLabel)")
+            MiloLog.warning("Rejected toggle for unsafe label: \(finalLabel)", category: .process)
             return
         }
         guard let safePath = Self.validatePlistPath(path) else {
-            print("Milo: rejected toggle for unsafe path: \(path)")
+            MiloLog.warning("Rejected toggle for unsafe path: \(path)", category: .process)
             return
         }
         let requiresAdmin = Self.requiresAdministrator(forPlistPath: safePath)
@@ -783,7 +870,7 @@ class ProcessManager: ObservableObject {
             _ = runLaunchctl(["bootout", "\(domain)/\(safeLabel)"], privileged: requiresAdmin)
             _ = runLaunchctl(["disable", "\(domain)/\(safeLabel)"], privileged: requiresAdmin)
             _ = runLaunchctl(["unload", "-w", safePath], privileged: requiresAdmin)
-            _ = runMilo(signal: "-9", pattern: safeLabel, privileged: requiresAdmin)
+            _ = terminatePIDs(exactPIDs(matchingStaticTargetName: safeLabel), privileged: requiresAdmin)
         }
     }
 
@@ -796,7 +883,7 @@ class ProcessManager: ObservableObject {
                 return plist["Label"] as? String
             }
         } catch {
-            print("Error reading or parsing plist at \(path): \(error)")
+            MiloLog.error("Error reading or parsing plist at \(path): \(error.localizedDescription)", category: .process)
         }
         return nil
     }

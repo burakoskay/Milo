@@ -10,8 +10,48 @@ struct CommandResult {
 }
 
 enum CommandRunner {
+    private static let allowedExecutables: Set<String> = [
+        "/bin/echo",
+        "/bin/kill",
+        "/bin/launchctl",
+        "/bin/ps",
+        "/usr/bin/defaults",
+        "/usr/bin/dscacheutil",
+        "/usr/bin/killall",
+        "/usr/bin/mdutil",
+        "/usr/bin/pluginkit",
+        "/usr/bin/sudo",
+        "/usr/bin/xattr",
+        "/usr/sbin/purge"
+    ]
+
+    private final class LockedData {
+        private let lock = NSLock()
+        private var storage = Data()
+
+        func append(_ data: Data) {
+            lock.lock()
+            storage.append(data)
+            lock.unlock()
+        }
+
+        func snapshot() -> Data {
+            lock.lock()
+            let data = storage
+            lock.unlock()
+            return data
+        }
+    }
+
     @discardableResult
     static func run(_ executable: String, arguments: [String] = []) -> CommandResult {
+        guard isAllowedExecutable(executable),
+              arguments.allSatisfy(isSafeArgument(_:)),
+              isAllowedInvocation(executable: executable, arguments: arguments) else {
+            MiloLog.error("Rejected command outside allowlist: \(executable)", category: .security)
+            return CommandResult(status: 126, stdout: "", stderr: "Executable or argument rejected by Milo command policy")
+        }
+
         let task = Process()
         task.executableURL = URL(fileURLWithPath: executable)
         task.arguments = arguments
@@ -20,23 +60,49 @@ enum CommandRunner {
         let stderrPipe = Pipe()
         task.standardOutput = stdoutPipe
         task.standardError = stderrPipe
+        let stdoutData = LockedData()
+        let stderrData = LockedData()
+        attachDrainHandler(to: stdoutPipe, output: stdoutData)
+        attachDrainHandler(to: stderrPipe, output: stderrData)
 
         do {
             try task.run()
             task.waitUntilExit()
+            stdoutPipe.fileHandleForReading.readabilityHandler = nil
+            stderrPipe.fileHandleForReading.readabilityHandler = nil
+            stdoutData.append(stdoutPipe.fileHandleForReading.readDataToEndOfFile())
+            stderrData.append(stderrPipe.fileHandleForReading.readDataToEndOfFile())
 
             return CommandResult(
                 status: task.terminationStatus,
-                stdout: String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "",
-                stderr: String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                stdout: String(data: stdoutData.snapshot(), encoding: .utf8) ?? "",
+                stderr: String(data: stderrData.snapshot(), encoding: .utf8) ?? ""
             )
         } catch {
+            stdoutPipe.fileHandleForReading.readabilityHandler = nil
+            stderrPipe.fileHandleForReading.readabilityHandler = nil
             return CommandResult(status: 1, stdout: "", stderr: error.localizedDescription)
+        }
+    }
+
+    private static func attachDrainHandler(to pipe: Pipe, output: LockedData) {
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else {
+                handle.readabilityHandler = nil
+                return
+            }
+            output.append(data)
         }
     }
 
     @discardableResult
     static func runPrivileged(_ executable: String, arguments: [String] = []) -> CommandResult {
+        guard isAllowedExecutable(executable), arguments.allSatisfy(isSafeArgument(_:)) else {
+            MiloLog.error("Rejected privileged command outside allowlist: \(executable)", category: .security)
+            return CommandResult(status: 126, stdout: "", stderr: "Privileged executable or argument rejected by Milo command policy")
+        }
+
         if PrivilegeManager.shared.isConfigured {
             let sudoResult = run("/usr/bin/sudo", arguments: ["-n", executable] + arguments)
             if sudoResult.succeeded { return sudoResult }
@@ -79,5 +145,23 @@ enum CommandRunner {
             .replacingOccurrences(of: "\"", with: "\\\"")
             .replacingOccurrences(of: "\n", with: "\\n")
             .replacingOccurrences(of: "\r", with: "\\r")
+    }
+
+    private static func isAllowedExecutable(_ executable: String) -> Bool {
+        guard executable.hasPrefix("/") else { return false }
+        let standardized = URL(fileURLWithPath: executable).standardizedFileURL.path
+        return standardized == executable && allowedExecutables.contains(executable)
+    }
+
+    private static func isAllowedInvocation(executable: String, arguments: [String]) -> Bool {
+        guard executable == "/usr/bin/sudo" else { return true }
+        guard arguments.count >= 2, arguments[0] == "-n" else { return false }
+        return isAllowedExecutable(arguments[1])
+    }
+
+    private static func isSafeArgument(_ argument: String) -> Bool {
+        !argument.unicodeScalars.contains { scalar in
+            scalar.value == 0 || CharacterSet.newlines.contains(scalar)
+        }
     }
 }

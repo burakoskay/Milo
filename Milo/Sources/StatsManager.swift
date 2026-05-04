@@ -75,7 +75,7 @@ class StatsManager {
         do {
             try FileManager.default.createDirectory(at: miloDir, withIntermediateDirectories: true)
         } catch {
-            print("Milo StatsManager: Failed to create directory. \\(error.localizedDescription)")
+            MiloLog.error("StatsManager failed to create directory: \(error.localizedDescription)", category: .persistence)
             return nil
         }
         return miloDir.appendingPathComponent("stats.json")
@@ -93,7 +93,7 @@ class StatsManager {
             let decoded = try JSONDecoder().decode(AggregatedStats.self, from: data)
             self.stats = decoded
         } catch {
-            print("Milo StatsManager: Failed to load or decode stats. Starting fresh. \(error.localizedDescription)")
+            MiloLog.warning("StatsManager failed to load or decode stats; starting fresh: \(error.localizedDescription)", category: .persistence)
         }
     }
 
@@ -119,7 +119,7 @@ class StatsManager {
             let encoded = try JSONEncoder().encode(stats)
             try encoded.write(to: url)
         } catch {
-            print("Milo StatsManager: Failed to save stats. \(error.localizedDescription)")
+            MiloLog.error("StatsManager failed to save stats: \(error.localizedDescription)", category: .persistence)
         }
     }
 }

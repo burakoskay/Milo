@@ -8,6 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || ""
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
 const SIGNATURE_MANIFEST_URL = Deno.env.get("SIGNATURE_MANIFEST_URL") || ""
+const SIGNATURE_SYNC_SECRET = Deno.env.get("SIGNATURE_SYNC_SECRET") || ""
 const TRUSTED_MANIFEST_PREFIX = "https://raw.githubusercontent.com/monomacaw/milo-signatures/"
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
@@ -69,6 +70,47 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" }
   })
+}
+
+function bearerToken(authorization: string | null): string | null {
+  if (!authorization) {
+    return null
+  }
+
+  const prefix = "Bearer "
+  if (!authorization.startsWith(prefix)) {
+    return null
+  }
+
+  const token = authorization.slice(prefix.length).trim()
+  return token.length > 0 ? token : null
+}
+
+function fixedTimeEquals(lhs: string, rhs: string): boolean {
+  const encoder = new TextEncoder()
+  const left = encoder.encode(lhs)
+  const right = encoder.encode(rhs)
+  const maxLength = Math.max(left.length, right.length)
+  let diff = left.length ^ right.length
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const leftByte = index < left.length ? left[index] : 0
+    const rightByte = index < right.length ? right[index] : 0
+    diff |= leftByte ^ rightByte
+  }
+
+  return diff === 0
+}
+
+function isAuthorized(req: Request): boolean {
+  if (!SIGNATURE_SYNC_SECRET) {
+    return false
+  }
+
+  const suppliedSecret = bearerToken(req.headers.get("authorization"))
+    || req.headers.get("x-milo-sync-secret")
+    || ""
+  return fixedTimeEquals(suppliedSecret, SIGNATURE_SYNC_SECRET)
 }
 
 function optionalString(value: unknown): string | null {
@@ -164,8 +206,12 @@ serve(async (req) => {
     return new Response("Method not allowed", { status: 405 })
   }
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SIGNATURE_MANIFEST_URL) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SIGNATURE_MANIFEST_URL || !SIGNATURE_SYNC_SECRET) {
     return jsonResponse({ error: "Server is not configured" }, 500)
+  }
+
+  if (!isAuthorized(req)) {
+    return jsonResponse({ error: "Unauthorized" }, 401)
   }
 
   if (!SIGNATURE_MANIFEST_URL.startsWith(TRUSTED_MANIFEST_PREFIX)) {
@@ -191,6 +237,10 @@ serve(async (req) => {
       return validateSignature(signature as ManifestSignature, manifest.signature_set_version as string)
     })
 
+    if (validSignatures.length === 0) {
+      return jsonResponse({ error: "Manifest contains no signatures" }, 400)
+    }
+
     const { error } = await supabase
       .from("telemetry_signatures")
       .upsert(validSignatures, { onConflict: "rule_id" })
@@ -200,7 +250,39 @@ serve(async (req) => {
       return jsonResponse({ error: "Database update failed" }, 500)
     }
 
-    return jsonResponse({ success: true, updated: validSignatures.length })
+    const currentRuleIDs = new Set(validSignatures.map((signature) => signature.rule_id))
+    const { data: activeRows, error: activeRowsError } = await supabase
+      .from("telemetry_signatures")
+      .select("rule_id")
+      .eq("verified", true)
+      .is("revoked_at", null)
+      .is("deprecated_at", null)
+
+    if (activeRowsError) {
+      console.error("Failed to read active telemetry signatures", activeRowsError)
+      return jsonResponse({ error: "Database read failed" }, 500)
+    }
+
+    const removedRuleIDs = (activeRows || [])
+      .map((row) => row.rule_id)
+      .filter((ruleID): ruleID is string => typeof ruleID === "string" && !currentRuleIDs.has(ruleID))
+
+    if (removedRuleIDs.length > 0) {
+      const { error: deprecateError } = await supabase
+        .from("telemetry_signatures")
+        .update({
+          verified: false,
+          deprecated_at: new Date().toISOString()
+        })
+        .in("rule_id", removedRuleIDs)
+
+      if (deprecateError) {
+        console.error("Failed to deprecate removed telemetry signatures", deprecateError)
+        return jsonResponse({ error: "Database deprecation failed" }, 500)
+      }
+    }
+
+    return jsonResponse({ success: true, updated: validSignatures.length, deprecated: removedRuleIDs.length })
   } catch (error) {
     console.error("Signature sync failed", error)
     return jsonResponse({ error: "Signature sync failed" }, 500)

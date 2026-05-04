@@ -11,7 +11,7 @@ class WhitelistManager {
         do {
             try FileManager.default.createDirectory(at: miloDir, withIntermediateDirectories: true)
         } catch {
-            print("Milo WhitelistManager: Failed to create directory. \\(error.localizedDescription)")
+            MiloLog.error("WhitelistManager failed to create directory: \(error.localizedDescription)", category: .persistence)
             return nil
         }
         return miloDir.appendingPathComponent("whitelist.json")
@@ -29,7 +29,7 @@ class WhitelistManager {
             let decoded = try JSONDecoder().decode(Set<String>.self, from: data)
             self.whitelistedProcesses = decoded
         } catch {
-            print("Milo WhitelistManager: Failed to load or decode whitelist. Starting fresh. \(error.localizedDescription)")
+            MiloLog.warning("WhitelistManager failed to load or decode whitelist; starting fresh: \(error.localizedDescription)", category: .persistence)
         }
     }
 
@@ -62,7 +62,7 @@ class WhitelistManager {
             let encoded = try JSONEncoder().encode(whitelistedProcesses)
             try encoded.write(to: url)
         } catch {
-            print("Milo WhitelistManager: Failed to save whitelist. \(error.localizedDescription)")
+            MiloLog.error("WhitelistManager failed to save whitelist: \(error.localizedDescription)", category: .persistence)
         }
     }
 }

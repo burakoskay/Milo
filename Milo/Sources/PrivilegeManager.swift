@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Security
 
 /// Manages the optional passwordless mode.
 /// This is intentionally opt-in because sudoers rules apply to the whole user session.
@@ -10,6 +11,29 @@ class PrivilegeManager {
 
     /// Cached result of sudo verification (reset on configure/remove)
     private var _sudoVerified: Bool?
+
+    private enum SudoersTempFileError: LocalizedError {
+        case randomGenerationFailed(OSStatus)
+        case utf8EncodingFailed
+        case openFailed(Int32)
+        case permissionFailed(Int32)
+        case writeFailed(Int32)
+
+        var errorDescription: String? {
+            switch self {
+            case .randomGenerationFailed(let status):
+                return "Secure random generation failed with status \(status)"
+            case .utf8EncodingFailed:
+                return "Sudoers content could not be encoded as UTF-8"
+            case .openFailed(let code):
+                return "Secure temporary sudoers file open failed with errno \(code)"
+            case .permissionFailed(let code):
+                return "Secure temporary sudoers file permission update failed with errno \(code)"
+            case .writeFailed(let code):
+                return "Secure temporary sudoers file write failed with errno \(code)"
+            }
+        }
+    }
 
     /// Check if privileges are already configured and working
     var isConfigured: Bool {
@@ -77,19 +101,25 @@ class PrivilegeManager {
         \(username) ALL=(ALL) NOPASSWD: /usr/bin/mdutil -a -i on
         """
 
-        // Write to temp file first (avoids escaping issues)
-        let tempFile = "/tmp/pkill_sudoers_\(ProcessInfo.processInfo.processIdentifier)"
+        let tempFile: String
         do {
-            try sudoersContent.write(toFile: tempFile, atomically: true, encoding: .utf8)
+            let tempURL = try createSecureTemporarySudoersFile(contents: sudoersContent)
+            tempFile = tempURL.path
         } catch {
-            print("Failed to write temp file: \(error)")
+            MiloLog.error("Failed to write temporary sudoers file: \(error.localizedDescription)", category: .privileges)
             completion(false)
             return
         }
 
         // Use AppleScript to move file with admin privileges
+        let command = [
+            "/usr/sbin/visudo -c -f \(Self.shellQuote(tempFile))",
+            "/bin/cp \(Self.shellQuote(tempFile)) /etc/sudoers.d/milo",
+            "/bin/chmod 0440 /etc/sudoers.d/milo",
+            "/bin/rm -f \(Self.shellQuote(tempFile))"
+        ].joined(separator: " && ")
         let script = """
-        do shell script "visudo -c -f '\(tempFile)' && cp '\(tempFile)' /etc/sudoers.d/pkill && chmod 0440 /etc/sudoers.d/pkill && rm '\(tempFile)'" with administrator privileges
+        do shell script "\(Self.appleScriptStringLiteral(command))" with administrator privileges
         """
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -103,14 +133,14 @@ class PrivilegeManager {
                             try FileManager.default.removeItem(atPath: tempFile)
                         }
                     } catch {
-                        print("Failed to clean up temp sudoers file: \(error.localizedDescription)")
+                        MiloLog.warning("Failed to clean up temporary sudoers file: \(error.localizedDescription)", category: .privileges)
                     }
 
                     if error == nil {
                         self?._sudoVerified = nil // Reset cache so next check re-verifies
                         completion(true)
                     } else {
-                        print("Failed to configure privileges: \(error ?? [:])")
+                        MiloLog.error("Failed to configure privileges via administrator prompt", category: .privileges)
                         completion(false)
                     }
                 }
@@ -122,206 +152,76 @@ class PrivilegeManager {
         }
     }
 
-    /// Legacy shell-string runner for static debloat recipes only.
-    /// Runtime process names, labels, and paths must use CommandRunner directly.
-    func runWithPrivileges(_ command: String, completion: ((Bool, String?) -> Void)? = nil) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let wrapped = self.wrapCommandsWithSudo(command)
-            guard wrapped.didWrap else {
-                DispatchQueue.main.async {
-                    completion?(false, "Command requires explicit administrator authorization")
-                }
-                return
+    private func createSecureTemporarySudoersFile(contents: String) throws -> URL {
+        let token = try Self.secureRandomHex(byteCount: 16)
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("milo-sudoers-\(token)", isDirectory: false)
+            .standardizedFileURL
+        try Self.writeExclusiveUTF8(contents, to: tempURL)
+        return tempURL
+    }
+
+    private static func secureRandomHex(byteCount: Int) throws -> String {
+        var bytes = [UInt8](repeating: 0, count: byteCount)
+        let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        guard status == errSecSuccess else {
+            throw SudoersTempFileError.randomGenerationFailed(status)
+        }
+        return bytes.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func writeExclusiveUTF8(_ string: String, to url: URL) throws {
+        guard let data = string.data(using: .utf8) else {
+            throw SudoersTempFileError.utf8EncodingFailed
+        }
+
+        let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+        guard fd >= 0 else {
+            throw SudoersTempFileError.openFailed(errno)
+        }
+        defer {
+            close(fd)
+        }
+
+        guard fchmod(fd, S_IRUSR | S_IWUSR) == 0 else {
+            throw SudoersTempFileError.permissionFailed(errno)
+        }
+
+        try data.withUnsafeBytes { buffer in
+            guard var pointer = buffer.baseAddress else {
+                throw SudoersTempFileError.utf8EncodingFailed
             }
 
-            let task = Process()
-            task.launchPath = "/bin/sh"
-            task.arguments = ["-c", wrapped.command]
-
-            let pipe = Pipe()
-            let errorPipe = Pipe()
-            task.standardOutput = pipe
-            task.standardError = errorPipe
-
-            do {
-                try task.run()
-                task.waitUntilExit()
-
-                let outputData = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: outputData, encoding: .utf8)
-
-                let success = task.terminationStatus == 0
-
-                DispatchQueue.main.async {
-                    completion?(success, output)
+            var remaining = data.count
+            while remaining > 0 {
+                let written = Darwin.write(fd, pointer, remaining)
+                guard written > 0 else {
+                    throw SudoersTempFileError.writeFailed(errno)
                 }
-            } catch {
-                DispatchQueue.main.async {
-                    completion?(false, error.localizedDescription)
-                }
+                let writtenCount = written
+                remaining -= writtenCount
+                pointer = pointer.advanced(by: writtenCount)
             }
         }
     }
 
-    /// Legacy synchronous shell-string runner for static debloat recipes only.
-    func runWithPrivilegesSync(_ command: String) -> Bool {
-        let wrapped = wrapCommandsWithSudo(command)
-        guard wrapped.didWrap else { return false }
-
-        let task = Process()
-        task.launchPath = "/bin/sh"
-        task.arguments = ["-c", wrapped.command]
-
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-            return task.terminationStatus == 0
-        } catch {
-            return false
-        }
+    private static func shellQuote(_ value: String) -> String {
+        guard !value.isEmpty else { return "''" }
+        return "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
-    // MARK: - Sudo Wrapping
-
-    private struct WrapResult {
-        let command: String
-        let didWrap: Bool
-    }
-
-    private func wrapCommandsWithSudo(_ command: String) -> WrapResult {
-        struct Segment {
-            let text: String
-            let isSeparator: Bool
-        }
-
-        var segments: [Segment] = []
-        var current = ""
-        var quote: Character?
-        let chars = Array(command)
-        var index = 0
-
-        while index < chars.count {
-            let char = chars[index]
-
-            if let currentQuote = quote, char == currentQuote {
-                current.append(char)
-                quote = nil
-                index += 1
-                continue
-            }
-
-            if quote == nil, char == "\"" || char == "'" {
-                quote = char
-                current.append(char)
-                index += 1
-                continue
-            }
-
-            if quote == nil {
-                if char == ";" {
-                    if !current.isEmpty {
-                        segments.append(Segment(text: current, isSeparator: false))
-                        current = ""
-                    }
-                    segments.append(Segment(text: ";", isSeparator: true))
-                    index += 1
-                    continue
-                }
-
-                if index + 1 < chars.count {
-                    let next = chars[index + 1]
-                    if char == "&", next == "&" {
-                        if !current.isEmpty {
-                            segments.append(Segment(text: current, isSeparator: false))
-                            current = ""
-                        }
-                        segments.append(Segment(text: "&&", isSeparator: true))
-                        index += 2
-                        continue
-                    }
-                    if char == "|", next == "|" {
-                        if !current.isEmpty {
-                            segments.append(Segment(text: current, isSeparator: false))
-                            current = ""
-                        }
-                        segments.append(Segment(text: "||", isSeparator: true))
-                        index += 2
-                        continue
-                    }
-                }
-            }
-
-            current.append(char)
-            index += 1
-        }
-
-        if !current.isEmpty {
-            segments.append(Segment(text: current, isSeparator: false))
-        }
-
-        var didWrap = false
-        var rejectedSegment = false
-        let wrappedCommand = segments.map { segment in
-            guard !segment.isSeparator else { return segment.text }
-
-            let trimmed = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return trimmed }
-
-            if let passwordless = passwordlessCommand(for: trimmed) {
-                didWrap = true
-                return passwordless
-            }
-            if trimmed != "true" {
-                rejectedSegment = true
-            }
-            return trimmed
-        }.joined(separator: " ")
-
-        return WrapResult(command: wrappedCommand, didWrap: didWrap && !rejectedSegment)
-    }
-
-    private func passwordlessCommand(for segment: String) -> String? {
-        let tokens = segment.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
-        guard !tokens.isEmpty else { return nil }
-
-        let redirectionIndex = tokens.firstIndex { token in
-            token.hasPrefix(">") || token.hasPrefix("1>") || token.hasPrefix("2>")
-        }
-        let commandTokens = Array(tokens[..<(redirectionIndex ?? tokens.endIndex)])
-        let suffixTokens = redirectionIndex.map { Array(tokens[$0...]) } ?? []
-        guard !commandTokens.isEmpty else { return nil }
-
-        let baseName = (commandTokens[0] as NSString).lastPathComponent
-        let args = Array(commandTokens.dropFirst())
-        let suffix = suffixTokens.isEmpty ? "" : " " + suffixTokens.joined(separator: " ")
-
-        if baseName == "purge", args.isEmpty {
-            return "sudo -n /usr/sbin/purge\(suffix)"
-        }
-        if baseName == "dscacheutil", args == ["-flushcache"] {
-            return "sudo -n /usr/bin/dscacheutil -flushcache\(suffix)"
-        }
-        if baseName == "killall", args == ["-HUP", "mDNSResponder"] {
-            return "sudo -n /usr/bin/killall -HUP mDNSResponder\(suffix)"
-        }
-        if baseName == "mdutil", args == ["-a", "-i", "off"] {
-            return "sudo -n /usr/bin/mdutil -a -i off\(suffix)"
-        }
-        if baseName == "mdutil", args == ["-a", "-i", "on"] {
-            return "sudo -n /usr/bin/mdutil -a -i on\(suffix)"
-        }
-
-        return nil
+    private static func appleScriptStringLiteral(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
     }
 
     /// Remove privileges configuration
     func removePrivileges(completion: @escaping (Bool) -> Void) {
         let script = """
-        do shell script "rm -f /etc/sudoers.d/milo" with administrator privileges
+        do shell script "rm -f /etc/sudoers.d/milo /etc/sudoers.d/pkill" with administrator privileges
         """
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -339,6 +239,4 @@ class PrivilegeManager {
             }
         }
     }
-}
-}
 }

@@ -103,13 +103,14 @@ class SettingsManager {
                     try service.unregister()
                 }
             } catch {
-                print("Failed to \(enable ? "register" : "unregister") login item: \(error)")
+                let action = enable ? "register" : "unregister"
+                MiloLog.error("Failed to \(action) login item: \(error.localizedDescription)", category: .settings)
             }
         } else {
             // Fallback: shared file list (deprecated but functional on 12)
             let success = SMLoginItemSetEnabled("com.monomacaw.milo" as CFString, enable)
             if !success {
-                print("SMLoginItemSetEnabled failed for \(enable)")
+                MiloLog.error("SMLoginItemSetEnabled failed for enable=\(enable)", category: .settings)
             }
         }
     }

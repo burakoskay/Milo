@@ -212,7 +212,7 @@ class MemoryManager {
             )
 
         } catch {
-            print("Failed to get memory stats: \(error)")
+            MiloLog.error("Failed to get memory stats: \(error.localizedDescription)", category: .memory)
             return nil
         }
     }

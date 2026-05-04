@@ -209,8 +209,9 @@ class DebloatManager: ObservableObject {
 
     /// Restart Finder, Dock, SystemUIServer
     func restartUI() {
-        let cmd = "killall Finder 2>/dev/null; killall Dock 2>/dev/null; killall SystemUIServer 2>/dev/null; killall cfprefsd 2>/dev/null"
-        _ = runShell(cmd)
+        for processName in ["Finder", "Dock", "SystemUIServer", "cfprefsd"] {
+            _ = runValidatedCommand("killall \(processName) 2>/dev/null || true", privileged: false)
+        }
         toast("Restarted Finder, Dock & SystemUIServer")
     }
 
@@ -240,17 +241,17 @@ class DebloatManager: ObservableObject {
 
         for cmd in userCmds {
             if cmd.contains("defaults ") { hasDefaultsCmd = true }
-            if !runShell(cmd) { ok = false }
+            if !runValidatedCommand(cmd, privileged: false) { ok = false }
         }
 
         for cmd in privileged {
             if cmd.contains("defaults ") { hasDefaultsCmd = true }
-            if !runPrivileged(cmd) { ok = false }
+            if !runValidatedCommand(cmd, privileged: true) { ok = false }
         }
 
         // Kill cfprefsd to force preference cache flush after defaults changes
         if hasDefaultsCmd {
-            _ = runShell("killall cfprefsd 2>/dev/null || true")
+            _ = runValidatedCommand("killall cfprefsd 2>/dev/null || true", privileged: false)
         }
 
         // Wait for cfprefsd to respawn and launchctl to sync
@@ -260,56 +261,24 @@ class DebloatManager: ObservableObject {
     }
 
     @discardableResult
-    private func runShell(_ command: String) -> Bool {
-        let task = Process()
-        task.launchPath = "/bin/sh"
-        task.arguments = ["-c", command]
-        task.standardOutput = Pipe()
-        task.standardError = Pipe()
-        do {
-            try task.run()
-            task.waitUntilExit()
-            return task.terminationStatus == 0
-        } catch { return false }
+    private func runValidatedCommand(_ command: String, privileged: Bool) -> Bool {
+        Self.runValidatedCommand(command, privileged: privileged)
     }
 
-    private func runPrivileged(_ command: String) -> Bool {
-        // Try passwordless sudo first
-        if PrivilegeManager.shared.isConfigured {
-            let result = PrivilegeManager.shared.runWithPrivilegesSync(command)
-            if result { return true }
-            PrivilegeManager.shared.resetVerification()
+    @discardableResult
+    static func runValidatedCommand(_ command: String, privileged: Bool) -> Bool {
+        guard let debloatCommand = DebloatCommand.parse(command) else {
+            MiloLog.error("Rejected unsupported debloat command: \(command)", category: .security)
+            return false
         }
-        // Fallback: AppleScript admin prompt
-        let escaped = command
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        let script = "do shell script \"\(escaped)\" with administrator privileges"
-        var error: NSDictionary?
-        if let appleScript = NSAppleScript(source: script) {
-            appleScript.executeAndReturnError(&error)
-            return error == nil
-        }
-        return false
+        return debloatCommand.run(privileged: privileged)
+    }
+
+    static func canParseValidatedCommand(_ command: String) -> Bool {
+        DebloatCommand.parse(command) != nil
     }
 
     // MARK: - Detection Helpers
-
-    /// Run a shell command and return its output
-    private static func shellOutput(_ command: String) -> String {
-        let task = Process()
-        task.launchPath = "/bin/sh"
-        task.arguments = ["-c", command]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        do {
-            try task.run()
-            task.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return String(data: data, encoding: .utf8) ?? ""
-        } catch { return "" }
-    }
 
     /// Read a defaults key. Returns the trimmed stdout or nil.
     private static func readDefault(_ domain: String, _ key: String) -> String? {
@@ -383,7 +352,7 @@ class DebloatManager: ObservableObject {
         return abs(d - value) < tolerance
     }
 
-    private static let widgetMarkerPath: String = {
+    static let widgetMarkerPath: String = {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return FileManager.default.temporaryDirectory.appendingPathComponent("milo-widgets-disabled.marker").path
         }
@@ -1338,7 +1307,7 @@ class DebloatManager: ObservableObject {
                         detect: {
                             // launchctl print-disabled system works without sudo and is accurate.
                             // "com.apple.AEServer" => disabled means the tweak is applied.
-                            let output = Self.shellOutput("launchctl print-disabled system")
+                            let output = CommandRunner.run("/bin/launchctl", arguments: ["print-disabled", "system"]).stdout
                             return output.contains("\"com.apple.AEServer\" => disabled")
                         }
                     ),

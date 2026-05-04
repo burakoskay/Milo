@@ -116,7 +116,10 @@ CREATE TABLE telemetry_signatures (
     category TEXT NOT NULL CHECK (category IN ('bloat', 'intelligence')),
     display_name TEXT NOT NULL,
     process_name TEXT NOT NULL CHECK (char_length(process_name) BETWEEN 1 AND 160),
-    launchd_label TEXT CHECK (launchd_label IS NULL OR launchd_label ~ '^[A-Za-z0-9._-]{1,256}$'),
+    launchd_label TEXT CHECK (
+        launchd_label IS NULL
+        OR (char_length(launchd_label) BETWEEN 1 AND 256 AND launchd_label ~ '^[A-Za-z0-9._-]+$')
+    ),
     launchd_domain TEXT NOT NULL DEFAULT 'gui' CHECK (launchd_domain IN ('gui', 'system', 'both')),
     bundle_id TEXT CHECK (bundle_id IS NULL OR bundle_id ~ '^[A-Za-z0-9][A-Za-z0-9._-]{1,255}$'),
     executable_path_pattern TEXT CHECK (executable_path_pattern IS NULL OR char_length(executable_path_pattern) BETWEEN 1 AND 512),

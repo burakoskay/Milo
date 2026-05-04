@@ -186,9 +186,8 @@ final class CloudSignatureManager {
     private static func hasLocatorMatch(rule: TelemetrySignature, observation: TelemetryProcessObservation) -> Bool {
         let processName = rule.processName.lowercased()
         let executableName = observation.executableName.lowercased()
-        let command = observation.command.lowercased()
 
-        if executableName == processName || command.contains(processName) {
+        if executableName == processName || commandExecutableName(from: observation.command)?.lowercased() == processName {
             return true
         }
 
@@ -198,6 +197,26 @@ final class CloudSignatureManager {
         }
 
         return false
+    }
+
+    private static func commandExecutableName(from command: String) -> String? {
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let first = trimmed.first, first == "\"" || first == "'" {
+            let remainder = trimmed.dropFirst()
+            guard let closingIndex = remainder.firstIndex(of: first) else { return nil }
+            let executable = String(remainder[..<closingIndex])
+            guard !executable.isEmpty else { return nil }
+            return URL(fileURLWithPath: executable).lastPathComponent
+        }
+
+        let firstToken = trimmed
+            .split(whereSeparator: { $0 == " " || $0 == "\t" })
+            .first
+            .map(String.init)
+        guard let firstToken, !firstToken.isEmpty else { return nil }
+        return URL(fileURLWithPath: firstToken).lastPathComponent
     }
 
     private static func hasStrongIdentityMatch(rule: TelemetrySignature, codeSignature: TelemetryCodeSignature?) -> Bool {

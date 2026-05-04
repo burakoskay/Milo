@@ -79,6 +79,14 @@ private struct SyntheticProcessHandle {
 }
 
 enum SelfTestRunner {
+    private static func emit(_ message: String = "") {
+        guard let data = (message + "\n").data(using: .utf8) else {
+            MiloLog.error("Self-test failed to encode output line", category: .selfTest)
+            return
+        }
+        FileHandle.standardOutput.write(data)
+    }
+
     static func run(includeDestructive: Bool = false) -> Int32 {
         let snapshot = SettingsSnapshot.capture()
         defer { snapshot.restore() }
@@ -113,23 +121,24 @@ enum SelfTestRunner {
         results.append(contentsOf: testMemoryFeatures(includeDestructive: includeDestructive))
         results.append(contentsOf: testSettingsPersistence(includeDestructive: includeDestructive))
         results.append(testDebloatSheetConstruction())
+        results.append(testDebloatCommandCatalog())
         results.append(contentsOf: testDebloatTweaks(includeDestructive: includeDestructive))
 
-        print("Milo self-test")
-        print("Mode: \(includeDestructive ? "destructive integration" : "safe")")
-        print("Bundle: \(Bundle.main.bundlePath)")
-        print("Date: \(ISO8601DateFormatter().string(from: Date()))")
-        print("")
+        emit("Milo self-test")
+        emit("Mode: \(includeDestructive ? "destructive integration" : "safe")")
+        emit("Bundle: \(Bundle.main.bundlePath)")
+        emit("Date: \(ISO8601DateFormatter().string(from: Date()))")
+        emit()
 
         for result in results {
-            print("[\(result.status.rawValue)] \(result.name): \(result.detail)")
+            emit("[\(result.status.rawValue)] \(result.name): \(result.detail)")
         }
 
         let failures = results.filter { $0.status == .fail }
         let passes = results.filter { $0.status == .pass }.count
         let skips = results.filter { $0.status == .skip }.count
-        print("")
-        print("Summary: \(passes) passed, \(failures.count) failed, \(skips) skipped")
+        emit()
+        emit("Summary: \(passes) passed, \(failures.count) failed, \(skips) skipped")
 
         return failures.isEmpty ? 0 : 1
     }
@@ -157,7 +166,7 @@ enum SelfTestRunner {
     }
 
     private static func testScannerCoverage(with scan: (bloat: [ProcessItem], intelligence: [ProcessItem])) -> [SelfTestResult] {
-        let rawProcesses = shell("/bin/ps -Axo command").stdout.lowercased()
+        let rawProcesses = CommandRunner.run("/bin/ps", arguments: ["-Axo", "command"]).stdout.lowercased()
         let detected = Set((scan.bloat.map { $0.name.lowercased() } + scan.intelligence.map { $0.name.lowercased() }))
 
         var results: [SelfTestResult] = []
@@ -231,11 +240,11 @@ enum SelfTestRunner {
 
     private static func testDirectCommandArgumentsDoNotInvokeShell() -> SelfTestResult {
         let marker = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("pkill-shell-injection-marker")
+            .appendingPathComponent("milo-shell-injection-marker")
         removeIfExists(at: marker)
         defer { removeIfExists(at: marker) }
 
-        let payload = "hello; touch pkill-shell-injection-marker"
+        let payload = "hello; touch milo-shell-injection-marker"
         let result = CommandRunner.run("/bin/echo", arguments: [payload])
         let markerExists = FileManager.default.fileExists(atPath: marker.path)
 
@@ -673,6 +682,22 @@ enum SelfTestRunner {
         return SelfTestResult(name: "Debloat sheet construction", status: .fail, detail: "Debloat view loaded but categories or tweak states were empty")
     }
 
+    private static func testDebloatCommandCatalog() -> SelfTestResult {
+        var failures: [String] = []
+        for tweak in DebloatManager.shared.categories.flatMap(\.tweaks) {
+            let commands = tweak.applyCommands + tweak.revertCommands + tweak.applyPrivileged + tweak.revertPrivileged
+            for command in commands where !DebloatManager.canParseValidatedCommand(command) {
+                failures.append("\(tweak.id): \(command)")
+            }
+        }
+
+        if failures.isEmpty {
+            return SelfTestResult(name: "Debloat command catalog", status: .pass, detail: "Every debloat recipe is accepted by the validated command parser")
+        }
+
+        return SelfTestResult(name: "Debloat command catalog", status: .fail, detail: failures.prefix(3).joined(separator: " | "))
+    }
+
     private static func testDebloatTweaks(includeDestructive: Bool) -> [SelfTestResult] {
         var results: [SelfTestResult] = []
 
@@ -695,7 +720,7 @@ enum SelfTestRunner {
 
         let syntheticApplied = runTweak(syntheticTweak, apply: true) && waitUntil(timeout: 4) { syntheticTweak.detect() }
         let syntheticReverted = runTweak(syntheticTweak, apply: false) && waitUntil(timeout: 4) { !syntheticTweak.detect() }
-        _ = shell("/usr/bin/defaults delete \(syntheticDomain) 2>/dev/null || true")
+        _ = CommandRunner.run("/usr/bin/defaults", arguments: ["delete", syntheticDomain])
 
         results.append(
             syntheticApplied && syntheticReverted
@@ -780,7 +805,7 @@ enum SelfTestRunner {
             do {
                 try data.write(to: url)
             } catch {
-                print("Self-test restore failed for \(url.path): \(error.localizedDescription)")
+                MiloLog.error("Self-test restore failed for \(url.path): \(error.localizedDescription)", category: .selfTest)
             }
         } else if !existed {
             removeIfExists(at: url)
@@ -807,7 +832,7 @@ enum SelfTestRunner {
             if command.contains("defaults ") {
                 touchedDefaults = true
             }
-            if shell(command).status != 0 {
+            if !DebloatManager.runValidatedCommand(command, privileged: false) {
                 success = false
             }
         }
@@ -822,7 +847,7 @@ enum SelfTestRunner {
         }
 
         if touchedDefaults {
-            _ = shell("killall cfprefsd 2>/dev/null || true")
+            _ = CommandRunner.run("/usr/bin/killall", arguments: ["cfprefsd"])
         }
 
         Thread.sleep(forTimeInterval: 0.8)
@@ -830,20 +855,7 @@ enum SelfTestRunner {
     }
 
     private static func runAdminCommand(_ command: String) -> Bool {
-        if PrivilegeManager.shared.isConfigured {
-            return PrivilegeManager.shared.runWithPrivilegesSync(command)
-        }
-
-        let escaped = command
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        let script = "do shell script \"\(escaped)\" with administrator privileges"
-        var error: NSDictionary?
-        if let appleScript = NSAppleScript(source: script) {
-            appleScript.executeAndReturnError(&error)
-            return error == nil
-        }
-        return false
+        DebloatManager.runValidatedCommand(command, privileged: true)
     }
 
     private static func waitForCompletion(timeout: TimeInterval, _ body: (@escaping (SelfTestResult) -> Void) -> Void) -> SelfTestResult {
@@ -877,36 +889,15 @@ enum SelfTestRunner {
         return condition()
     }
 
-    private static func shell(_ command: String) -> (status: Int32, stdout: String, stderr: String) {
-        let task = Process()
-        task.launchPath = "/bin/sh"
-        task.arguments = ["-c", command]
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        task.standardOutput = stdoutPipe
-        task.standardError = stderrPipe
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-
-            let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            return (task.terminationStatus, stdout, stderr)
-        } catch {
-            return (1, "", error.localizedDescription)
-        }
-    }
-
     private static func spawnSyntheticProcess(named name: String, vendor: String) -> SyntheticProcessHandle? {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("milo-selftest-\\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("milo-selftest-\(UUID().uuidString)", isDirectory: true)
         let executable = directory.appendingPathComponent(name)
 
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try FileManager.default.createSymbolicLink(at: executable, withDestinationURL: URL(fileURLWithPath: "/bin/sleep"))
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/sleep"), to: executable)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
 
             let process = Process()
             process.executableURL = executable
@@ -928,7 +919,7 @@ enum SelfTestRunner {
                 handle.process.terminate()
                 _ = waitUntil(timeout: 1.5) { !handle.process.isRunning }
                 if handle.process.isRunning {
-                    _ = shell("/bin/kill -9 \(handle.process.processIdentifier) 2>/dev/null || true")
+                    _ = CommandRunner.run("/bin/kill", arguments: ["-9", String(handle.process.processIdentifier)])
                 }
             }
             removeIfExists(at: handle.directory)
@@ -940,7 +931,7 @@ enum SelfTestRunner {
         do {
             return try Data(contentsOf: url)
         } catch {
-            print("Self-test failed to read \(url.path): \(error.localizedDescription)")
+            MiloLog.error("Self-test failed to read \(url.path): \(error.localizedDescription)", category: .selfTest)
             return nil
         }
     }
@@ -959,10 +950,7 @@ enum SelfTestRunner {
         do {
             try FileManager.default.removeItem(at: url)
         } catch {
-            print("Self-test cleanup failed for \(url.path): \(error.localizedDescription)")
+            MiloLog.error("Self-test cleanup failed for \(url.path): \(error.localizedDescription)", category: .selfTest)
         }
-    }
-}
-  }
     }
 }

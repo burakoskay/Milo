@@ -16,7 +16,7 @@ class SIPChecker {
                 return output.contains("enabled")
             }
         } catch {
-            print("Failed to check SIP status: \(error)")
+            MiloLog.error("Failed to check SIP status: \(error.localizedDescription)", category: .security)
         }
 
         return true // Assume enabled if check fails for safety

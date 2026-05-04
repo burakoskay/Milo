@@ -99,7 +99,10 @@ DO $$
 BEGIN
     ALTER TABLE public.telemetry_signatures
         ADD CONSTRAINT telemetry_signatures_launchd_label_check
-        CHECK (launchd_label IS NULL OR launchd_label ~ '^[A-Za-z0-9._-]{1,256}$');
+        CHECK (
+            launchd_label IS NULL
+            OR (char_length(launchd_label) BETWEEN 1 AND 256 AND launchd_label ~ '^[A-Za-z0-9._-]+$')
+        );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

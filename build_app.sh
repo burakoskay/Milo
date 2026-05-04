@@ -112,6 +112,10 @@ cat > "$ENTITLEMENTS_PATH" <<'EOF'
 <dict>
     <key>com.apple.security.automation.apple-events</key>
     <true/>
+    <key>com.apple.developer.applesignin</key>
+    <array>
+        <string>Default</string>
+    </array>
 </dict>
 </plist>
 EOF
