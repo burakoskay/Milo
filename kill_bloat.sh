@@ -83,10 +83,18 @@ declare -a processes=(
     "HomeWidget"
 )
 
+# Function to escape regex special characters
+escape_regex() {
+    printf '%s\n' "$1" | sed 's/[][\.^*+?()|\\${}]/\\&/g'
+}
+
 for process in "${processes[@]}"
 do
     # pkill -f matches against the full command line
-    if pkill -f "$process" 2>/dev/null; then
+    # -i for case-insensitive match
+    # -- to prevent process names starting with - from being interpreted as options
+    escaped_process=$(escape_regex "$process")
+    if pkill -i -f -- "$escaped_process" 2>/dev/null; then
         echo "  - Killed $process"
     fi
 done
