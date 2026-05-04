@@ -78,7 +78,7 @@ class PrivilegeManager {
         """
 
         // Write to temp file first (avoids escaping issues)
-        let tempFile = "/tmp/pkill_sudoers_\(ProcessInfo.processInfo.processIdentifier)"
+        let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).path
         do {
             try sudoersContent.write(toFile: tempFile, atomically: true, encoding: .utf8)
         } catch {
@@ -89,7 +89,7 @@ class PrivilegeManager {
 
         // Use AppleScript to move file with admin privileges
         let script = """
-        do shell script "visudo -c -f '\(tempFile)' && cp '\(tempFile)' /etc/sudoers.d/pkill && chmod 0440 /etc/sudoers.d/pkill && rm '\(tempFile)'" with administrator privileges
+        do shell script "visudo -c -f '\(tempFile)' && cp '\(tempFile)' /etc/sudoers.d/milo && chmod 0440 /etc/sudoers.d/milo && rm '\(tempFile)'" with administrator privileges
         """
 
         DispatchQueue.global(qos: .userInitiated).async {
