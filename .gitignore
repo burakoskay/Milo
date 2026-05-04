@@ -1,0 +1,31 @@
+# Build artifacts
+Milo.app/
+.build/
+.build_icons/
+.dmg_staging/
+*.dmg
+
+# Local/private project context
+data/
+MILO_AUDIT_REPORT_*.md
+CLAUDE.md
+.claude/
+.vscode/
+
+# Swift Package Manager
+.swiftpm/
+Packages/
+
+# macOS
+.DS_Store
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+
+# Xcode
+DerivedData/
+build/
+
+# Secrets & API Keys
+Secrets.swift
+Milo/Sources/Secrets.swift

@@ -1,0 +1,39 @@
+# Milo SwiftLint Configuration
+# Designed for pragmatism and to prevent unnecessary CI failures
+
+disabled_rules:
+  - inclusive_language # We use "whitelist" which is standard in this context
+  - identifier_name # Single letter variables (i, s) are fine in small scopes
+
+opt_in_rules:
+  - empty_count
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - missing_docs
+
+line_length:
+  warning: 250
+  error: 300
+  ignores_urls: true
+  ignores_function_declarations: true
+  ignores_comments: true
+
+type_body_length:
+  warning: 2000
+  error: 2500
+
+function_body_length:
+  warning: 1500
+  error: 2000
+
+file_length:
+  warning: 2500
+  error: 3000
+
+cyclomatic_complexity:
+  warning: 20
+  error: 30
+
+large_tuple:
+  warning: 4
+  error: 5

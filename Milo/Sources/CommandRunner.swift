@@ -1,0 +1,83 @@
+import Foundation
+import AppKit
+
+struct CommandResult {
+    let status: Int32
+    let stdout: String
+    let stderr: String
+
+    var succeeded: Bool { status == 0 }
+}
+
+enum CommandRunner {
+    @discardableResult
+    static func run(_ executable: String, arguments: [String] = []) -> CommandResult {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: executable)
+        task.arguments = arguments
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        task.standardOutput = stdoutPipe
+        task.standardError = stderrPipe
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            return CommandResult(
+                status: task.terminationStatus,
+                stdout: String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "",
+                stderr: String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            )
+        } catch {
+            return CommandResult(status: 1, stdout: "", stderr: error.localizedDescription)
+        }
+    }
+
+    @discardableResult
+    static func runPrivileged(_ executable: String, arguments: [String] = []) -> CommandResult {
+        if PrivilegeManager.shared.isConfigured {
+            let sudoResult = run("/usr/bin/sudo", arguments: ["-n", executable] + arguments)
+            if sudoResult.succeeded { return sudoResult }
+            PrivilegeManager.shared.resetVerification()
+        }
+
+        return runWithAdministratorPrivileges(executable, arguments: arguments)
+    }
+
+    static func shellEscapedCommand(_ executable: String, arguments: [String]) -> String {
+        ([executable] + arguments).map(shellQuote).joined(separator: " ")
+    }
+
+    private static func runWithAdministratorPrivileges(_ executable: String, arguments: [String]) -> CommandResult {
+        let shellCommand = shellEscapedCommand(executable, arguments: arguments)
+        let script = "do shell script \"\(appleScriptStringLiteral(shellCommand))\" with administrator privileges"
+
+        var error: NSDictionary?
+        guard let appleScript = NSAppleScript(source: script) else {
+            return CommandResult(status: 1, stdout: "", stderr: "Failed to create administrator prompt")
+        }
+
+        let descriptor = appleScript.executeAndReturnError(&error)
+        if let error {
+            let message = error["NSAppleScriptErrorMessage"] as? String ?? "Administrator access denied"
+            return CommandResult(status: 1, stdout: "", stderr: message)
+        }
+
+        return CommandResult(status: 0, stdout: descriptor.stringValue ?? "", stderr: "")
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        guard !value.isEmpty else { return "''" }
+        return "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    private static func appleScriptStringLiteral(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+    }
+}

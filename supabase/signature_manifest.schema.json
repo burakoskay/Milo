@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://monomacaw.com/schemas/milo-signature-manifest.schema.json",
+  "title": "Milo Telemetry Signature Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "signature_set_version", "signatures"],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "signature_set_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "signatures": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/signature" },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_id",
+        "vendor",
+        "category",
+        "display_name",
+        "process_name",
+        "launchd_domain",
+        "termination_strategy",
+        "verified"
+      ],
+      "anyOf": [
+        { "required": ["team_id"] },
+        { "required": ["signing_identifier"] },
+        { "required": ["bundle_id"] }
+      ],
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"
+        },
+        "vendor": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]{1,80}$"
+        },
+        "category": {
+          "enum": ["bloat", "intelligence"]
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "process_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "launchd_label": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]{1,256}$"
+        },
+        "launchd_domain": {
+          "enum": ["gui", "system", "both"]
+        },
+        "bundle_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,255}$"
+        },
+        "executable_path_pattern": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "team_id": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{10}$"
+        },
+        "signing_identifier": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,255}$"
+        },
+        "min_macos": {
+          "type": "string",
+          "pattern": "^[0-9]{1,2}(\\.[0-9]{1,2}){0,2}$"
+        },
+        "max_macos": {
+          "type": "string",
+          "pattern": "^[0-9]{1,2}(\\.[0-9]{1,2}){0,2}$"
+        },
+        "termination_strategy": {
+          "enum": ["signal", "launchctl_bootout", "launchctl_disable", "none"]
+        },
+        "severity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "verified": {
+          "const": true
+        },
+        "source_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{7,64}$"
+        }
+      }
+    }
+  }
+}

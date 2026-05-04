@@ -1,0 +1,4 @@
+target create "./Milo.app/Contents/MacOS/Milo"
+run
+thread backtrace all
+quit
