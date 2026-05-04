@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 class WhitelistManager {
     static let shared = WhitelistManager()
@@ -11,7 +12,7 @@ class WhitelistManager {
         do {
             try FileManager.default.createDirectory(at: miloDir, withIntermediateDirectories: true)
         } catch {
-            print("Milo WhitelistManager: Failed to create directory. \\(error.localizedDescription)")
+            Logger.whitelist.error("Milo WhitelistManager: Failed to create directory: \(error.localizedDescription, privacy: .public)")
             return nil
         }
         return miloDir.appendingPathComponent("whitelist.json")
@@ -29,7 +30,7 @@ class WhitelistManager {
             let decoded = try JSONDecoder().decode(Set<String>.self, from: data)
             self.whitelistedProcesses = decoded
         } catch {
-            print("Milo WhitelistManager: Failed to load or decode whitelist. Starting fresh. \(error.localizedDescription)")
+            Logger.whitelist.error("Milo WhitelistManager: Failed to load or decode whitelist. Starting fresh. \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -62,7 +63,7 @@ class WhitelistManager {
             let encoded = try JSONEncoder().encode(whitelistedProcesses)
             try encoded.write(to: url)
         } catch {
-            print("Milo WhitelistManager: Failed to save whitelist. \(error.localizedDescription)")
+            Logger.whitelist.error("Milo WhitelistManager: Failed to save whitelist: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

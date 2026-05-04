@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import os
 
 /// Manages the optional passwordless mode.
 /// This is intentionally opt-in because sudoers rules apply to the whole user session.
@@ -82,7 +83,7 @@ class PrivilegeManager {
         do {
             try sudoersContent.write(toFile: tempFile, atomically: true, encoding: .utf8)
         } catch {
-            print("Failed to write temp file: \(error)")
+            Logger.privilege.error("Failed to write temp file: \(error, privacy: .public)")
             completion(false)
             return
         }
@@ -103,14 +104,14 @@ class PrivilegeManager {
                             try FileManager.default.removeItem(atPath: tempFile)
                         }
                     } catch {
-                        print("Failed to clean up temp sudoers file: \(error.localizedDescription)")
+                        Logger.privilege.error("Failed to clean up temp sudoers file: \(error.localizedDescription, privacy: .public)")
                     }
 
                     if error == nil {
                         self?._sudoVerified = nil // Reset cache so next check re-verifies
                         completion(true)
                     } else {
-                        print("Failed to configure privileges: \(error ?? [:])")
+                        Logger.privilege.error("Failed to configure privileges: \(error ?? [:], privacy: .public)")
                         completion(false)
                     }
                 }

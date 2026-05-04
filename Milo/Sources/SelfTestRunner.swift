@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import SwiftUI
+import os
 
 private enum SelfTestStatus: String {
     case pass = "PASS"
@@ -115,21 +116,21 @@ enum SelfTestRunner {
         results.append(testDebloatSheetConstruction())
         results.append(contentsOf: testDebloatTweaks(includeDestructive: includeDestructive))
 
-        print("Milo self-test")
-        print("Mode: \(includeDestructive ? "destructive integration" : "safe")")
-        print("Bundle: \(Bundle.main.bundlePath)")
-        print("Date: \(ISO8601DateFormatter().string(from: Date()))")
-        print("")
+        Logger.selfTest.info("Milo self-test")
+        Logger.selfTest.info("Mode: \(includeDestructive ? "destructive integration" : "safe", privacy: .public)")
+        Logger.selfTest.info("Bundle: \(Bundle.main.bundlePath, privacy: .public)")
+        Logger.selfTest.info("Date: \(ISO8601DateFormatter().string(from: Date()), privacy: .public)")
+        Logger.selfTest.info("")
 
         for result in results {
-            print("[\(result.status.rawValue)] \(result.name): \(result.detail)")
+            Logger.selfTest.info("[\(result.status.rawValue, privacy: .public)] \(result.name, privacy: .public): \(result.detail, privacy: .public)")
         }
 
         let failures = results.filter { $0.status == .fail }
         let passes = results.filter { $0.status == .pass }.count
         let skips = results.filter { $0.status == .skip }.count
-        print("")
-        print("Summary: \(passes) passed, \(failures.count) failed, \(skips) skipped")
+        Logger.selfTest.info("")
+        Logger.selfTest.info("Summary: \(passes, privacy: .public) passed, \(failures.count, privacy: .public) failed, \(skips, privacy: .public) skipped")
 
         return failures.isEmpty ? 0 : 1
     }
@@ -780,7 +781,7 @@ enum SelfTestRunner {
             do {
                 try data.write(to: url)
             } catch {
-                print("Self-test restore failed for \(url.path): \(error.localizedDescription)")
+                Logger.selfTest.error("Self-test restore failed for \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         } else if !existed {
             removeIfExists(at: url)
@@ -940,7 +941,7 @@ enum SelfTestRunner {
         do {
             return try Data(contentsOf: url)
         } catch {
-            print("Self-test failed to read \(url.path): \(error.localizedDescription)")
+            Logger.selfTest.error("Self-test failed to read \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
@@ -959,7 +960,7 @@ enum SelfTestRunner {
         do {
             try FileManager.default.removeItem(at: url)
         } catch {
-            print("Self-test cleanup failed for \(url.path): \(error.localizedDescription)")
+            Logger.selfTest.error("Self-test cleanup failed for \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 }

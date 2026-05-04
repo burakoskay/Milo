@@ -1,5 +1,6 @@
 import Foundation
 import ServiceManagement
+import os
 
 /// Manages persistent user preferences for Milo
 class SettingsManager {
@@ -103,13 +104,13 @@ class SettingsManager {
                     try service.unregister()
                 }
             } catch {
-                print("Failed to \(enable ? "register" : "unregister") login item: \(error)")
+                Logger.settings.error("Failed to \(enable ? "register" : "unregister") login item: \(error, privacy: .public)")
             }
         } else {
             // Fallback: shared file list (deprecated but functional on 12)
             let success = SMLoginItemSetEnabled("com.monomacaw.milo" as CFString, enable)
             if !success {
-                print("SMLoginItemSetEnabled failed for \(enable)")
+                Logger.settings.error("SMLoginItemSetEnabled failed for \(enable)")
             }
         }
     }

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import os
 
 struct MemoryStats {
     let totalGB: Double
@@ -212,7 +213,7 @@ class MemoryManager {
             )
 
         } catch {
-            print("Failed to get memory stats: \(error)")
+            Logger.memory.error("Failed to get memory stats: \(error, privacy: .public)")
             return nil
         }
     }

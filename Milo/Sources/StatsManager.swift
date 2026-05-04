@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 struct KillStats: Codable {
     let timestamp: Date
@@ -75,7 +76,7 @@ class StatsManager {
         do {
             try FileManager.default.createDirectory(at: miloDir, withIntermediateDirectories: true)
         } catch {
-            print("Milo StatsManager: Failed to create directory. \\(error.localizedDescription)")
+            Logger.stats.error("Milo StatsManager: Failed to create directory: \(error.localizedDescription, privacy: .public)")
             return nil
         }
         return miloDir.appendingPathComponent("stats.json")
@@ -93,7 +94,7 @@ class StatsManager {
             let decoded = try JSONDecoder().decode(AggregatedStats.self, from: data)
             self.stats = decoded
         } catch {
-            print("Milo StatsManager: Failed to load or decode stats. Starting fresh. \(error.localizedDescription)")
+            Logger.stats.error("Milo StatsManager: Failed to load or decode stats. Starting fresh. \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -119,7 +120,7 @@ class StatsManager {
             let encoded = try JSONEncoder().encode(stats)
             try encoded.write(to: url)
         } catch {
-            print("Milo StatsManager: Failed to save stats. \(error.localizedDescription)")
+            Logger.stats.error("Milo StatsManager: Failed to save stats: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

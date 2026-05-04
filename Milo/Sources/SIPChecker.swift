@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 class SIPChecker {
     static func isSIPEnabled() -> Bool {
@@ -16,7 +17,7 @@ class SIPChecker {
                 return output.contains("enabled")
             }
         } catch {
-            print("Failed to check SIP status: \(error)")
+            Logger.sip.error("Failed to check SIP status: \(error, privacy: .public)")
         }
 
         return true // Assume enabled if check fails for safety

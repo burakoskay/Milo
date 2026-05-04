@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import Security
 import Darwin
+import os
 
 struct LaunchItem: Identifiable, Hashable {
     let id = UUID()
@@ -29,7 +30,7 @@ class ProcessManager: ObservableObject {
         guard !label.isEmpty, label.count <= 256 else { return nil }
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-_"))
         guard label.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
-            print("Milo: rejected unsafe launchd label: \(label)")
+            Logger.process.error("Milo: rejected unsafe launchd label: \(label, privacy: .public)")
             return nil
         }
         return label
@@ -40,7 +41,7 @@ class ProcessManager: ObservableObject {
         let standardized = URL(fileURLWithPath: expanded).standardizedFileURL.path
         guard standardized.hasSuffix(".plist") else { return nil }
         guard !standardized.unicodeScalars.contains(where: { CharacterSet.newlines.contains($0) || CharacterSet.controlCharacters.contains($0) }) else {
-            print("Milo: rejected unsafe plist path: \(path)")
+            Logger.process.error("Milo: rejected unsafe plist path: \(path, privacy: .public)")
             return nil
         }
         let userLaunchAgents = FileManager.default.homeDirectoryForCurrentUser
@@ -54,7 +55,7 @@ class ProcessManager: ObservableObject {
             userLaunchAgents
         ]
         guard allowedRoots.contains(where: { standardized == $0 || standardized.hasPrefix($0 + "/") }) else {
-            print("Milo: rejected plist outside LaunchAgents/LaunchDaemons: \(path)")
+            Logger.process.error("Milo: rejected plist outside LaunchAgents/LaunchDaemons: \(path, privacy: .public)")
             return nil
         }
         return standardized
@@ -430,7 +431,7 @@ class ProcessManager: ObservableObject {
             return (bloatItems, intelItems)
 
         } catch {
-            print("Failed to scan processes: \(error)")
+            Logger.process.error("Failed to scan processes: \(error, privacy: .public)")
         }
 
         return ([], [])
@@ -476,7 +477,7 @@ class ProcessManager: ObservableObject {
                 return (Array(foundBloat).sorted(), Array(foundIntel).sorted())
             }
         } catch {
-            print("Failed to scan processes: \(error)")
+            Logger.process.error("Failed to scan processes: \(error, privacy: .public)")
         }
 
         return ([], [])
@@ -756,7 +757,7 @@ class ProcessManager: ObservableObject {
         }
 
         guard let finalLabel = label, !finalLabel.isEmpty else {
-            print("Failed to determine label for plist at: \(path)")
+            Logger.process.error("Failed to determine label for plist at: \(path, privacy: .public)")
             return
         }
 
@@ -766,11 +767,11 @@ class ProcessManager: ObservableObject {
         let domain = isDaemon ? "system" : "gui/\(uid)"
 
         guard let safeLabel = Self.validateLaunchdLabel(finalLabel) else {
-            print("Milo: rejected toggle for unsafe label: \(finalLabel)")
+            Logger.process.error("Milo: rejected toggle for unsafe label: \(finalLabel, privacy: .public)")
             return
         }
         guard let safePath = Self.validatePlistPath(path) else {
-            print("Milo: rejected toggle for unsafe path: \(path)")
+            Logger.process.error("Milo: rejected toggle for unsafe path: \(path, privacy: .public)")
             return
         }
         let requiresAdmin = Self.requiresAdministrator(forPlistPath: safePath)
@@ -796,7 +797,7 @@ class ProcessManager: ObservableObject {
                 return plist["Label"] as? String
             }
         } catch {
-            print("Error reading or parsing plist at \(path): \(error)")
+            Logger.process.error("Error reading or parsing plist at \(path, privacy: .public): \(error, privacy: .public)")
         }
         return nil
     }
