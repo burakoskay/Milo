@@ -143,12 +143,18 @@ for service in "${SERVICES[@]}"; do
     fi
 done
 
+# Function to escape regex special characters
+escape_regex() {
+    printf '%s\n' "$1" | sed 's/[][\.^*+?()|\\${}]/\\&/g'
+}
+
 echo ""
 echo "Killing processes..."
 for proc in "${PROCESSES[@]}"; do
-    if pgrep -f "$proc" > /dev/null 2>&1; then
+    escaped_proc=$(escape_regex "$proc")
+    if pgrep -f -- "$escaped_proc" > /dev/null 2>&1; then
         echo -n "  $proc: "
-        pkill -9 -f "$proc" 2>/dev/null || true
+        pkill -9 -f -- "$escaped_proc" 2>/dev/null || true
         echo -e "${GREEN}killed${NC}"
     fi
 done
