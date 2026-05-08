@@ -4,6 +4,7 @@ import WebKit
 
 struct PaywallView: View {
     @StateObject private var checkoutManager = CheckoutManager.shared
+    @ObservedObject private var licenseManager = LicenseManager.shared
     @State private var emailInput = ""
     @State private var checkoutConfiguration: PaddleCheckoutConfiguration?
     @Environment(\.dismiss) var dismiss
@@ -13,12 +14,21 @@ struct PaywallView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if licenseManager.isVerifying {
+                Text("Verifying license status...")
+                    .font(.caption)
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.accentColor.opacity(0.1))
+                    .foregroundStyle(Color.accentColor)
+            }
+
             ZStack {
                 Color(nsColor: .windowBackgroundColor)
                     .edgesIgnoringSafeArea(.top)
 
                 VStack(spacing: 12) {
-                    let imageName = colorScheme == .dark ? "milo_white" : "Milo_black"
+                    let imageName = colorScheme == .dark ? "milo_white" : "milo_black"
                     if let imagePath = Bundle.main.path(forResource: imageName, ofType: "png"),
                        let nsImage = NSImage(contentsOfFile: imagePath) {
                         Image(nsImage: nsImage)
@@ -161,20 +171,14 @@ struct PaywallView: View {
                     SignInWithAppleButton(
                         .signIn,
                         onRequest: { request in
-                            request.requestedScopes = [.email]
+                            _ = checkoutManager.configureSignInWithAppleRequest(request)
                         },
                         onCompletion: { result in
                             switch result {
                             case .success(let authorization):
-                                checkoutManager.authorizationController(
-                                    controller: ASAuthorizationController(authorizationRequests: []),
-                                    didCompleteWithAuthorization: authorization
-                                )
-                            case .failure(let error):
-                                checkoutManager.authorizationController(
-                                    controller: ASAuthorizationController(authorizationRequests: []),
-                                    didCompleteWithError: error
-                                )
+                                checkoutManager.handleSignInWithAppleAuthorization(authorization)
+                            case .failure:
+                                checkoutManager.handleSignInWithAppleFailure()
                             }
                         }
                     )
@@ -238,7 +242,8 @@ private struct PaddleCheckoutView: NSViewRepresentable {
         webConfiguration.userContentController.add(context.coordinator, name: "miloCheckout")
 
         let webView = WKWebView(frame: .zero, configuration: webConfiguration)
-        webView.setValue(false, forKey: "drawsBackground")
+        webView.navigationDelegate = context.coordinator
+        webView.underPageBackgroundColor = .clear
         webView.loadHTMLString(Self.html(for: configuration), baseURL: URL(string: "https://checkout.monomacaw.com"))
         return webView
     }
@@ -259,6 +264,7 @@ private struct PaddleCheckoutView: NSViewRepresentable {
             let data = try JSONEncoder().encode(payload)
             json = String(data: data, encoding: .utf8)?.replacingOccurrences(of: "</", with: "<\\/") ?? "{}"
         } catch {
+            MiloLog.error("Failed to encode Paddle checkout payload: \(error.localizedDescription)", category: .security)
             json = "{}"
         }
 
@@ -334,7 +340,7 @@ private struct PaddleCheckoutView: NSViewRepresentable {
         """
     }
 
-    final class Coordinator: NSObject, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let onClose: () -> Void
 
         init(onClose: @escaping () -> Void) {
@@ -350,6 +356,20 @@ private struct PaddleCheckoutView: NSViewRepresentable {
             if type == "completed" {
                 onClose()
             }
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if let host = navigationAction.request.url?.host {
+                let allowedHosts = ["paddle.com", "paddlejs-checkout.paddle.com", "monomacaw.com"]
+                if allowedHosts.contains(where: { host == $0 || host.hasSuffix(".\($0)") }) {
+                    decisionHandler(.allow)
+                    return
+                }
+            } else if navigationAction.request.url?.scheme == "about" {
+                decisionHandler(.allow)
+                return
+            }
+            decisionHandler(.cancel)
         }
     }
 }

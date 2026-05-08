@@ -21,7 +21,7 @@ struct SettingsView: View {
 
     @State private var privilegeStatus: String = ""
 
-    private let scanIntervalOptions = [0, 30, 60, 120, 300]
+    private let scanIntervalOptions = [0, 60, 120, 300, 600]
 
     var body: some View {
         ZStack {
@@ -188,10 +188,10 @@ struct SettingsView: View {
 
                 Picker("", selection: $autoScanInterval) {
                     Text("Off").tag(0)
-                    Text("30s").tag(30)
                     Text("1m").tag(60)
                     Text("2m").tag(120)
                     Text("5m").tag(300)
+                    Text("10m").tag(600)
                 }
                 .pickerStyle(.menu)
                 .frame(width: 80)

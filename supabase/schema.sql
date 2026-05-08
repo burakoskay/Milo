@@ -272,7 +272,9 @@ CREATE OR REPLACE FUNCTION public.update_user_subscription(
     p_customer_id TEXT,
     p_subscription_id TEXT,
     p_next_billing TIMESTAMPTZ,
-    p_event_occurred_at TIMESTAMPTZ
+    p_event_occurred_at TIMESTAMPTZ,
+    p_event_id TEXT DEFAULT NULL,
+    p_event_type TEXT DEFAULT NULL
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -280,6 +282,16 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    IF p_event_id IS NOT NULL THEN
+        INSERT INTO paddle_webhook_events (event_id, event_type, occurred_at)
+        VALUES (p_event_id, p_event_type, p_event_occurred_at)
+        ON CONFLICT (event_id) DO NOTHING;
+
+        IF NOT FOUND THEN
+            RETURN;
+        END IF;
+    END IF;
+
     IF p_status IS NULL OR p_status NOT IN ('active', 'trialing', 'past_due', 'paused', 'canceled') THEN
         RAISE EXCEPTION 'Invalid subscription status';
     END IF;
@@ -311,12 +323,14 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.update_user_subscription(UUID, TEXT, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.update_user_subscription(UUID, TEXT, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ) TO service_role;
+REVOKE ALL ON FUNCTION public.update_user_subscription(UUID, TEXT, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.update_user_subscription(UUID, TEXT, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT) TO service_role;
 
 CREATE OR REPLACE FUNCTION public.cancel_user_subscription(
     p_user_id UUID,
-    p_event_occurred_at TIMESTAMPTZ
+    p_event_occurred_at TIMESTAMPTZ,
+    p_event_id TEXT DEFAULT NULL,
+    p_event_type TEXT DEFAULT NULL
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -324,6 +338,16 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    IF p_event_id IS NOT NULL THEN
+        INSERT INTO paddle_webhook_events (event_id, event_type, occurred_at)
+        VALUES (p_event_id, p_event_type, p_event_occurred_at)
+        ON CONFLICT (event_id) DO NOTHING;
+
+        IF NOT FOUND THEN
+            RETURN;
+        END IF;
+    END IF;
+
     UPDATE profiles
     SET subscription_status = 'canceled',
         next_billing_date = NULL,
@@ -345,5 +369,5 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.cancel_user_subscription(UUID, TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.cancel_user_subscription(UUID, TIMESTAMPTZ) TO service_role;
+REVOKE ALL ON FUNCTION public.cancel_user_subscription(UUID, TIMESTAMPTZ, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.cancel_user_subscription(UUID, TIMESTAMPTZ, TEXT, TEXT) TO service_role;

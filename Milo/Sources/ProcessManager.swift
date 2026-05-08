@@ -23,6 +23,8 @@ struct LaunchdProcess {
 class ProcessManager: ObservableObject {
     static let shared = ProcessManager()
 
+    private typealias PrivilegedCommand = (executable: String, arguments: [String])
+
     // MARK: - Direct Execution Safety
 
     private static func validateLaunchdLabel(_ label: String) -> String? {
@@ -71,6 +73,28 @@ class ProcessManager: ObservableObject {
             ? CommandRunner.runPrivileged("/bin/launchctl", arguments: arguments)
             : CommandRunner.run("/bin/launchctl", arguments: arguments)
         return result.succeeded
+    }
+
+    private func launchctlCommand(_ arguments: [String]) -> PrivilegedCommand {
+        (executable: "/bin/launchctl", arguments: arguments)
+    }
+
+    private func runPrivilegedCommands(_ commands: [PrivilegedCommand]) -> Bool {
+        guard !commands.isEmpty else { return true }
+        return CommandRunner.runPrivilegedBatch(commands).succeeded
+    }
+
+    private func appendTermKillCommands(for pids: Set<Int32>, to commands: inout [PrivilegedCommand]) {
+        let sortedPIDs = pids.sorted()
+        guard !sortedPIDs.isEmpty else { return }
+
+        for pid in sortedPIDs where pid > 0 {
+            commands.append((executable: "/bin/kill", arguments: ["-TERM", String(pid)]))
+        }
+        commands.append((executable: "/bin/sleep", arguments: ["1"]))
+        for pid in sortedPIDs where pid > 0 {
+            commands.append((executable: "/bin/kill", arguments: ["-KILL", String(pid)]))
+        }
     }
 
     private func runKill(signal: String, pid: Int32, privileged: Bool = false) -> Bool {
@@ -369,154 +393,128 @@ class ProcessManager: ObservableObject {
     // MARK: - Scanning
 
     func scanForRunningTargetsWithResources() -> (bloat: [ProcessItem], intelligence: [ProcessItem]) {
-        let task = Process()
-        task.launchPath = "/bin/ps"
-        task.arguments = ["-Axo", "pid,%cpu,rss,comm,command"]
-
-        let pipe = Pipe()
-        task.standardOutput = pipe
-
-        do {
-            try task.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            guard let output = String(data: data, encoding: .utf8) else {
-                return ([], [])
-            }
-
-            let lines = output.components(separatedBy: .newlines)
-
-            var bloatMatches: [String: (cpu: Double, mem: Double, pids: Set<Int32>, telemetryMatch: TelemetryMatch?)] = [:]
-            var intelMatches: [String: (cpu: Double, mem: Double, pids: Set<Int32>, telemetryMatch: TelemetryMatch?)] = [:]
-
-            for line in lines.dropFirst() {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                guard !trimmed.isEmpty else { continue }
-
-                let parts = trimmed.split(separator: " ", maxSplits: 4, omittingEmptySubsequences: true)
-                guard parts.count >= 5 else { continue }
-
-                guard let pid = Int32(String(parts[0])) else { continue }
-                let cpu = Double(parts[1]) ?? 0.0
-                let memKB = Double(parts[2]) ?? 0.0
-                let memMB = memKB / 1024.0
-                let executable = resolvedExecutablePath(pid: pid, fallback: String(parts[3]))
-                let command = String(parts[4])
-
-                if let detection = detectTarget(pid: pid, executablePath: executable, command: command) {
-                    switch detection.kind {
-                    case .bloat:
-                        var existing = bloatMatches[detection.name] ?? (0, 0, Set<Int32>(), detection.telemetryMatch)
-                        existing.cpu += cpu
-                        existing.mem += memMB
-                        existing.pids.insert(pid)
-                        if existing.telemetryMatch == nil {
-                            existing.telemetryMatch = detection.telemetryMatch
-                        }
-                        bloatMatches[detection.name] = existing
-                    case .intelligence:
-                        var existing = intelMatches[detection.name] ?? (0, 0, Set<Int32>(), detection.telemetryMatch)
-                        existing.cpu += cpu
-                        existing.mem += memMB
-                        existing.pids.insert(pid)
-                        if existing.telemetryMatch == nil {
-                            existing.telemetryMatch = detection.telemetryMatch
-                        }
-                        intelMatches[detection.name] = existing
-                    }
-                }
-            }
-
-            let bloatItems = bloatMatches.map { name, stats in
-                let launchdInfo = getLaunchdInfo(name)
-                let telemetrySignature = stats.telemetryMatch?.signature
-                return ProcessItem(
-                    name: name,
-                    description: telemetrySignature.map { "\($0.vendor) · Signed telemetry rule" } ?? friendlyDescription(for: name),
-                    vendor: telemetrySignature?.vendor ?? vendorFor(processName: name),
-                    cpuUsage: stats.cpu,
-                    memoryMB: stats.mem,
-                    isLaunchdManaged: launchdInfo != nil || telemetrySignature?.launchdLabel != nil,
-                    isSystemProcess: launchdInfo?.isSystem ?? telemetryRequiresSystemPrivilege(telemetrySignature),
-                    matchedPIDs: stats.pids,
-                    telemetryRuleID: telemetrySignature?.ruleID,
-                    terminationStrategy: telemetrySignature?.terminationStrategy,
-                    launchdLabel: telemetrySignature?.launchdLabel,
-                    launchdDomain: telemetrySignature?.launchdDomain
-                )
-            }.sorted { $0.name < $1.name }
-
-            let intelItems = intelMatches.map { name, stats in
-                let launchdInfo = getLaunchdInfo(name)
-                let telemetrySignature = stats.telemetryMatch?.signature
-                return ProcessItem(
-                    name: name,
-                    description: telemetrySignature.map { "\($0.vendor) · Signed telemetry rule" } ?? friendlyDescription(for: name),
-                    vendor: telemetrySignature?.vendor ?? vendorFor(processName: name),
-                    cpuUsage: stats.cpu,
-                    memoryMB: stats.mem,
-                    isLaunchdManaged: launchdInfo != nil || telemetrySignature?.launchdLabel != nil,
-                    isSystemProcess: launchdInfo?.isSystem ?? telemetryRequiresSystemPrivilege(telemetrySignature),
-                    matchedPIDs: stats.pids,
-                    telemetryRuleID: telemetrySignature?.ruleID,
-                    terminationStrategy: telemetrySignature?.terminationStrategy,
-                    launchdLabel: telemetrySignature?.launchdLabel,
-                    launchdDomain: telemetrySignature?.launchdDomain
-                )
-            }.sorted { $0.name < $1.name }
-
-            return (bloatItems, intelItems)
-
-        } catch {
-            MiloLog.error("Failed to scan processes with resources: \(error.localizedDescription)", category: .process)
+        let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,%cpu,rss,comm,command"])
+        guard result.succeeded else {
+            MiloLog.error("Failed to scan processes with resources: \(result.stderr)", category: .process)
+            return ([], [])
         }
 
-        return ([], [])
+        let lines = result.stdout.components(separatedBy: .newlines)
+
+        var bloatMatches: [String: (cpu: Double, mem: Double, pids: Set<Int32>, telemetryMatch: TelemetryMatch?)] = [:]
+        var intelMatches: [String: (cpu: Double, mem: Double, pids: Set<Int32>, telemetryMatch: TelemetryMatch?)] = [:]
+
+        for line in lines.dropFirst() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+
+            let parts = trimmed.split(separator: " ", maxSplits: 4, omittingEmptySubsequences: true)
+            guard parts.count >= 5 else { continue }
+
+            guard let pid = Int32(String(parts[0])) else { continue }
+            let cpu = Double(parts[1]) ?? 0.0
+            let memKB = Double(parts[2]) ?? 0.0
+            let memMB = memKB / 1024.0
+            let executable = resolvedExecutablePath(pid: pid, fallback: String(parts[3]))
+            let command = String(parts[4])
+
+            if let detection = detectTarget(pid: pid, executablePath: executable, command: command) {
+                switch detection.kind {
+                case .bloat:
+                    var existing = bloatMatches[detection.name] ?? (0, 0, Set<Int32>(), detection.telemetryMatch)
+                    existing.cpu += cpu
+                    existing.mem += memMB
+                    existing.pids.insert(pid)
+                    if existing.telemetryMatch == nil {
+                        existing.telemetryMatch = detection.telemetryMatch
+                    }
+                    bloatMatches[detection.name] = existing
+                case .intelligence:
+                    var existing = intelMatches[detection.name] ?? (0, 0, Set<Int32>(), detection.telemetryMatch)
+                    existing.cpu += cpu
+                    existing.mem += memMB
+                    existing.pids.insert(pid)
+                    if existing.telemetryMatch == nil {
+                        existing.telemetryMatch = detection.telemetryMatch
+                    }
+                    intelMatches[detection.name] = existing
+                }
+            }
+        }
+
+        let bloatItems = bloatMatches.map { name, stats in
+            let launchdInfo = getLaunchdInfo(name)
+            let telemetrySignature = stats.telemetryMatch?.signature
+            return ProcessItem(
+                name: name,
+                description: telemetrySignature.map { "\($0.vendor) · Signed telemetry rule" } ?? friendlyDescription(for: name),
+                vendor: telemetrySignature?.vendor ?? vendorFor(processName: name),
+                cpuUsage: stats.cpu,
+                memoryMB: stats.mem,
+                isLaunchdManaged: launchdInfo != nil || telemetrySignature?.launchdLabel != nil,
+                isSystemProcess: launchdInfo?.isSystem ?? telemetryRequiresSystemPrivilege(telemetrySignature),
+                matchedPIDs: stats.pids,
+                telemetryRuleID: telemetrySignature?.ruleID,
+                terminationStrategy: telemetrySignature?.terminationStrategy,
+                launchdLabel: telemetrySignature?.launchdLabel,
+                launchdDomain: telemetrySignature?.launchdDomain
+            )
+        }.sorted { $0.name < $1.name }
+
+        let intelItems = intelMatches.map { name, stats in
+            let launchdInfo = getLaunchdInfo(name)
+            let telemetrySignature = stats.telemetryMatch?.signature
+            return ProcessItem(
+                name: name,
+                description: telemetrySignature.map { "\($0.vendor) · Signed telemetry rule" } ?? friendlyDescription(for: name),
+                vendor: telemetrySignature?.vendor ?? vendorFor(processName: name),
+                cpuUsage: stats.cpu,
+                memoryMB: stats.mem,
+                isLaunchdManaged: launchdInfo != nil || telemetrySignature?.launchdLabel != nil,
+                isSystemProcess: launchdInfo?.isSystem ?? telemetryRequiresSystemPrivilege(telemetrySignature),
+                matchedPIDs: stats.pids,
+                telemetryRuleID: telemetrySignature?.ruleID,
+                terminationStrategy: telemetrySignature?.terminationStrategy,
+                launchdLabel: telemetrySignature?.launchdLabel,
+                launchdDomain: telemetrySignature?.launchdDomain
+            )
+        }.sorted { $0.name < $1.name }
+
+        return (bloatItems, intelItems)
     }
 
     func scanForRunningTargets() -> (bloat: [String], intelligence: [String]) {
-        let task = Process()
-        task.launchPath = "/bin/ps"
-        task.arguments = ["-Axo", "pid,comm,command"]
-
-        let pipe = Pipe()
-        task.standardOutput = pipe
-
-        do {
-            try task.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                let lines = output.components(separatedBy: .newlines)
-
-                var foundBloat: Set<String> = []
-                var foundIntel: Set<String> = []
-
-                for line in lines {
-                    let trimmed = line.trimmingCharacters(in: .whitespaces)
-                    guard !trimmed.isEmpty else { continue }
-                    let parts = trimmed.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
-                    guard parts.count == 3,
-                          let pid = Int32(String(parts[0])) else { continue }
-
-                    let executable = resolvedExecutablePath(pid: pid, fallback: String(parts[1]))
-                    let command = String(parts[2])
-
-                    if let detection = detectTarget(pid: pid, executablePath: executable, command: command) {
-                        switch detection.kind {
-                        case .bloat:
-                            foundBloat.insert(detection.name)
-                        case .intelligence:
-                            foundIntel.insert(detection.name)
-                        }
-                    }
-                }
-
-                return (Array(foundBloat).sorted(), Array(foundIntel).sorted())
-            }
-        } catch {
-            MiloLog.error("Failed to scan processes: \(error.localizedDescription)", category: .process)
+        let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,comm,command"])
+        guard result.succeeded else {
+            MiloLog.error("Failed to scan processes: \(result.stderr)", category: .process)
+            return ([], [])
         }
 
-        return ([], [])
+        let lines = result.stdout.components(separatedBy: .newlines)
+        var foundBloat: Set<String> = []
+        var foundIntel: Set<String> = []
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            let parts = trimmed.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
+            guard parts.count == 3,
+                  let pid = Int32(String(parts[0])) else { continue }
+
+            let executable = resolvedExecutablePath(pid: pid, fallback: String(parts[1]))
+            let command = String(parts[2])
+
+            if let detection = detectTarget(pid: pid, executablePath: executable, command: command) {
+                switch detection.kind {
+                case .bloat:
+                    foundBloat.insert(detection.name)
+                case .intelligence:
+                    foundIntel.insert(detection.name)
+                }
+            }
+        }
+
+        return (Array(foundBloat).sorted(), Array(foundIntel).sorted())
     }
 
     // MARK: - Killing
@@ -635,6 +633,12 @@ class ProcessManager: ObservableObject {
     private func terminatePIDs(_ pids: Set<Int32>, privileged: Bool) -> Bool {
         guard !pids.isEmpty else { return false }
 
+        if privileged {
+            var commands: [PrivilegedCommand] = []
+            appendTermKillCommands(for: pids, to: &commands)
+            return runPrivilegedCommands(commands)
+        }
+
         var accepted = true
         for pid in pids.sorted() where !runKill(signal: "-TERM", pid: pid, privileged: privileged) {
             accepted = false
@@ -657,43 +661,32 @@ class ProcessManager: ObservableObject {
     }
 
     private func exactPIDs(matchingStaticTargetName targetName: String) -> Set<Int32> {
-        let task = Process()
-        task.launchPath = "/bin/ps"
-        task.arguments = ["-Axo", "pid,comm,command"]
-
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-
-        do {
-            try task.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            guard let output = String(data: data, encoding: .utf8) else { return [] }
-
-            return Set(output.components(separatedBy: .newlines).compactMap { line -> Int32? in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                guard !trimmed.isEmpty else { return nil }
-
-                let parts = trimmed.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
-                guard parts.count == 3,
-                      let pid = Int32(String(parts[0])) else {
-                    return nil
-                }
-
-                let executable = resolvedExecutablePath(pid: pid, fallback: String(parts[1]))
-                let command = String(parts[2])
-                let executableName = executableName(from: executable)
-                return bestStaticTargetMatch(
-                    executablePath: executable,
-                    executableName: executableName,
-                    command: command,
-                    targets: [targetName]
-                ) == nil ? nil : pid
-            })
-        } catch {
-            MiloLog.error("Failed to enumerate exact process identifiers for \(targetName): \(error.localizedDescription)", category: .process)
+        let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,comm,command"])
+        guard result.succeeded else {
+            MiloLog.error("Failed to enumerate exact process identifiers for \(targetName): \(result.stderr)", category: .process)
             return []
         }
+
+        return Set(result.stdout.components(separatedBy: .newlines).compactMap { line -> Int32? in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { return nil }
+
+            let parts = trimmed.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
+            guard parts.count == 3,
+                  let pid = Int32(String(parts[0])) else {
+                return nil
+            }
+
+            let executable = resolvedExecutablePath(pid: pid, fallback: String(parts[1]))
+            let command = String(parts[2])
+            let executableName = executableName(from: executable)
+            return bestStaticTargetMatch(
+                executablePath: executable,
+                executableName: executableName,
+                command: command,
+                targets: [targetName]
+            ) == nil ? nil : pid
+        })
     }
 
     private func runTelemetryLaunchctl(label: String?, domain: TelemetryLaunchdDomain?, disableFirst: Bool) -> Bool {
@@ -716,11 +709,25 @@ class ProcessManager: ObservableObject {
         }
 
         for (launchdDomain, privileged) in domains {
-            if disableFirst, !runLaunchctl(["disable", "\(launchdDomain)/\(safeLabel)"], privileged: privileged) {
-                accepted = false
-            }
-            if !runLaunchctl(["bootout", "\(launchdDomain)/\(safeLabel)"], privileged: privileged) {
-                accepted = false
+            var privilegedCommands: [PrivilegedCommand] = []
+            let disableArguments = ["disable", "\(launchdDomain)/\(safeLabel)"]
+            let bootoutArguments = ["bootout", "\(launchdDomain)/\(safeLabel)"]
+
+            if privileged {
+                if disableFirst {
+                    privilegedCommands.append(launchctlCommand(disableArguments))
+                }
+                privilegedCommands.append(launchctlCommand(bootoutArguments))
+                if !runPrivilegedCommands(privilegedCommands) {
+                    accepted = false
+                }
+            } else {
+                if disableFirst, !runLaunchctl(disableArguments) {
+                    accepted = false
+                }
+                if !runLaunchctl(bootoutArguments) {
+                    accepted = false
+                }
             }
         }
 
@@ -736,31 +743,64 @@ class ProcessManager: ObservableObject {
         let isDaemon = plistPath?.contains("/LaunchDaemons/") ?? info.plistPath.contains("LaunchDaemons")
         let admin = plistPath.map(Self.requiresAdministrator(forPlistPath:)) ?? isDaemon
         var accepted = true
+        var privilegedCommands: [PrivilegedCommand] = []
 
-        if (isDaemon || info.isSystem) && !runLaunchctl(["disable", "system/\(safeLabel)"], privileged: admin) && !info.isSystem {
-            accepted = false
+        if isDaemon || info.isSystem {
+            let arguments = ["disable", "system/\(safeLabel)"]
+            if admin {
+                privilegedCommands.append(launchctlCommand(arguments))
+            } else if !runLaunchctl(arguments) && !info.isSystem {
+                accepted = false
+            }
         }
 
         if isDaemon {
-            _ = runLaunchctl(["bootout", "system/\(safeLabel)"], privileged: admin)
+            let arguments = ["bootout", "system/\(safeLabel)"]
+            if admin {
+                privilegedCommands.append(launchctlCommand(arguments))
+            } else {
+                _ = runLaunchctl(arguments)
+            }
         }
 
         _ = runLaunchctl(["disable", "gui/\(uid)/\(safeLabel)"])
         _ = runLaunchctl(["bootout", "gui/\(uid)/\(safeLabel)"])
 
         if let plistPath, FileManager.default.fileExists(atPath: plistPath) {
-            _ = runLaunchctl(["unload", "-w", plistPath], privileged: admin)
+            let arguments = ["unload", "-w", plistPath]
+            if admin {
+                privilegedCommands.append(launchctlCommand(arguments))
+            } else {
+                _ = runLaunchctl(arguments)
+            }
         }
 
         for relatedLabel in info.relatedLabels {
             guard let safeRelated = Self.validateLaunchdLabel(relatedLabel) else { continue }
-            _ = runLaunchctl(["disable", "system/\(safeRelated)"], privileged: admin)
+            if admin {
+                privilegedCommands.append(launchctlCommand(["disable", "system/\(safeRelated)"]))
+            } else {
+                _ = runLaunchctl(["disable", "system/\(safeRelated)"])
+            }
             _ = runLaunchctl(["disable", "gui/\(uid)/\(safeRelated)"])
-            _ = runLaunchctl(["bootout", "system/\(safeRelated)"], privileged: admin)
+            if admin {
+                privilegedCommands.append(launchctlCommand(["bootout", "system/\(safeRelated)"]))
+            } else {
+                _ = runLaunchctl(["bootout", "system/\(safeRelated)"])
+            }
             _ = runLaunchctl(["bootout", "gui/\(uid)/\(safeRelated)"])
         }
 
-        _ = terminatePIDs(exactPIDs(matchingStaticTargetName: info.processName), privileged: admin)
+        let pids = exactPIDs(matchingStaticTargetName: info.processName)
+        if admin {
+            appendTermKillCommands(for: pids, to: &privilegedCommands)
+        } else {
+            _ = terminatePIDs(pids, privileged: false)
+        }
+
+        if !runPrivilegedCommands(privilegedCommands) {
+            accepted = false
+        }
 
         return accepted && (!info.isSystem || !SIPChecker.isSIPEnabled())
     }
@@ -771,21 +811,36 @@ class ProcessManager: ObservableObject {
         let plistPath = Self.validatePlistPath(info.plistPath)
         let admin = plistPath.map(Self.requiresAdministrator(forPlistPath:)) ?? info.plistPath.contains("LaunchDaemons")
         var accepted = true
+        var privilegedCommands: [PrivilegedCommand] = []
 
-        if (plistPath?.contains("/LaunchDaemons/") ?? info.isSystem) && !runLaunchctl(["enable", "system/\(safeLabel)"], privileged: admin) && !info.isSystem {
-            accepted = false
+        if plistPath?.contains("/LaunchDaemons/") ?? info.isSystem {
+            let arguments = ["enable", "system/\(safeLabel)"]
+            if admin {
+                privilegedCommands.append(launchctlCommand(arguments))
+            } else if !runLaunchctl(arguments) && !info.isSystem {
+                accepted = false
+            }
         }
         _ = runLaunchctl(["enable", "gui/\(uid)/\(safeLabel)"])
 
         if let plistPath, FileManager.default.fileExists(atPath: plistPath) {
             let domain = plistPath.contains("/LaunchDaemons/") ? "system" : "gui/\(uid)"
-            _ = runLaunchctl(["bootstrap", domain, plistPath], privileged: admin)
-            _ = runLaunchctl(["load", "-w", plistPath], privileged: admin)
+            if admin {
+                privilegedCommands.append(launchctlCommand(["bootstrap", domain, plistPath]))
+                privilegedCommands.append(launchctlCommand(["load", "-w", plistPath]))
+            } else {
+                _ = runLaunchctl(["bootstrap", domain, plistPath])
+                _ = runLaunchctl(["load", "-w", plistPath])
+            }
         }
 
         for relatedLabel in info.relatedLabels {
             guard let safeRelated = Self.validateLaunchdLabel(relatedLabel) else { continue }
             _ = runLaunchctl(["enable", "gui/\(uid)/\(safeRelated)"])
+        }
+
+        if !runPrivilegedCommands(privilegedCommands) {
+            accepted = false
         }
 
         return accepted
@@ -861,17 +916,39 @@ class ProcessManager: ObservableObject {
             return
         }
         let requiresAdmin = Self.requiresAdministrator(forPlistPath: safePath)
+        var privilegedCommands: [PrivilegedCommand] = []
 
         if enable {
-            _ = runLaunchctl(["enable", "\(domain)/\(safeLabel)"], privileged: requiresAdmin)
-            _ = runLaunchctl(["bootstrap", domain, safePath], privileged: requiresAdmin)
-            _ = runLaunchctl(["load", "-w", safePath], privileged: requiresAdmin)
+            let commands = [
+                ["enable", "\(domain)/\(safeLabel)"],
+                ["bootstrap", domain, safePath],
+                ["load", "-w", safePath]
+            ]
+            if requiresAdmin {
+                privilegedCommands.append(contentsOf: commands.map(launchctlCommand(_:)))
+            } else {
+                for command in commands {
+                    _ = runLaunchctl(command)
+                }
+            }
         } else {
-            _ = runLaunchctl(["bootout", "\(domain)/\(safeLabel)"], privileged: requiresAdmin)
-            _ = runLaunchctl(["disable", "\(domain)/\(safeLabel)"], privileged: requiresAdmin)
-            _ = runLaunchctl(["unload", "-w", safePath], privileged: requiresAdmin)
-            _ = terminatePIDs(exactPIDs(matchingStaticTargetName: safeLabel), privileged: requiresAdmin)
+            let commands = [
+                ["bootout", "\(domain)/\(safeLabel)"],
+                ["disable", "\(domain)/\(safeLabel)"],
+                ["unload", "-w", safePath]
+            ]
+            if requiresAdmin {
+                privilegedCommands.append(contentsOf: commands.map(launchctlCommand(_:)))
+                appendTermKillCommands(for: exactPIDs(matchingStaticTargetName: safeLabel), to: &privilegedCommands)
+            } else {
+                for command in commands {
+                    _ = runLaunchctl(command)
+                }
+                _ = terminatePIDs(exactPIDs(matchingStaticTargetName: safeLabel), privileged: false)
+            }
         }
+
+        _ = runPrivilegedCommands(privilegedCommands)
     }
 
     // MARK: - Helpers
@@ -891,19 +968,6 @@ class ProcessManager: ObservableObject {
     private func isLaunchItemLoaded(label: String, path: String) -> Bool {
         let uid = getuid()
         let domain = path.contains("/LaunchDaemons/") ? "system" : "gui/\(uid)"
-
-        let task = Process()
-        task.launchPath = "/bin/launchctl"
-        task.arguments = ["print", "\(domain)/\(label)"]
-        task.standardOutput = Pipe()
-        task.standardError = Pipe()
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-            return task.terminationStatus == 0
-        } catch {
-            return false
-        }
+        return CommandRunner.run("/bin/launchctl", arguments: ["print", "\(domain)/\(label)"]).succeeded
     }
 }

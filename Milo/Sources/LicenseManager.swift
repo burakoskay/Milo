@@ -62,6 +62,7 @@ final class LicenseManager: ObservableObject {
     static let shared = LicenseManager()
 
     @Published private(set) var isSubscribed: Bool = false
+    @Published private(set) var isVerifying: Bool = false
     @Published private(set) var licenseError: String?
 
     // The single Public Key embedded in the app. The Private Key NEVER leaves the Supabase server.
@@ -74,7 +75,7 @@ final class LicenseManager: ObservableObject {
     private init() {}
 
     /// Extracts a highly unique, stable device fingerprint without triggering privacy warnings
-    func generateDeviceFingerprint() -> String? {
+    func generateDeviceFingerprint(userID: String) -> String? {
         let platformExpert = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPlatformExpertDevice"))
         guard platformExpert != 0 else { return nil }
         defer { IOObjectRelease(platformExpert) }
@@ -89,14 +90,18 @@ final class LicenseManager: ObservableObject {
         }
 
         // Hash the serial number so the raw serial never leaves the device
-        let data = Data(serialNumberAsCFString.utf8)
+        let rawString = "\(serialNumberAsCFString)\u{0}\(userID)"
+        let data = Data(rawString.utf8)
         let hash = SHA256.hash(data: data)
         return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
 
     /// Fetches the license state and signed cloud signatures from Supabase
-    func verifyLicenseAndFetchSignatures(sessionToken: String) async {
-        guard let deviceId = generateDeviceFingerprint() else {
+    func verifyLicenseAndFetchSignatures(sessionToken: String, userID: String) async {
+        await MainActor.run { isVerifying = true }
+        defer { Task { @MainActor in isVerifying = false } }
+
+        guard let deviceId = generateDeviceFingerprint(userID: userID) else {
             await setLicenseState(isValid: false, error: "Hardware fingerprint generation failed.")
             return
         }
@@ -121,7 +126,7 @@ final class LicenseManager: ObservableObject {
                 return
             }
             if httpResponse.statusCode != 200 {
-                if httpResponse.statusCode >= 500, await applyCachedLicenseEnvelope() {
+                if httpResponse.statusCode >= 500, await applyCachedLicenseEnvelope(userID: userID) {
                     return
                 }
                 await setLicenseState(isValid: false, error: "Server rejected the verification request.")
@@ -129,11 +134,11 @@ final class LicenseManager: ObservableObject {
             }
 
             let envelope = try JSONDecoder().decode(SignedLicenseEnvelope.self, from: data)
-            let payload = try verifyCryptographicSignature(envelope: envelope)
+            let payload = try verifyCryptographicSignature(envelope: envelope, userID: userID)
             try cacheVerifiedEnvelope(envelope)
             await applyVerifiedPayload(payload)
         } catch {
-            if await applyCachedLicenseEnvelope() {
+            if await applyCachedLicenseEnvelope(userID: userID) {
                 return
             }
             await setLicenseState(isValid: false, error: "Network or decoding error: \(error.localizedDescription)")
@@ -143,7 +148,7 @@ final class LicenseManager: ObservableObject {
     /// Verifies the Ed25519 Signature.
     /// If an attacker modifies the payload (e.g., changes 'expired' to 'active'),
     /// the cryptographic signature check will fail and throw an error.
-    private func verifyCryptographicSignature(envelope: SignedLicenseEnvelope) throws -> LicensePayload {
+    private func verifyCryptographicSignature(envelope: SignedLicenseEnvelope, userID: String) throws -> LicensePayload {
         guard let payloadData = Data(base64Encoded: envelope.payload),
               let signatureData = Data(base64Encoded: envelope.signature),
               let keyData = Data(base64Encoded: publicKeyBase64) else {
@@ -168,7 +173,7 @@ final class LicenseManager: ObservableObject {
             throw LicenseVerificationError.malformedSignedPayload
         }
 
-        guard payload.deviceId == generateDeviceFingerprint() else {
+        guard payload.deviceId == generateDeviceFingerprint(userID: userID) else {
             throw LicenseVerificationError.deviceMismatch
         }
 
@@ -214,10 +219,10 @@ final class LicenseManager: ObservableObject {
         }
     }
 
-    private func applyCachedLicenseEnvelope() async -> Bool {
+    private func applyCachedLicenseEnvelope(userID: String) async -> Bool {
         do {
             guard let envelope = try readCachedLicenseEnvelope() else { return false }
-            let payload = try verifyCryptographicSignature(envelope: envelope)
+            let payload = try verifyCryptographicSignature(envelope: envelope, userID: userID)
             await applyVerifiedPayload(payload)
             return true
         } catch {

@@ -22,13 +22,6 @@ struct AggregatedStats: Codable {
         return totalCPUSaved * 0.1
     }
 
-    var estimatedTrackingEventsInterrupted: Int {
-        // Rough estimate: telemetry-heavy helpers may collect ~100 events per hour.
-        guard let first = firstKillDate else { return 0 }
-        let hoursSinceFirstKill = Date().timeIntervalSince(first) / 3600
-        return Int(Double(totalProcessesKilled) * hoursSinceFirstKill * 100)
-    }
-
     var killedProcessesByVendor: [String: Int] {
         Dictionary(grouping: killHistory, by: { $0.vendor })
             .mapValues { $0.count }
@@ -117,7 +110,7 @@ class StatsManager {
         guard let url = statsFileURL else { return }
         do {
             let encoded = try JSONEncoder().encode(stats)
-            try encoded.write(to: url)
+            try encoded.write(to: url, options: [.atomic])
         } catch {
             MiloLog.error("StatsManager failed to save stats: \(error.localizedDescription)", category: .persistence)
         }
