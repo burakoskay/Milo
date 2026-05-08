@@ -21,6 +21,7 @@ class SettingsManager {
         static let showBadgeCount      = "Milo.showBadgeCount"
         static let showMemoryInHeader  = "Milo.showMemoryInHeader"
         static let notifyOnDetection   = "Milo.notifyOnDetection"
+        static let privilegeOnboardingPrompted = "Milo.privilegeOnboardingPrompted"
     }
 
     // MARK: - Properties
@@ -42,7 +43,7 @@ class SettingsManager {
 
     /// Periodic auto-scan interval in seconds (0 = disabled)
     var autoScanInterval: Int {
-        get { defaults.integer(forKey: Key.autoScanInterval) }
+        get { defaults.object(forKey: Key.autoScanInterval) == nil ? 60 : defaults.integer(forKey: Key.autoScanInterval) }
         set { defaults.set(newValue, forKey: Key.autoScanInterval) }
     }
 
@@ -82,6 +83,12 @@ class SettingsManager {
     var notifyOnDetection: Bool {
         get { defaults.bool(forKey: Key.notifyOnDetection) }
         set { defaults.set(newValue, forKey: Key.notifyOnDetection) }
+    }
+
+    /// Tracks whether the first-launch privilege explanation has already been shown.
+    var privilegeOnboardingPrompted: Bool {
+        get { defaults.bool(forKey: Key.privilegeOnboardingPrompted) }
+        set { defaults.set(newValue, forKey: Key.privilegeOnboardingPrompted) }
     }
 
     // MARK: - Login Item
@@ -128,5 +135,6 @@ class SettingsManager {
     private func migrateLegacySettings() {
         // Remove stale persisted auto-kill values from older builds and test runs.
         defaults.removeObject(forKey: "Milo.autoKillOnDetect")
+        defaults.removeObject(forKey: "Milo.MagicLinkState")
     }
 }

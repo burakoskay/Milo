@@ -118,11 +118,10 @@ struct DedicatedWindowView: View {
                     .scaledToFit()
                     .frame(height: 28)
             } else {
-                Image("milo_color")
-                    .resizable()
-                    .scaledToFit()
+                Image(systemName: "gearshape.2.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.secondary)
                     .frame(width: 24, height: 24)
-                    .font(.system(size: 22))
             }
 
             Spacer()
@@ -151,16 +150,6 @@ struct DedicatedWindowView: View {
                 .controlSize(.small)
                 .disabled(appState.isScanning)
                 .help("Rescan (⌘R)")
-
-                // User icon
-                ZStack {
-                    Circle()
-                        .fill(.quaternary)
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(width: 28, height: 28)
             }
         }
     }

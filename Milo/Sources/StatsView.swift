@@ -40,13 +40,6 @@ struct StatsView: View {
                                 icon: "battery.100.bolt",
                                 color: .green
                             )
-
-                            StatCard(
-                                title: "Tracking Estimate",
-                                value: "~\(formatNumber(appState.stats.estimatedTrackingEventsInterrupted))",
-                                icon: "eye.slash.fill",
-                                color: .purple
-                            )
                         }
 
                         // Killed by Vendor

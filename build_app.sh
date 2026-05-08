@@ -64,19 +64,19 @@ cp Milo/Info.plist "$APP_DIR/Contents/Info.plist"
 
 # ── Step 4b: Copy resource images ────────────────────────────────────────────
 echo "→ Copying resource images..."
-cp Milo/Resources/*.png "$APP_DIR/Contents/Resources/" 2>/dev/null || true
-# Colored Milo logo for dedicated window
-LOGO_SRC="/Volumes/Internal HD/Developer/monomacaw/Logos/4x/Asset 11@4x.png"
-if [[ -f "$LOGO_SRC" ]]; then
-    cp "$LOGO_SRC" "$APP_DIR/Contents/Resources/milo_color.png"
+RESOURCE_IMAGES=(Milo/Resources/*.png)
+if [[ ! -e "${RESOURCE_IMAGES[0]}" ]]; then
+    echo "✘  No PNG resources found in Milo/Resources."
+    exit 1
 fi
+cp "${RESOURCE_IMAGES[@]}" "$APP_DIR/Contents/Resources/"
 
 # ── Step 5: Generate icons ──────────────────────────────────────────────────
 echo "→ Generating app icons..."
 mkdir -p "$ICON_WORK_DIR"
 
-LIGHT_PNG="/Volumes/Internal HD/Developer/Pkill/Icons/Icon Exports/Icon-iOS-Default-1024x1024@1x.png"
-DARK_PNG="/Volumes/Internal HD/Developer/Pkill/Icons/Icon Exports/Icon-iOS-Dark-1024x1024@1x.png"
+LIGHT_PNG="Icons/Icon Exports/Milo-iOS-Default-1024x1024@1x.png"
+DARK_PNG="Icons/Icon Exports/Milo-iOS-Dark-1024x1024@1x.png"
 
 for style in Light Dark; do
     PNG_SRC=$LIGHT_PNG
@@ -128,7 +128,13 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
         exit 1
     fi
     echo "→ Signing with Developer ID..."
-    codesign --force --deep \
+    codesign --force \
+        --sign "$DEVELOPER_ID" \
+        --options runtime \
+        --entitlements "$ENTITLEMENTS_PATH" \
+        --timestamp \
+        "$APP_DIR/Contents/MacOS/$APP_NAME"
+    codesign --force \
         --sign "$DEVELOPER_ID" \
         --options runtime \
         --entitlements "$ENTITLEMENTS_PATH" \
@@ -140,7 +146,12 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
     spctl --assess --type execute "$APP_DIR" 2>&1 || echo "  (spctl may fail until notarized)"
 else
     echo "→ Ad-hoc code signing (dev)..."
-    codesign --force --deep \
+    codesign --force \
+        --sign - \
+        --options runtime \
+        --entitlements "$ENTITLEMENTS_PATH" \
+        "$APP_DIR/Contents/MacOS/$APP_NAME"
+    codesign --force \
         --sign - \
         --options runtime \
         --entitlements "$ENTITLEMENTS_PATH" \
