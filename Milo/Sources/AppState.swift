@@ -64,6 +64,7 @@ class AppState: ObservableObject {
     // Privilege setup
     @Published var isConfiguringPrivileges: Bool = false
     @Published var privilegeError: String?
+    @Published var showingFirstLaunchPrivilegePrompt: Bool = false
 
     // Memory management
     @Published var memoryStats: MemoryStats?
@@ -182,11 +183,7 @@ class AppState: ObservableObject {
 
         if !CommandLine.arguments.contains("--self-test") || CommandLine.arguments.contains("--self-test-destructive") {
             SettingsManager.shared.syncLoginItemState()
-        }
-
-        // Request notification permission if notifications are enabled
-        if SettingsManager.shared.notifyOnDetection {
-            requestNotificationPermission()
+            prepareFirstLaunchPrivilegePrompt()
         }
     }
 
@@ -206,6 +203,8 @@ class AppState: ObservableObject {
     func setupPrivileges() {
         isConfiguringPrivileges = true
         privilegeError = nil
+        SettingsManager.shared.privilegeOnboardingPrompted = true
+        showingFirstLaunchPrivilegePrompt = false
         PrivilegeManager.shared.configurePrivileges { [weak self] success in
             DispatchQueue.main.async {
                 self?.isConfiguringPrivileges = false
@@ -219,6 +218,19 @@ class AppState: ObservableObject {
                 }
             }
         }
+    }
+
+    func deferFirstLaunchPrivilegePrompt() {
+        SettingsManager.shared.privilegeOnboardingPrompted = true
+        showingFirstLaunchPrivilegePrompt = false
+    }
+
+    private func prepareFirstLaunchPrivilegePrompt() {
+        guard !SettingsManager.shared.privilegeOnboardingPrompted,
+              !PrivilegeManager.shared.isConfigured else {
+            return
+        }
+        showingFirstLaunchPrivilegePrompt = true
     }
 
     func refreshLaunchItems() {
@@ -490,7 +502,6 @@ class AppState: ObservableObject {
         lines.append("- Total processes killed: \(currentStats.totalProcessesKilled)")
         lines.append("- Total RAM freed: \(String(format: "%.1f GB", currentStats.totalRAMSavedMB / 1024))")
         lines.append("- Estimated battery saved: \(String(format: "~%.1f hours", currentStats.estimatedBatteryHoursSaved))")
-        lines.append("- Estimated tracking events interrupted: ~\(currentStats.estimatedTrackingEventsInterrupted)")
         lines.append("")
 
         if !currentStats.killedProcessesByVendor.isEmpty {

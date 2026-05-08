@@ -184,6 +184,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Initial view mode
         if currentViewMode == "dedicatedWindow" {
             openDedicatedWindow()
+        } else if appState.showingFirstLaunchPrivilegePrompt {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                self?.showPanel()
+            }
         }
     }
 

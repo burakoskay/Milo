@@ -46,6 +46,7 @@ class MemoryManager {
 
         var clearedSize: UInt64 = 0
         var clearedCount = 0
+        var skippedCount = 0
 
         do {
             let cachesURL = URL(fileURLWithPath: cachesPath, isDirectory: true).standardizedFileURL
@@ -70,18 +71,24 @@ class MemoryManager {
                     continue
                 }
 
-                clearedSize += allocatedSize(of: itemURL)
+                let size = allocatedSize(of: itemURL)
 
                 do {
                     try fileManager.removeItem(at: itemURL)
+                    clearedSize += size
                     clearedCount += 1
                 } catch {
+                    skippedCount += 1
                     continue
                 }
             }
 
             let sizeInMB = Double(clearedSize) / 1_048_576.0
-            return (true, String(format: "Cleared %d cache items (%.1f MB)", clearedCount, sizeInMB))
+            if skippedCount > 0 {
+                return (true, String(format: "Cleared %d, skipped %d (TCC denied) (%.1f MB)", clearedCount, skippedCount, sizeInMB))
+            } else {
+                return (true, String(format: "Cleared %d cache items (%.1f MB)", clearedCount, sizeInMB))
+            }
         } catch {
             return (false, "Failed to clear caches: \(error.localizedDescription)")
         }
@@ -127,94 +134,85 @@ class MemoryManager {
 
     /// Get current memory statistics
     func getMemoryStats() -> MemoryStats? {
-        // Run vm_stat to get memory info
-        let task = Process()
-        task.launchPath = "/usr/bin/vm_stat"
-
-        let pipe = Pipe()
-        task.standardOutput = pipe
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            guard let output = String(data: data, encoding: .utf8) else { return nil }
-
-            // Parse vm_stat output
-            var stats: [String: Double] = [:]
-            let lines = output.components(separatedBy: .newlines)
-
-            var pageSize: Double = 4096 // Default page size
-
-            for line in lines {
-                if line.contains("page size of") {
-                    // Extract page size
-                    let components = line.components(separatedBy: " ")
-                    if let size = components.last?.trimmingCharacters(in: CharacterSet(charactersIn: " bytes.")),
-                       let pageSizeInt = Double(size) {
-                        pageSize = pageSizeInt
-                    }
-                } else if line.contains(":") {
-                    let components = line.components(separatedBy: ":")
-                    guard components.count == 2 else { continue }
-
-                    let key = components[0].trimmingCharacters(in: .whitespaces)
-                    let value = components[1]
-                        .trimmingCharacters(in: .whitespaces)
-                        .replacingOccurrences(of: ".", with: "")
-
-                    if let pages = Double(value) {
-                        stats[key] = pages
-                    }
-                }
-            }
-
-            // Calculate memory in GB
-            let bytesToGB = pageSize / 1_073_741_824.0 // 1GB = 1024^3 bytes
-
-            let free = (stats["Pages free"] ?? 0) * bytesToGB
-            let active = (stats["Pages active"] ?? 0) * bytesToGB
-            let inactive = (stats["Pages inactive"] ?? 0) * bytesToGB
-            let wired = (stats["Pages wired down"] ?? 0) * bytesToGB
-            let compressed = (stats["Pages occupied by compressor"] ?? 0) * bytesToGB
-            let cached = (stats["File-backed pages"] ?? 0) * bytesToGB
-
-            // Get total memory
-            var size: UInt64 = 0
-            var length = MemoryLayout<UInt64>.size
-            sysctlbyname("hw.memsize", &size, &length, nil, 0)
-            let totalGB = Double(size) / 1_073_741_824.0
-
-            let appMemory = active + wired
-
-            // Determine memory pressure
-            let usedPercentage = ((wired + active + compressed) / totalGB) * 100
-            let pressure: MemoryStats.MemoryPressure
-            if usedPercentage > 85 {
-                pressure = .critical
-            } else if usedPercentage > 70 {
-                pressure = .warning
-            } else {
-                pressure = .normal
-            }
-
-            return MemoryStats(
-                totalGB: totalGB,
-                wiredGB: wired,
-                activeGB: active,
-                inactiveGB: inactive,
-                compressedGB: compressed,
-                freeGB: free,
-                appMemoryGB: appMemory,
-                cachedFilesGB: cached,
-                memoryPressure: pressure
-            )
-
-        } catch {
-            MiloLog.error("Failed to get memory stats: \(error.localizedDescription)", category: .memory)
+        let result = CommandRunner.run("/usr/bin/vm_stat")
+        guard result.succeeded else {
+            MiloLog.error("Failed to read memory statistics: \(result.stderr)", category: .memory)
             return nil
         }
+
+        // Parse vm_stat output
+        var stats: [String: Double] = [:]
+        let lines = result.stdout.components(separatedBy: .newlines)
+
+        var pageSize: Double = 4096 // Default page size
+
+        for line in lines {
+            if line.contains("page size of") {
+                // Extract page size
+                let components = line.components(separatedBy: " ")
+                if let size = components.last?.trimmingCharacters(in: CharacterSet(charactersIn: " bytes.")),
+                   let pageSizeInt = Double(size) {
+                    pageSize = pageSizeInt
+                }
+            } else if line.contains(":") {
+                let components = line.components(separatedBy: ":")
+                guard components.count == 2 else { continue }
+
+                let key = components[0].trimmingCharacters(in: .whitespaces)
+                let value = components[1]
+                    .trimmingCharacters(in: .whitespaces)
+                    .replacingOccurrences(of: ".", with: "")
+
+                if let pages = Double(value) {
+                    stats[key] = pages
+                }
+            }
+        }
+
+        // Calculate memory in GB
+        let bytesToGB = pageSize / 1_073_741_824.0 // 1GB = 1024^3 bytes
+
+        let free = (stats["Pages free"] ?? 0) * bytesToGB
+        let active = (stats["Pages active"] ?? 0) * bytesToGB
+        let inactive = (stats["Pages inactive"] ?? 0) * bytesToGB
+        let wired = (stats["Pages wired down"] ?? 0) * bytesToGB
+        let compressed = (stats["Pages occupied by compressor"] ?? 0) * bytesToGB
+        let cached = (stats["File-backed pages"] ?? 0) * bytesToGB
+
+        // Get total memory
+        var size: UInt64 = 0
+        var length = MemoryLayout<UInt64>.size
+        let sysctlStatus = sysctlbyname("hw.memsize", &size, &length, nil, 0)
+        guard sysctlStatus == 0, size > 0 else {
+            MiloLog.error("Failed to read total physical memory via sysctl", category: .memory)
+            return nil
+        }
+        let totalGB = Double(size) / 1_073_741_824.0
+
+        let appMemory = active + wired
+
+        // Determine memory pressure
+        let usedPercentage = ((wired + active + compressed) / totalGB) * 100
+        let pressure: MemoryStats.MemoryPressure
+        if usedPercentage > 85 {
+            pressure = .critical
+        } else if usedPercentage > 70 {
+            pressure = .warning
+        } else {
+            pressure = .normal
+        }
+
+        return MemoryStats(
+            totalGB: totalGB,
+            wiredGB: wired,
+            activeGB: active,
+            inactiveGB: inactive,
+            compressedGB: compressed,
+            freeGB: free,
+            appMemoryGB: appMemory,
+            cachedFilesGB: cached,
+            memoryPressure: pressure
+        )
     }
 
     /// Purge inactive memory (requires sudo)

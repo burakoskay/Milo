@@ -60,7 +60,7 @@ class WhitelistManager {
         guard let url = whitelistFileURL else { return }
         do {
             let encoded = try JSONEncoder().encode(whitelistedProcesses)
-            try encoded.write(to: url)
+            try encoded.write(to: url, options: [.atomic])
         } catch {
             MiloLog.error("WhitelistManager failed to save whitelist: \(error.localizedDescription)", category: .persistence)
         }

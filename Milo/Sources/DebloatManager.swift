@@ -289,36 +289,16 @@ class DebloatManager: ObservableObject {
 
     /// Read a defaults key. Returns the trimmed stdout or nil.
     private static func readDefault(_ domain: String, _ key: String) -> String? {
-        let task = Process()
-        task.launchPath = "/usr/bin/defaults"
-        task.arguments = ["read", domain, key]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        do {
-            try task.run()
-            task.waitUntilExit()
-            guard task.terminationStatus == 0 else { return nil }
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch { return nil }
+        let result = CommandRunner.run("/usr/bin/defaults", arguments: ["read", domain, key])
+        guard result.succeeded else { return nil }
+        return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Read a defaults key using -currentHost (for ByHost plists)
     private static func readDefaultCurrentHost(_ domain: String, _ key: String) -> String? {
-        let task = Process()
-        task.launchPath = "/usr/bin/defaults"
-        task.arguments = ["-currentHost", "read", domain, key]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        do {
-            try task.run()
-            task.waitUntilExit()
-            guard task.terminationStatus == 0 else { return nil }
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch { return nil }
+        let result = CommandRunner.run("/usr/bin/defaults", arguments: ["-currentHost", "read", domain, key])
+        guard result.succeeded else { return nil }
+        return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Check if a defaults bool key is set to the expected value
@@ -377,56 +357,24 @@ class DebloatManager: ObservableObject {
     }
 
     private static func pluginElectionStates() -> [String: Character] {
-        let task = Process()
-        task.launchPath = "/usr/bin/pluginkit"
-        task.arguments = ["-mAvv"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-
-        do {
-            let widgetIDs = Set(ProcessData.widgetBundleIDs)
-            let outputLock = NSLock()
-            var outputData = Data()
-            pipe.fileHandleForReading.readabilityHandler = { handle in
-                let chunk = handle.availableData
-                guard !chunk.isEmpty else { return }
-                outputLock.lock()
-                outputData.append(chunk)
-                outputLock.unlock()
-            }
-
-            try task.run()
-            task.waitUntilExit()
-            pipe.fileHandleForReading.readabilityHandler = nil
-
-            let trailingData = pipe.fileHandleForReading.readDataToEndOfFile()
-            if !trailingData.isEmpty {
-                outputLock.lock()
-                outputData.append(trailingData)
-                outputLock.unlock()
-            }
-
-            guard task.terminationStatus == 0 else { return [:] }
-
-            outputLock.lock()
-            let output = String(data: outputData, encoding: .utf8) ?? ""
-            outputLock.unlock()
-            var states: [String: Character] = [:]
-
-            for line in output.components(separatedBy: .newlines) {
-                guard let first = line.first, first == "+" || first == "-" || first == " " else { continue }
-                let payload = String(line.dropFirst()).trimmingCharacters(in: .whitespaces)
-                guard let openParen = payload.firstIndex(of: "(") else { continue }
-                let identifier = String(payload[..<openParen])
-                guard widgetIDs.contains(identifier) else { continue }
-                states[identifier] = first
-            }
-
-            return states
-        } catch {
+        let result = CommandRunner.run("/usr/bin/pluginkit", arguments: ["-mAvv"])
+        guard result.succeeded else {
             return [:]
         }
+
+        let widgetIDs = Set(ProcessData.widgetBundleIDs)
+        var states: [String: Character] = [:]
+
+        for line in result.stdout.components(separatedBy: .newlines) {
+            guard let first = line.first, first == "+" || first == "-" || first == " " else { continue }
+            let payload = String(line.dropFirst()).trimmingCharacters(in: .whitespaces)
+            guard let openParen = payload.firstIndex(of: "(") else { continue }
+            let identifier = String(payload[..<openParen])
+            guard widgetIDs.contains(identifier) else { continue }
+            states[identifier] = first
+        }
+
+        return states
     }
 
     static func ignoredWidgetBundleIDs() -> [String] {
@@ -447,76 +395,45 @@ class DebloatManager: ObservableObject {
     }
 
     static func anyWidgetProcessesRunning() -> Bool {
-        let task = Process()
-        task.launchPath = "/bin/ps"
-        task.arguments = ["-Axo", "command"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        do {
-            try task.run()
-            task.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            return output
-                .components(separatedBy: .newlines)
-                .contains { line in
-                    let lower = line.lowercased()
-                    return lower.contains(".appex/contents/macos/") && lower.contains("widget")
-                }
-        } catch {
+        let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "command"])
+        guard result.succeeded else {
             return false
         }
+        return result.stdout
+            .components(separatedBy: .newlines)
+            .contains { line in
+                let lower = line.lowercased()
+                return lower.contains(".appex/contents/macos/") && lower.contains("widget")
+            }
     }
 
     /// Check if a launchctl service is disabled for the current user (gui/ domain)
     static func isLaunchctlDisabled(label: String) -> Bool {
         let uid = getuid()
-        let task = Process()
-        task.launchPath = "/bin/launchctl"
-        task.arguments = ["print-disabled", "gui/\(uid)"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        do {
-            try task.run()
-            task.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            guard let output = String(data: data, encoding: .utf8) else { return false }
-            let pattern = "\"\(label)\""
-            for line in output.components(separatedBy: .newlines) {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                if trimmed.contains(pattern) && trimmed.contains("=> disabled") {
-                    return true
-                }
+        let result = CommandRunner.run("/bin/launchctl", arguments: ["print-disabled", "gui/\(uid)"])
+        guard result.succeeded else { return false }
+        let pattern = "\"\(label)\""
+        for line in result.stdout.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.contains(pattern) && trimmed.contains("=> disabled") {
+                return true
             }
-            return false
-        } catch { return false }
+        }
+        return false
     }
 
     /// Check if a system-level launchctl service is disabled (requires sudo -n)
     static func isSystemLaunchctlDisabled(label: String) -> Bool {
-        let task = Process()
-        task.launchPath = "/usr/bin/sudo"
-        task.arguments = ["-n", "/bin/launchctl", "print-disabled", "system"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        do {
-            try task.run()
-            task.waitUntilExit()
-            guard task.terminationStatus == 0 else { return false }
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            guard let output = String(data: data, encoding: .utf8) else { return false }
-            let pattern = "\"\(label)\""
-            for line in output.components(separatedBy: .newlines) {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                if trimmed.contains(pattern) && trimmed.contains("=> disabled") {
-                    return true
-                }
+        let result = CommandRunner.run("/usr/bin/sudo", arguments: ["-n", "/bin/launchctl", "print-disabled", "system"])
+        guard result.succeeded else { return false }
+        let pattern = "\"\(label)\""
+        for line in result.stdout.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.contains(pattern) && trimmed.contains("=> disabled") {
+                return true
             }
-            return false
-        } catch { return false }
+        }
+        return false
     }
 
     // MARK: - Category Definitions
@@ -870,19 +787,9 @@ class DebloatManager: ObservableObject {
                         revertCommands: [],
                         revertPrivileged: ["mdutil -a -i on 2>/dev/null || true"],
                         detect: {
-                            let task = Process()
-                            task.launchPath = "/usr/bin/mdutil"
-                            task.arguments = ["-s", "/"]
-                            let pipe = Pipe()
-                            task.standardOutput = pipe
-                            task.standardError = Pipe()
-                            do {
-                                try task.run()
-                                task.waitUntilExit()
-                                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                                let output = String(data: data, encoding: .utf8) ?? ""
-                                return output.lowercased().contains("indexing disabled")
-                            } catch { return false }
+                            let result = CommandRunner.run("/usr/bin/mdutil", arguments: ["-s", "/"])
+                            guard result.succeeded else { return false }
+                            return result.stdout.lowercased().contains("indexing disabled")
                         }
                     ),
                     DebloatTweak(
@@ -1849,25 +1756,15 @@ class DebloatManager: ObservableObject {
                         detect: {
                             // Check any ARMDCHelper label in gui/ domain
                             let uid = getuid()
-                            let task = Process()
-                            task.launchPath = "/bin/launchctl"
-                            task.arguments = ["print-disabled", "gui/\(uid)"]
-                            let pipe = Pipe()
-                            task.standardOutput = pipe
-                            task.standardError = Pipe()
-                            do {
-                                try task.run()
-                                task.waitUntilExit()
-                                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                                guard let output = String(data: data, encoding: .utf8) else { return false }
-                                for line in output.components(separatedBy: .newlines) {
-                                    let trimmed = line.trimmingCharacters(in: .whitespaces)
-                                    if trimmed.contains("ARMDCHelper") && trimmed.contains("=> disabled") {
-                                        return true
-                                    }
+                            let result = CommandRunner.run("/bin/launchctl", arguments: ["print-disabled", "gui/\(uid)"])
+                            guard result.succeeded else { return false }
+                            for line in result.stdout.components(separatedBy: .newlines) {
+                                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                                if trimmed.contains("ARMDCHelper") && trimmed.contains("=> disabled") {
+                                    return true
                                 }
-                                return false
-                            } catch { return false }
+                            }
+                            return false
                         }
                     ),
                     DebloatTweak(
@@ -1904,24 +1801,14 @@ class DebloatManager: ObservableObject {
                         ],
                         revertPrivileged: [],
                         detect: {
-                            let task = Process()
-                            task.launchPath = "/usr/bin/pluginkit"
-                            task.arguments = ["-mA"]
-                            let pipe = Pipe()
-                            task.standardOutput = pipe
-                            task.standardError = Pipe()
-                            do {
-                                try task.run()
-                                task.waitUntilExit()
-                                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                                guard let output = String(data: data, encoding: .utf8) else { return false }
-                                for line in output.components(separatedBy: .newlines) {
-                                    if line.contains("ACCFinderSync") && line.hasPrefix("+") {
-                                        return false
-                                    }
+                            let result = CommandRunner.run("/usr/bin/pluginkit", arguments: ["-mA"])
+                            guard result.succeeded else { return false }
+                            for line in result.stdout.components(separatedBy: .newlines) {
+                                if line.contains("ACCFinderSync") && line.hasPrefix("+") {
+                                    return false
                                 }
-                                return true
-                            } catch { return false }
+                            }
+                            return true
                         }
                     )
                 ]
@@ -2078,20 +1965,9 @@ class DebloatManager: ObservableObject {
                     "xattr -d com.apple.quarantine '\(userPath)' 2>/dev/null || true"
                 ],
                 detect: {
-                    let task = Process()
-                    task.launchPath = "/usr/bin/xattr"
-                    task.arguments = ["-p", "com.apple.quarantine", sysPath]
-                    let pipe = Pipe()
-                    task.standardOutput = pipe
-                    task.standardError = Pipe()
-                    do {
-                        try task.run()
-                        task.waitUntilExit()
-                        guard task.terminationStatus == 0 else { return false }
-                        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                        let output = String(data: data, encoding: .utf8) ?? ""
-                        return output.contains("blocked")
-                    } catch { return false }
+                    let result = CommandRunner.run("/usr/bin/xattr", arguments: ["-p", "com.apple.quarantine", sysPath])
+                    guard result.succeeded else { return false }
+                    return result.stdout.contains("blocked")
                 }
             )
         }

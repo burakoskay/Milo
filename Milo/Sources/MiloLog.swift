@@ -24,16 +24,28 @@ enum MiloLog {
     private static let selfTestLogger = Logger(subsystem: subsystem, category: "SelfTest")
     private static let securityLogger = Logger(subsystem: subsystem, category: "Security")
 
-    static func error(_ message: String, category: Category = .general) {
-        logger(for: category).error("\(message, privacy: .public)")
+    static func error(_ message: String, category: Category = .general, isPublic: Bool = false) {
+        if isPublic {
+            logger(for: category).error("\(message, privacy: .public)")
+        } else {
+            logger(for: category).error("\(message, privacy: .private)")
+        }
     }
 
-    static func warning(_ message: String, category: Category = .general) {
-        logger(for: category).warning("\(message, privacy: .public)")
+    static func warning(_ message: String, category: Category = .general, isPublic: Bool = false) {
+        if isPublic {
+            logger(for: category).warning("\(message, privacy: .public)")
+        } else {
+            logger(for: category).warning("\(message, privacy: .private)")
+        }
     }
 
-    static func info(_ message: String, category: Category = .general) {
-        logger(for: category).info("\(message, privacy: .public)")
+    static func info(_ message: String, category: Category = .general, isPublic: Bool = false) {
+        if isPublic {
+            logger(for: category).info("\(message, privacy: .public)")
+        } else {
+            logger(for: category).info("\(message, privacy: .private)")
+        }
     }
 
     private static func logger(for category: Category) -> Logger {
