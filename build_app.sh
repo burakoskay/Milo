@@ -105,7 +105,8 @@ for style in Light Dark; do
 done
 # ── Step 6: Write entitlements ───────────────────────────────────────────────
 ENTITLEMENTS_PATH=".Milo.entitlements"
-cat > "$ENTITLEMENTS_PATH" <<'EOF'
+if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
+    cat > "$ENTITLEMENTS_PATH" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -119,6 +120,18 @@ cat > "$ENTITLEMENTS_PATH" <<'EOF'
 </dict>
 </plist>
 EOF
+else
+    cat > "$ENTITLEMENTS_PATH" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+</dict>
+</plist>
+EOF
+fi
 
 # ── Step 7: Code signing ────────────────────────────────────────────────────
 if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
