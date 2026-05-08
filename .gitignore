@@ -9,8 +9,12 @@ Milo.app/
 data/
 MILO_AUDIT_REPORT_*.md
 CLAUDE.md
+GEMINI.md
+state.md
+test_results.log
 .claude/
 .vscode/
+supabase/.temp/
 
 # Swift Package Manager
 .swiftpm/
@@ -21,6 +25,11 @@ Packages/
 *.xcodeproj
 *.xcworkspace
 xcuserdata/
+
+# Generated icon export sizes; the build consumes only the 1024px sources.
+Icons/Icon Exports/Milo-iOS-*.png
+!Icons/Icon Exports/Milo-iOS-Default-1024x1024@1x.png
+!Icons/Icon Exports/Milo-iOS-Dark-1024x1024@1x.png
 
 # Xcode
 DerivedData/

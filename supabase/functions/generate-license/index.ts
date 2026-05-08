@@ -102,6 +102,18 @@ function effectiveSubscriptionStatus(profile: ProfileRow | null): string {
     }
   }
 
+  if (profile.subscription_status === "past_due") {
+    if (!profile.next_billing_date) {
+      return "expired"
+    }
+
+    const billingDate = Date.parse(profile.next_billing_date)
+    // 7 days grace period
+    if (Number.isFinite(billingDate) && (Date.now() - billingDate) <= 7 * 24 * 60 * 60 * 1000) {
+      return "active"
+    }
+  }
+
   return "expired"
 }
 

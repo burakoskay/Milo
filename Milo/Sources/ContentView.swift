@@ -328,6 +328,16 @@ struct ContentView: View {
         } message: {
             Text("This removes cached files from your user Library Caches folder. Apps may rebuild caches the next time they open.")
         }
+        .alert("Enable Faster Privileged Actions?", isPresented: $appState.showingFirstLaunchPrivilegePrompt) {
+            Button("Later", role: .cancel) {
+                appState.deferFirstLaunchPrivilegePrompt()
+            }
+            Button("Enable") {
+                appState.setupPrivileges()
+            }
+        } message: {
+            Text("Milo can install a narrow sudoers rule for cache, DNS, Spotlight, and memory maintenance. Process termination still uses explicit per-action approval when macOS requires administrator privileges.")
+        }
         // Keyboard shortcuts
         .background(
             Group {
@@ -374,18 +384,16 @@ struct ContentView: View {
             HStack(alignment: .center, spacing: 10) {
                 ZStack {
                     Circle().fill(.ultraThinMaterial)
-                    if let imagePath = Bundle.main.path(forResource: NSApp.effectiveAppearance.name == .darkAqua ? "milo_white" : "Milo_black", ofType: "png"),
+                    if let imagePath = Bundle.main.path(forResource: NSApp.effectiveAppearance.name == .darkAqua ? "milo_white" : "milo_black", ofType: "png"),
                        let nsImage = NSImage(contentsOfFile: imagePath) {
                         Image(nsImage: nsImage)
                             .resizable()
                             .scaledToFit()
                             .frame(width: 18, height: 18)
                     } else {
-                        Image("milo_color")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
+                        Image(systemName: "gearshape.2.fill")
                             .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 24, height: 24)
                     }
                 }
                 .frame(width: 28, height: 28)

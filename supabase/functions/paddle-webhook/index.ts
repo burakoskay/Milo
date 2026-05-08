@@ -150,22 +150,6 @@ serve(async (req) => {
       return new Response("Invalid event timestamp", { status: 400 });
     }
 
-    const { error: idempotencyError } = await supabase
-      .from('paddle_webhook_events')
-      .insert({
-        event_id: event.event_id,
-        event_type: event.event_type,
-        occurred_at: event.occurred_at
-      });
-
-    if (idempotencyError) {
-      if (idempotencyError.code === '23505') {
-        return jsonResponse({ received: true, duplicate: true });
-      }
-      console.error("Failed to record webhook idempotency key:", idempotencyError);
-      return new Response("Database error", { status: 500 });
-    }
-
     const data = event.data;
     // We strictly require custom_data.user_id to map the payment to a Supabase profile
     const userId = data?.custom_data?.user_id;
@@ -202,7 +186,9 @@ serve(async (req) => {
             p_customer_id: data.customer_id,
             p_subscription_id: data.id,
             p_next_billing: nextBilledAt,
-            p_event_occurred_at: event.occurred_at
+            p_event_occurred_at: event.occurred_at,
+            p_event_id: event.event_id,
+            p_event_type: event.event_type
         });
         databaseError = errUpdate;
         break;
@@ -214,7 +200,9 @@ serve(async (req) => {
 
         const { error: errCancel } = await supabase.rpc('cancel_user_subscription', {
             p_user_id: userId,
-            p_event_occurred_at: event.occurred_at
+            p_event_occurred_at: event.occurred_at,
+            p_event_id: event.event_id,
+            p_event_type: event.event_type
         });
         databaseError = errCancel;
         break;

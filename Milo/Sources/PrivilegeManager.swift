@@ -55,7 +55,7 @@ class PrivilegeManager {
 
     /// Quick test that passwordless sudo is functional.
     private func verifySudoWorks() -> Bool {
-        CommandRunner.run("/usr/bin/sudo", arguments: ["-n", "/usr/bin/dscacheutil", "-flushcache"]).succeeded
+        CommandRunner.run("/usr/bin/sudo", arguments: ["-n", "/bin/echo", "milo"]).succeeded
     }
 
     private func containsLegacyBroadRules() -> Bool {
@@ -95,6 +95,7 @@ class PrivilegeManager {
         # WARNING: sudoers rules are user-wide. Any process running as this user
         # can invoke these exact commands through sudo without a password.
         \(username) ALL=(ALL) NOPASSWD: /usr/sbin/purge
+        \(username) ALL=(ALL) NOPASSWD: /bin/echo milo
         \(username) ALL=(ALL) NOPASSWD: /usr/bin/dscacheutil -flushcache
         \(username) ALL=(ALL) NOPASSWD: /usr/bin/killall -HUP mDNSResponder
         \(username) ALL=(ALL) NOPASSWD: /usr/bin/mdutil -a -i off
