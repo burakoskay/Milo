@@ -12,17 +12,19 @@ jobs:
   unit-tests:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Checkout canonical website contract
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ vars.MONOMACAW_WEBSITE_REPOSITORY || 'burakoskay/monomacaw-website' }}
+          ref: ${{ vars.MONOMACAW_CONTRACT_REF || 'main' }}
           path: _contract/website
-          token: ${{ secrets.MONOMACAW_CONTRACT_READ_TOKEN || github.token }}
+          ssh-key: ${{ secrets.MONOMACAW_CONTRACT_DEPLOY_KEY }}
+          persist-credentials: false
       - name: Verify MLP-v1 golden fixture
         run: Tools/verify-mlp-golden-fixture.sh
         env:
-          MLP_GOLDEN_FIXTURE: ${{ github.workspace }}/_contract/website/tests/fixtures/mlp-v1-golden.json
+          MLP_GOLDEN_FIXTURE_DIR: ${{ github.workspace }}/_contract/website/tests/fixtures
       - name: Test app package
         run: swift test
       - name: Test MiloKit package
