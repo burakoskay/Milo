@@ -4,6 +4,12 @@ Milo.app/
 .build_icons/
 .dmg_staging/
 *.dmg
+*.app
+*.zip
+*.xcarchive
+*.dSYM
+build/
+dist/
 
 # Local/private project context
 data/
@@ -15,10 +21,10 @@ test_results.log
 .claude/
 .vscode/
 supabase/.temp/
+_contract/
 
 # Swift Package Manager
 .swiftpm/
-Packages/
 
 # macOS
 .DS_Store
@@ -31,10 +37,17 @@ Icons/Icon Exports/Milo-iOS-*.png
 !Icons/Icon Exports/Milo-iOS-Default-1024x1024@1x.png
 !Icons/Icon Exports/Milo-iOS-Dark-1024x1024@1x.png
 
-# Xcode
-DerivedData/
-build/
-
 # Secrets & API Keys
 Secrets.swift
 Milo/Sources/Secrets.swift
+**/Secrets.swift
+**/*.keychain
+**/*.keychain-db
+**/per-build-salt.bin
+Sparkle/appcast/*.private.*
+
+# Node / Edge tooling
+node_modules/
+.env
+.env.*
+!.env.example

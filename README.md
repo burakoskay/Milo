@@ -1,177 +1,172 @@
-# 💀 Milo
+# Milo Engineering Bootstrap
 
-**Milo** is a high-performance macOS status bar application for power users, developers, and music producers who want explicit control over background processes and auto-start services.
+Milo is a local-first macOS menu-bar process-management app. The active product architecture is the `App/Milo` SwiftPM executable plus `Packages/MiloKit`.
 
-Milo is intentionally local-first: no analytics, no network calls, no accounts, and no telemetry. It scans your Mac locally, asks before destructive process kills by default, and keeps passwordless privileged mode optional.
+## Current Build Paths
 
-## 🚀 Key Features
+### MiloKit Package
 
-- **Explicit Process Termination:** Detect and terminate selected resource-heavy helper processes from Adobe, Microsoft, Avid, and more.
-- **Apple Intelligence Controls:** Detect Apple Intelligence, Siri, and telemetry-adjacent daemons (`siriknowledged`, `biomed`, `intelligenceplatformd`, etc.) so you can decide what to stop.
-- **System Debloat:** Full macOS Tahoe debloat suite with 14 categories — animations, visual effects, Apple Intelligence, Safari/Mail privacy, Finder/Dock tuning, system daemons, Adobe background services, stock-app blocking, and advanced SIP-off tweaks. Every tweak is individually toggleable and revertible.
-- **Auto-Start Manager:** Scans `LaunchAgents` and `LaunchDaemons` to detect persistent services. Toggle them `Enabled` or `Disabled` with immediate effect.
-- **Preferences (⌘,):** Settings panel with Start at Login, auto-scan intervals, badge toggle, kill confirmation, privilege management, and system info.
-- **Scan & Select UI:** See exactly what is running before you kill it. Choose individual processes or nuke them all.
-- **SIP Awareness:** Real-time monitoring of System Integrity Protection (SIP) status. SIP-dependent debloat categories are clearly marked.
-- **Native & Lightweight:** Written in Swift and SwiftUI. The expensive debloat state loads only when the Debloat sheet is opened.
+The v2 package lives under `Packages/MiloKit`:
 
-## 🎯 Targeted Vendors
-
-Milo comes pre-configured to detect common background helpers from:
-- **Adobe Creative Cloud:** (CCXProcess, Core Sync, Adobe Desktop Service, etc.)
-- **Audio Licensing:** (UAD, Antelope, Waves, PACE/iLok)
-- **Utilities:** (CleanMyMac and similar cleanup/menu helpers)
-- **Microsoft Office:** (AutoUpdate, Office365Service, Widgets)
-- **Apple Telemetry:** (Siri, Biome, Triald, Knowledge-agent, etc.)
-
-Password managers, VPNs, firewalls, and backup tools are deliberately excluded from the default target lists.
-
-## 🔧 System Debloat Categories
-
-The built-in debloat engine provides 14 categories of system-level tweaks. Each tweak can be toggled individually and reverted at any time.
-
-| # | Category | SIP Required | What it does |
-|---|----------|:---:|---|
-| 1 | **Kill Animations** | No | Disable window, Mission Control, and dialog animations |
-| 2 | **Visual Effects** | No | Remove Liquid Glass transparency, increase contrast |
-| 3 | **Apple Intelligence & Siri** | No | Disable AI features, Writing Tools, inline predictions, Siri |
-| 4 | **Background Services** | No | Kill Game Center, Tips, knowledge daemons, analytics |
-| 5 | **Finder — Pro Mode** | No | POSIX paths, hidden files, path bar, no .DS_Store on USB |
-| 6 | **Dock — Minimal** | No | Hide recent apps, auto-hide Dock |
-| 7 | **Safari & Mail** | No | Safari developer mode, tracking protection, remote-content controls |
-| 8 | **Privacy Hardening** | No | Block ad tracking, disable Handoff, remote events |
-| 9 | **Keyboard & Input** | No | Disable autocorrect, fast key repeat, full keyboard access |
-| 10 | **Performance Tweaks** | No | Disable quarantine dialogs, save to disk by default |
-| 11 | **System Daemons** | **Yes** | Disable AI/ML daemons, analytics, media analysis, Screen Time |
-| 12 | **Adobe Bloatware** | No | Disable CC agents, sync, update helpers, Finder extensions, installer daemon |
-| 13 | **Block Stock Apps** | **Yes** | Quarantine Chess, News, Stocks, TV, Tips, etc. |
-| 14 | **Advanced** | **Yes** | Disable Sidecar, Universal Control, Continuity, Journal |
-
-> Categories 11, 13–14 require SIP to be disabled (`csrutil disable` from Recovery). All other categories work with SIP enabled.
-
-## ⚙️ Settings & Preferences
-
-Milo's settings panel is accessible via **⌘,** or the gear icon in the toolbar.
-
-| Setting | Description |
-|---------|-------------|
-| **Start at Login** | Automatically launch Milo when you log in (uses SMAppService) |
-| **Confirm Before Kill** | Show a confirmation dialog before terminating processes |
-| **Scan on Open** | Auto-scan for bloat each time the popover opens |
-| **Auto-Rescan Interval** | Periodically re-scan while open (30s / 1m / 2m / 5m / off) |
-| **Status Bar Badge** | Show bloat count next to the 💀 icon |
-| **Memory in Header** | Show memory pressure bar in the main view |
-| **Privileges** | Optional passwordless sudo mode for faster privileged actions |
-
-## 🛠 Installation & Usage
-
-### Build from Source
-If you have Swift installed, you can build the `.app` bundle using the included script:
 ```bash
-chmod +x build_app.sh
-./build_app.sh              # Dev build (ad-hoc signed)
-./build_app.sh release      # Optimised release build + DMG
-./build_app.sh release sign # Release + Developer ID signing
-./build_app.sh release notarize # Full notarization pipeline
+cd Packages/MiloKit
+swift package resolve
+swift build
 ```
 
-For signing and notarization, set these environment variables:
+`MiloHardening` is split into a C target plus a Swift wrapper target because SwiftPM does not support mixed C and Swift source files in a single target. The public design boundary is unchanged: security-critical decisions live in C; Swift coordinates.
+
+## Backend Contract
+
+The backend lives in `/Volumes/Internal HD/Developer/monomacaw/website`. Milo does not own Supabase migrations, Paddle webhooks, or license Edge Functions. The app consumes Monomacaw License Protocol v1 from the website repo.
+
+The MLP-v1 golden fixture is copied into
+`Packages/MiloKit/Tests/MiloLicenseTests/Fixtures/mlp-v1-golden.json` only so
+SwiftPM tests can run without reaching into a sibling checkout at runtime. The
+website repo remains canonical. Before changing license envelope shape, signing
+bytes, or protocol-version semantics, update the fixture in the website repo,
+run `npm run contract:fixture:sync` from the website checkout, then rerun:
+
 ```bash
-export DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)"
-export APPLE_ID="you@example.com"
-export APPLE_TEAM_ID="XXXXXXXXXX"
-export APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"
+Tools/verify-mlp-golden-fixture.sh
+swift test --package-path Packages/MiloKit
 ```
 
-### Running the App
-1. Open `Milo.app`.
-2. Look for the 💀 icon in your macOS Status Bar.
-3. Click to scan for active bloatware.
-4. Select the items you want to terminate and hit **Kill Selected**.
+CI checks out the website fixture into `_contract/website` and fails if Milo's
+local fixture diverges. If the website repo is private, configure
+`MONOMACAW_CONTRACT_READ_TOKEN` with read-only access and set
+`MONOMACAW_WEBSITE_REPOSITORY` if the repository has moved.
 
-> **Note:** Modification of system services and some process operations require Administrator privileges. By default, macOS prompts for approval. Passwordless mode is optional and should be used only if you accept that sudoers rules apply to every process running as your macOS user.
+## Release Governance
 
-### Self-Test
+Milo follows SemVer 2.0.0 from `v2.0.0` onward. Commits on `main` use Conventional Commits 1.0.0, release tags are immutable annotated GPG-signed tags, and every product PR updates `CHANGELOG.md`.
+
+Required process files live under `.github/`:
+
+```text
+.github/pull_request_template.md
+.github/branch-protection.json
+.github/workflows/conventional-commits.yml
+.github/workflows/changelog-check.yml
+.github/workflows/mirror.yml
+.github/dependabot.yml
+```
+
+## Verification Spine
+
+Use this order for local release checks:
+
 ```bash
+cd Packages/MiloKit
+swift package describe
+swift build
+
+cd ../..
 swift build -c release
-.build/release/Milo --self-test
+./build_app.sh release
+Tools/verify-build.sh /path/to/Milo.app
 ```
 
-The default self-test is safe: it does not clear real user caches, flush DNS, purge memory, toggle login items, create LaunchAgents, or mutate real debloat settings. Destructive integration checks are available with `--self-test-destructive`.
+`./build_app.sh release` intentionally produces an ad-hoc signed QA artifact. It is not a production release.
 
-## ⚠️ Disclaimer
-Milo is a powerful cleanup tool. Disabling audio drivers, launch agents, or system services can stop dependent hardware or macOS features until you re-enable them. Review each item before applying changes.
+## Release Machine Setup
 
----
+Production release signing happens only on the dedicated release machine with the Developer ID private key available locally, preferably through the YubiKey-backed keychain identity.
 
-## 📋 Project Status
+Verify the signing identity:
 
-### February 10, 2026 — Distribution Readiness Pass
-
-The following improvements were made to bring Milo from a working prototype to a distribution-ready v1.0:
-
-#### Architecture & Code Quality
-- **Extracted shared UI components** — `VisualEffectBlur`, `GlassCard`, and `StatCard` were duplicated across `ContentView.swift`, `StatsView.swift`, and `WhitelistView.swift`. All three are now in a single `SharedUI.swift`.
-- **Split ProcessManager** — The monolithic 1,674-line `ProcessManager.swift` was split into `ProcessData.swift` (957 lines of pure data: target lists, vendor patterns, launchd mappings, friendly descriptions) and `ProcessManager.swift` (502 lines of logic only).
-- **Added `Package.swift`** — Swift Package Manager manifest targeting macOS 13+ for proper IDE integration and dependency management.
-
-#### Security Hardening
-- **Tightened sudoers rule** — Removed the dangerous `NOPASSWD: /bin/sh -c *` entry (effectively unrestricted root) from the privilege manager. The sudoers file now only grants passwordless access to the 6 specific binaries Milo needs: `pkill`, `launchctl`, `kill`, `killall`, `purge`, `dscacheutil`.
-- **Per-binary sudo wrapping** — Added `wrapCommandsWithSudo()` in `PrivilegeManager.swift` to prefix each privileged binary call with `sudo -n` individually instead of wrapping whole command strings in a root shell.
-
-#### Error Handling & UX
-- **Fallback app icon** — `IconManager.swift` now draws a procedural 💀 icon at runtime when `.icns` assets are missing, instead of silently failing.
-- **Privilege setup error feedback** — The setup banner now shows inline error messages when the one-time sudoers configuration fails.
-- **Version display** — The popover header now shows the app version from `Info.plist` instead of static text.
-
-#### Distribution & Packaging
-- **Upgraded build script** (`build_app.sh`) — Now supports 4 modes: `dev`, `release`, `release sign`, `release notarize`. Release builds use `-O -whole-module-optimization`, hardened runtime, and entitlements. Automatically creates a DMG with an `/Applications` symlink for drag-install. Full `notarytool` + `stapler` notarization pipeline via environment variables.
-- **Added entitlements** — `com.apple.security.automation.apple-events` entitlement applied during code signing for AppleScript privilege escalation.
-- **Added `NSAppleEventsUsageDescription`** to `Info.plist` (required for notarization compliance).
-- **Added `.gitignore`** — Covers build artifacts (`.app`, `.dmg`, `.build_icons`, `.dmg_staging`), SPM cache, Xcode junk, and `.DS_Store`.
-
-#### File Structure After Changes
-```
-Milo/Sources/
-  AppState.swift          — Central ObservableObject state hub
-  ContentView.swift       — Main popover UI
-  DebloatManager.swift    — Debloat engine: 14 categories, apply/revert logic
-  DebloatView.swift       — Debloat settings UI with per-tweak toggles
-  IconManager.swift       — App icon management with fallback
-  main.swift              — AppDelegate, status bar item, Cmd+, menu
-  MemoryManager.swift     — vm_stat memory stats + purge
-  PrivilegeManager.swift  — Sudoers rule management (hardened)
-  ProcessData.swift       — All target lists & data dictionaries
-  ProcessManager.swift    — Process scanning & killing logic (slimmed)
-  SettingsManager.swift   — [NEW] Persistent preferences & login item management
-  SettingsView.swift      — [NEW] Preferences UI (⌘,)
-  SharedUI.swift          — Shared VisualEffectBlur, GlassCard, StatCard
-  SIPChecker.swift        — SIP status check
-  StatsManager.swift      — Kill history persistence
-  StatsView.swift         — Statistics dashboard
-  WhitelistManager.swift  — Process exclusion list
-  WhitelistView.swift     — Whitelist management UI
+```bash
+security find-identity -v -p codesigning
 ```
 
-#### What Remains for Future Work
-- **Dedicated test target** — The built-in safe self-test covers scanning, confirmation, kill flows, whitelist persistence, memory parsing, protected-target exclusions, and packaging smoke checks. A formal Swift test target would still be useful for faster CI.
-- **Sparkle / auto-update** — No update mechanism. Consider integrating Sparkle for delta updates via an appcast feed.
-- **Scheduled scans** — Auto-rescan while the popover is open exists; a detached scheduler could be added later if the app needs background monitoring.
-- **Debloat profiles** — Pre-built profiles (e.g., "Music Producer", "Developer", "Privacy Max") that pre-select appropriate tweaks.
+The identity must be:
 
-### February 10, 2026 — System Debloat Integration
+```text
+Developer ID Application: <legal Apple developer name> (883MM2YM4N)
+```
 
-Integrated a Tahoe-focused debloat suite into Milo as a native GUI feature.
+Store notarization credentials once on the release machine:
 
-#### New Features
-- **DebloatManager** (`DebloatManager.swift`) — Data-driven debloat engine with 14 categories and 50+ individually-toggleable tweaks. Each tweak stores both apply and revert commands. User-level `defaults write` commands run directly; system-level commands (`launchctl disable system/*`, `mdutil`, `systemsetup`, `xattr`) run through `PrivilegeManager` or AppleScript elevation.
-- **DebloatView** (`DebloatView.swift`) — Full SwiftUI sheet with expandable categories, per-tweak checkboxes, category-level and global Apply/Revert buttons, SIP-awareness (SIP-required categories are visually dimmed and disabled), applied-count badges, and a "Restart UI" button to reload Finder/Dock/SystemUIServer.
-- **Debloat persistence** — Applied tweaks are tracked in UserDefaults so the app remembers what was changed across sessions.
+```bash
+xcrun notarytool store-credentials milo-notary \
+  --apple-id "$APPLE_ID" \
+  --team-id 883MM2YM4N \
+  --password "$APP_PASSWORD"
+```
 
-#### Changes to Existing Files
-- **AppState.swift** — Added `showingDebloat` published property.
-- **ContentView.swift** — Added debloat button (wand icon) to the footer bar, opening `DebloatView` as a sheet.
-- **PrivilegeManager.swift** — Added `mdutil`, `systemsetup`, and `xattr` to the sudoers allowlist and the `privilegedBinaries` set, enabling passwordless debloat operations after initial setup.
+Generate the Sparkle Ed25519 key pair on the offline/release machine. The private key never leaves encrypted offline storage. Only the public key is exported into the release shell:
 
----
-*Created for the elite who want their Mac to be a workstation, not a playground for background daemons.*
+```bash
+swift Tools/sign-appcast.swift generate-key \
+  /Volumes/Offline/Milo/sparkle-ed25519-private.raw \
+  /Volumes/Offline/Milo/sparkle-ed25519-public.txt
+```
+
+```bash
+export SPARKLE_PUBLIC_ED_KEY="$(cat /Volumes/Offline/Milo/sparkle-ed25519-public.txt)"
+```
+
+Build, sign, notarize, staple, and verify:
+
+```bash
+export DEVELOPER_ID="Developer ID Application: <legal Apple developer name> (883MM2YM4N)"
+export NOTARY_KEYCHAIN_PROFILE="milo-notary"
+export SPARKLE_PUBLIC_ED_KEY="<Sparkle Ed25519 public key>"
+
+./build_app.sh release notarize
+Tools/verify-build.sh Milo.app
+spctl --assess --type open --context context:primary-signature -vv Milo-2.0.0.dmg
+```
+
+The signed release path fails before compilation if the Developer ID identity is missing, the Team ID does not match `883MM2YM4N`, or `SPARKLE_PUBLIC_ED_KEY` is absent or still a placeholder.
+
+## Update Feed Release Rows
+
+`update-feed` is served by the website Supabase project and filters `app_releases` by the caller's license row:
+
+- `app_releases.app_id = licenses.app_id`
+- `app_releases.channel = 'production'`
+- `app_releases.is_active = true`
+- `app_releases.version <= licenses.max_app_version`
+- `app_releases.release_date <= licenses.update_entitled_until`
+
+Seed a signed Milo release only after the DMG is notarized and the Sparkle archive signature is produced offline:
+
+```bash
+swift Tools/sign-appcast.swift sign-release \
+  Milo-2.0.0.dmg \
+  /Volumes/Offline/Milo/sparkle-ed25519-private.raw \
+  Milo-2.0.0.dmg.ed25519
+```
+
+```sql
+INSERT INTO public.app_releases (
+  app_id,
+  channel,
+  version,
+  build_number,
+  release_date,
+  minimum_system_version,
+  download_url,
+  file_size,
+  ed_signature,
+  release_notes_url
+) VALUES (
+  'milo',
+  'production',
+  '2.0.0',
+  '200',
+  now(),
+  '13.0',
+  'https://monomacaw.com/products/milo/download/Milo-2.0.0.dmg',
+  <byte_size>,
+  '<contents of Milo-2.0.0.dmg.ed25519>',
+  'https://monomacaw.com/products/milo/changelog#200'
+);
+```
+
+Update checks use the device-key signing model documented in the website protocol registry. No app-shipped HMAC material is accepted.
+
+## Secret Rules
+
+`Milo/Sources/Secrets.swift` is ignored and must not be printed, committed, or pasted into logs. Milo 2.0 moves secrets that must ship in the app into the obfuscated string pipeline described in `GEMINI.md`.

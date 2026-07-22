@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
@@ -6,17 +6,43 @@ let package = Package(
     platforms: [
         .macOS(.v13)
     ],
+    dependencies: [
+        .package(path: "Packages/MiloKit"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
+    ],
     targets: [
         .executableTarget(
             name: "Milo",
-            path: "Milo/Sources",
+            dependencies: [
+                .product(name: "MiloHardening", package: "MiloKit"),
+                .product(name: "MiloLicense", package: "MiloKit"),
+                .product(name: "MiloUpdates", package: "MiloKit"),
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
+            path: "App/Milo",
+            exclude: [
+                "Info.plist",
+                "Milo.entitlements",
+                "Sparkle"
+            ],
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug)),
+                .unsafeFlags(["-strict-concurrency=targeted"])
+            ],
             linkerSettings: [
-                .unsafeFlags([
-                    "-Xlinker", "-framework", "-Xlinker", "Cocoa",
-                    "-Xlinker", "-framework", "-Xlinker", "SwiftUI",
-                    "-Xlinker", "-framework", "-Xlinker", "WebKit"
-                ])
+                .linkedFramework("AppKit"),
+                .linkedFramework("AuthenticationServices"),
+                .linkedFramework("Cocoa"),
+                .linkedFramework("CryptoKit"),
+                .linkedFramework("IOKit"),
+                .linkedFramework("Security"),
+                .linkedFramework("SwiftUI"),
+                .linkedFramework("WebKit")
             ]
+        ),
+        .testTarget(
+            name: "MiloRedTeamTests",
+            path: "Tests/redteam"
         )
     ]
 )

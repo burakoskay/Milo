@@ -1,0 +1,38 @@
+{
+  "repository": "monomacaw/pkill",
+  "branch": "main",
+  "branch_protection": {
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 1,
+      "dismiss_stale_reviews": true,
+      "require_code_owner_reviews": true
+    },
+    "required_status_checks": {
+      "strict": true,
+      "contexts": [
+        "lint-and-format",
+        "unit-tests",
+        "red-team-suite",
+        "static-analysis",
+        "verify-build",
+        "migration-validation",
+        "conventional-commits",
+        "changelog-check"
+      ]
+    },
+    "enforce_admins": true,
+    "restrictions": null,
+    "required_linear_history": true,
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "required_signatures": true
+  },
+  "tag_protection": {
+    "patterns": ["v*"],
+    "immutable": true
+  },
+  "apply_with": [
+    "gh api --method PUT repos/monomacaw/pkill/branches/main/protection --input .github/branch-protection.json",
+    "gh api --method POST repos/monomacaw/pkill/tags/protection -f pattern='v*'"
+  ]
+}

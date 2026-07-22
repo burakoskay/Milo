@@ -1,0 +1,19 @@
+* text=auto eol=lf
+
+*.swift text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.ts text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.plist text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+
+*.png binary
+*.icns binary
+*.dmg binary
+*.zip binary
+*.xcarchive binary
+*.dSYM binary

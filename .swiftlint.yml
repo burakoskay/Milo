@@ -11,6 +11,13 @@ opt_in_rules:
   - implicitly_unwrapped_optional
   - missing_docs
 
+excluded:
+  - .claude
+  - .build
+  - Packages/MiloKit/.build
+  - Server
+  - supabase
+
 line_length:
   warning: 250
   error: 300

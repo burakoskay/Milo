@@ -1,0 +1,29 @@
+name: unit-tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout canonical website contract
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MONOMACAW_WEBSITE_REPOSITORY || 'burakoskay/monomacaw-website' }}
+          path: _contract/website
+          token: ${{ secrets.MONOMACAW_CONTRACT_READ_TOKEN || github.token }}
+      - name: Verify MLP-v1 golden fixture
+        run: Tools/verify-mlp-golden-fixture.sh
+        env:
+          MLP_GOLDEN_FIXTURE: ${{ github.workspace }}/_contract/website/tests/fixtures/mlp-v1-golden.json
+      - name: Test app package
+        run: swift test
+      - name: Test MiloKit package
+        run: swift test --package-path Packages/MiloKit

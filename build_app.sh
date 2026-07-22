@@ -8,21 +8,67 @@
 #   ./build_app.sh release sign     # Release + Developer ID signing
 #   ./build_app.sh release notarize # Release + sign + notarize for distribution
 #
-# Environment variables (for signing / notarisation):
-#   DEVELOPER_ID    – e.g. "Developer ID Application: Your Name (TEAMID)"
-#   APPLE_ID        – Apple ID email for notarization
-#   APPLE_TEAM_ID   – 10-char team identifier
-#   APP_PASSWORD    – App-specific password for notarytool
+# Environment variables (for signed releases):
+#   DEVELOPER_ID             – e.g. "Developer ID Application: Your Name (883MM2YM4N)"
+#   SPARKLE_PUBLIC_ED_KEY    – Sparkle Ed25519 public key for SUPublicEDKey
+#   NOTARY_KEYCHAIN_PROFILE  – notarytool profile, defaults to "milo-notary"
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 APP_NAME="Milo"
 APP_DIR="$APP_NAME.app"
-SOURCES="Milo/Sources/*.swift"
+TEAM_ID="883MM2YM4N"
+BUNDLE_ID="com.monomacaw.milo"
 BUILD_MODE="${1:-dev}"     # dev | release
 SIGN_MODE="${2:-}"         # sign | notarize | (empty)
-VERSION=$(grep -A1 CFBundleShortVersionString Milo/Info.plist | tail -1 | sed -E 's/.*<string>(.*)<\/string>/\1/')
+VERSION=$(grep -A1 CFBundleShortVersionString App/Milo/Info.plist | tail -1 | sed -E 's/.*<string>(.*)<\/string>/\1/')
 ICON_WORK_DIR=".build_icons"
+NOTARY_KEYCHAIN_PROFILE="${NOTARY_KEYCHAIN_PROFILE:-milo-notary}"
+
+if [[ "$BUILD_MODE" != "dev" && "$BUILD_MODE" != "release" ]]; then
+    echo "✘  Invalid build mode: $BUILD_MODE"
+    echo "   Usage: ./build_app.sh [dev|release] [sign|notarize]"
+    exit 64
+fi
+
+if [[ -n "$SIGN_MODE" && "$SIGN_MODE" != "sign" && "$SIGN_MODE" != "notarize" ]]; then
+    echo "✘  Invalid signing mode: $SIGN_MODE"
+    echo "   Usage: ./build_app.sh [dev|release] [sign|notarize]"
+    exit 64
+fi
+
+if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
+    if [[ -z "${DEVELOPER_ID:-}" ]]; then
+        echo "✘  DEVELOPER_ID environment variable is required for signed releases."
+        echo "   Example: export DEVELOPER_ID=\"Developer ID Application: Your Name ($TEAM_ID)\""
+        exit 1
+    fi
+
+    if [[ "$DEVELOPER_ID" != *"($TEAM_ID)"* ]]; then
+        echo "✘  DEVELOPER_ID must be for Team ID $TEAM_ID."
+        exit 1
+    fi
+
+    if ! security find-identity -v -p codesigning | grep -F "$DEVELOPER_ID" >/dev/null; then
+        echo "✘  Developer ID identity is not available in the current keychain: $DEVELOPER_ID"
+        exit 1
+    fi
+
+    if [[ -z "${SPARKLE_PUBLIC_ED_KEY:-}" ]]; then
+        echo "✘  SPARKLE_PUBLIC_ED_KEY is required for signed Milo releases."
+        exit 1
+    fi
+
+    if [[ "$SPARKLE_PUBLIC_ED_KEY" == *'$('* || "$SPARKLE_PUBLIC_ED_KEY" == *"REPLACE"* ]]; then
+        echo "✘  SPARKLE_PUBLIC_ED_KEY is still a placeholder."
+        exit 1
+    fi
+
+    if [[ "$SIGN_MODE" == "notarize" && -z "$NOTARY_KEYCHAIN_PROFILE" ]]; then
+        echo "✘  NOTARY_KEYCHAIN_PROFILE is required for notarization."
+        exit 1
+    fi
+fi
 
 echo "╔══════════════════════════════════════════╗"
 echo "║  Milo Build Script  v${VERSION:-1.0}               ║"
@@ -36,31 +82,73 @@ rm -rf "$APP_DIR" "$ICON_WORK_DIR" "${APP_NAME}.dmg"
 # ── Step 2: Create bundle structure ──────────────────────────────────────────
 echo "→ Creating app bundle structure..."
 mkdir -p "$APP_DIR/Contents/MacOS"
+mkdir -p "$APP_DIR/Contents/Frameworks"
 mkdir -p "$APP_DIR/Contents/Resources"
 
 # ── Step 3: Compile ─────────────────────────────────────────────────────────
-SWIFT_FLAGS="-target $(uname -m)-apple-macosx13.0"
+SWIFTPM_CONFIGURATION="debug"
+SWIFT_BUILD_FLAGS=(--product "$APP_NAME" -c "$SWIFTPM_CONFIGURATION")
 
 if [[ "$BUILD_MODE" == "release" ]]; then
-    echo "→ Compiling Swift sources (release, optimised)..."
-    SWIFT_FLAGS="$SWIFT_FLAGS -O -whole-module-optimization"
+    echo "→ Building SwiftPM product (release, optimised)..."
+    SWIFTPM_CONFIGURATION="release"
+    SWIFT_BUILD_FLAGS=(--product "$APP_NAME" -c "$SWIFTPM_CONFIGURATION")
 else
-    echo "→ Compiling Swift sources (dev)..."
-    SWIFT_FLAGS="$SWIFT_FLAGS -D DEBUG"
+    echo "→ Building SwiftPM product (dev)..."
 fi
 
 if [[ "$SIGN_MODE" != "sign" && "$SIGN_MODE" != "notarize" ]]; then
-    SWIFT_FLAGS="$SWIFT_FLAGS -D AD_HOC"
+    SWIFT_BUILD_FLAGS+=(-Xswiftc -DAD_HOC -Xcc -DAD_HOC)
 fi
 
-# shellcheck disable=SC2086
-swiftc $SOURCES $SWIFT_FLAGS \
-    -framework WebKit \
-    -o "$APP_DIR/Contents/MacOS/$APP_NAME"
+swift build "${SWIFT_BUILD_FLAGS[@]}"
+BIN_PATH=$(swift build -c "$SWIFTPM_CONFIGURATION" --show-bin-path)
+cp "$BIN_PATH/$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"
+
+if [[ ! -d "$BIN_PATH/Sparkle.framework" ]]; then
+    echo "✘  Sparkle.framework was not produced by SwiftPM."
+    exit 1
+fi
+cp -R "$BIN_PATH/Sparkle.framework" "$APP_DIR/Contents/Frameworks/"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_DIR/Contents/MacOS/$APP_NAME"
 
 # ── Step 4: Copy Info.plist ──────────────────────────────────────────────────
 echo "→ Copying Info.plist..."
-cp Milo/Info.plist "$APP_DIR/Contents/Info.plist"
+cp App/Milo/Info.plist "$APP_DIR/Contents/Info.plist"
+if [[ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ]]; then
+    /usr/bin/plutil -replace SUPublicEDKey -string "$SPARKLE_PUBLIC_ED_KEY" "$APP_DIR/Contents/Info.plist"
+fi
+if [[ -n "${MILO_PADDLE_CLIENT_TOKEN:-}" ]]; then
+    /usr/bin/plutil -replace MiloPaddleClientToken -string "$MILO_PADDLE_CLIENT_TOKEN" "$APP_DIR/Contents/Info.plist"
+fi
+if [[ -n "${MILO_PADDLE_PRICE_ID:-}" ]]; then
+    /usr/bin/plutil -replace MiloPaddlePriceID -string "$MILO_PADDLE_PRICE_ID" "$APP_DIR/Contents/Info.plist"
+fi
+if [[ -n "${MILO_PADDLE_ENVIRONMENT:-}" ]]; then
+    /usr/bin/plutil -replace MiloPaddleEnvironment -string "$MILO_PADDLE_ENVIRONMENT" "$APP_DIR/Contents/Info.plist"
+fi
+
+if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
+    COPIED_BUNDLE_ID=$(/usr/bin/plutil -extract CFBundleIdentifier raw "$APP_DIR/Contents/Info.plist")
+    if [[ "$COPIED_BUNDLE_ID" != "$BUNDLE_ID" ]]; then
+        echo "✘  Bundle identifier mismatch: $COPIED_BUNDLE_ID"
+        exit 1
+    fi
+
+    COPIED_SPARKLE_KEY=$(/usr/bin/plutil -extract SUPublicEDKey raw "$APP_DIR/Contents/Info.plist")
+    if [[ -z "$COPIED_SPARKLE_KEY" || "$COPIED_SPARKLE_KEY" == *'$('* || "$COPIED_SPARKLE_KEY" == *"REPLACE"* ]]; then
+        echo "✘  Signed release plist does not contain a real Sparkle public key."
+        exit 1
+    fi
+
+    for REQUIRED_KEY in MiloPaddleClientToken MiloPaddlePriceID MiloPaddleEnvironment; do
+        REQUIRED_VALUE=$(/usr/bin/plutil -extract "$REQUIRED_KEY" raw "$APP_DIR/Contents/Info.plist")
+        if [[ -z "$REQUIRED_VALUE" || "$REQUIRED_VALUE" == *'$('* || "$REQUIRED_VALUE" == *"REPLACE"* ]]; then
+            echo "✘  Signed release plist does not contain $REQUIRED_KEY."
+            exit 1
+        fi
+    done
+fi
 
 # ── Step 4b: Copy resource images ────────────────────────────────────────────
 echo "→ Copying resource images..."
@@ -135,12 +223,12 @@ fi
 
 # ── Step 7: Code signing ────────────────────────────────────────────────────
 if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
-    if [[ -z "${DEVELOPER_ID:-}" ]]; then
-        echo "✘  DEVELOPER_ID environment variable is required for signing."
-        echo "   Example: export DEVELOPER_ID=\"Developer ID Application: Your Name (TEAMID)\""
-        exit 1
-    fi
     echo "→ Signing with Developer ID..."
+    codesign --force \
+        --sign "$DEVELOPER_ID" \
+        --options runtime \
+        --timestamp \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework"
     codesign --force \
         --sign "$DEVELOPER_ID" \
         --options runtime \
@@ -158,7 +246,11 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
     codesign --verify --deep --strict "$APP_DIR"
     spctl --assess --type execute "$APP_DIR" 2>&1 || echo "  (spctl may fail until notarized)"
 else
-    echo "→ Ad-hoc code signing (dev)..."
+    echo "→ Ad-hoc code signing (local QA only)..."
+    codesign --force \
+        --sign - \
+        --options runtime \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework"
     codesign --force \
         --sign - \
         --options runtime \
@@ -202,22 +294,17 @@ fi
 
 # ── Step 9: Notarize (if requested) ─────────────────────────────────────────
 if [[ "$SIGN_MODE" == "notarize" ]]; then
-    if [[ -z "${APPLE_ID:-}" || -z "${APPLE_TEAM_ID:-}" || -z "${APP_PASSWORD:-}" ]]; then
-        echo "✘  Notarization requires APPLE_ID, APPLE_TEAM_ID, and APP_PASSWORD env vars."
-        exit 1
-    fi
-
     DMG_NAME="${APP_NAME}-${VERSION:-1.0}.dmg"
     echo "→ Submitting $DMG_NAME for notarization..."
 
     xcrun notarytool submit "$DMG_NAME" \
-        --apple-id "$APPLE_ID" \
-        --team-id "$APPLE_TEAM_ID" \
-        --password "$APP_PASSWORD" \
+        --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" \
         --wait
 
     echo "→ Stapling notarization ticket..."
     xcrun stapler staple "$DMG_NAME"
+    xcrun stapler validate "$DMG_NAME"
+    spctl --assess --type open --context context:primary-signature -vv "$DMG_NAME"
 
     echo "  ✔ Notarization complete!"
 fi
