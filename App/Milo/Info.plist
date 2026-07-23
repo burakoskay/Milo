@@ -57,5 +57,9 @@
             </array>
         </dict>
     </array>
+    <key>MiloSupabaseAnonKey</key>
+    <string></string>
+    <key>MiloLicensePublicKey</key>
+    <string></string>
 </dict>
 </plist>

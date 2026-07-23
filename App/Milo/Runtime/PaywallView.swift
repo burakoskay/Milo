@@ -387,7 +387,7 @@ private struct PaddleHTMLPayload: Encodable {
     let customerEmail: String?
 }
 
-private extension Secrets.PaddleEnvironment {
+private extension PaddleEnvironment {
     var javascriptName: String {
         switch self {
         case .sandbox:

@@ -5,7 +5,7 @@ import CryptoKit
 
 struct PaddleCheckoutConfiguration: Identifiable {
     let id = UUID()
-    let environment: Secrets.PaddleEnvironment
+    let environment: PaddleEnvironment
     let clientToken: String
     let priceID: String
     let userID: String
@@ -56,7 +56,7 @@ final class CheckoutManager: NSObject, ObservableObject {
     @Published private(set) var authError: String?
 
     private let supabaseURL = BackendConfiguration.supabaseURL
-    private let supabaseAnonKey = Secrets.supabaseAnonKey
+    private let supabaseAnonKey = MiloClientConfiguration.supabaseAnonKey
     private let keychainService = "com.monomacaw.milo.auth"
     private let keychainAccount = "supabase_jwt"
     private let magicLinkStateAccount = "magic_link_state"
@@ -240,21 +240,22 @@ final class CheckoutManager: NSObject, ObservableObject {
             return nil
         }
 
-        let priceID = Secrets.paddlePriceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let priceID = MiloClientConfiguration.paddlePriceID
         guard Self.isValidPaddlePriceID(priceID) else {
             authError = "Paddle Price ID is not configured."
             return nil
         }
 
-        let clientToken = Secrets.paddleClientToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard Self.isValidPaddleClientToken(clientToken, environment: Secrets.paddleEnvironment) else {
+        let clientToken = MiloClientConfiguration.paddleClientToken
+        guard let environment = MiloClientConfiguration.paddleEnvironment,
+              Self.isValidPaddleClientToken(clientToken, environment: environment) else {
             authError = "Paddle client token is not configured."
             return nil
         }
 
         authError = nil
         return PaddleCheckoutConfiguration(
-            environment: Secrets.paddleEnvironment,
+            environment: environment,
             clientToken: clientToken,
             priceID: priceID,
             userID: userID,
@@ -566,7 +567,7 @@ final class CheckoutManager: NSObject, ObservableObject {
         return hashedData.compactMap { String(format: "%02x", $0) }.joined()
     }
 
-    private static func isValidPaddleClientToken(_ token: String, environment: Secrets.PaddleEnvironment) -> Bool {
+    private static func isValidPaddleClientToken(_ token: String, environment: PaddleEnvironment) -> Bool {
         let expectedPrefix: String
         switch environment {
         case .sandbox:

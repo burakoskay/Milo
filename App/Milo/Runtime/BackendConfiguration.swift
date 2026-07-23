@@ -2,15 +2,11 @@ import Foundation
 
 enum BackendConfiguration {
     static var supabaseURL: String {
-        #if DEBUG
-        return Secrets.supabaseURL
-        #else
-        if let value = Bundle.main.object(forInfoDictionaryKey: "MiloSupabaseURL") as? String,
-           Self.isAllowedBackendURL(value) {
+        let value = MiloClientConfiguration.bundleString(for: "MiloSupabaseURL")
+        if Self.isAllowedBackendURL(value) {
             return value
         }
         return "https://monomacaw.com"
-        #endif
     }
 
     private static func isAllowedBackendURL(_ value: String) -> Bool {

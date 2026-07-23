@@ -9,15 +9,14 @@
 #   ./build_app.sh release notarize # Release + sign + notarize for distribution
 #
 # Environment variables (for signed releases):
-#   DEVELOPER_ID             – e.g. "Developer ID Application: Your Name (883MM2YM4N)"
-#   SPARKLE_PUBLIC_ED_KEY    – Sparkle Ed25519 public key for SUPublicEDKey
+#   DEVELOPER_ID             – e.g. "Developer ID Application: Your Name (8N738727QB)"
 #   NOTARY_KEYCHAIN_PROFILE  – notarytool profile, defaults to "milo-notary"
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 APP_NAME="Milo"
 APP_DIR="$APP_NAME.app"
-TEAM_ID="883MM2YM4N"
+TEAM_ID="8N738727QB"
 BUNDLE_ID="com.monomacaw.milo"
 BUILD_MODE="${1:-dev}"     # dev | release
 SIGN_MODE="${2:-}"         # sign | notarize | (empty)
@@ -51,16 +50,6 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
 
     if ! security find-identity -v -p codesigning | grep -F "$DEVELOPER_ID" >/dev/null; then
         echo "✘  Developer ID identity is not available in the current keychain: $DEVELOPER_ID"
-        exit 1
-    fi
-
-    if [[ -z "${SPARKLE_PUBLIC_ED_KEY:-}" ]]; then
-        echo "✘  SPARKLE_PUBLIC_ED_KEY is required for signed Milo releases."
-        exit 1
-    fi
-
-    if [[ "$SPARKLE_PUBLIC_ED_KEY" == *'$('* || "$SPARKLE_PUBLIC_ED_KEY" == *"REPLACE"* ]]; then
-        echo "✘  SPARKLE_PUBLIC_ED_KEY is still a placeholder."
         exit 1
     fi
 
@@ -105,19 +94,9 @@ swift build "${SWIFT_BUILD_FLAGS[@]}"
 BIN_PATH=$(swift build -c "$SWIFTPM_CONFIGURATION" --show-bin-path)
 cp "$BIN_PATH/$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"
 
-if [[ ! -d "$BIN_PATH/Sparkle.framework" ]]; then
-    echo "✘  Sparkle.framework was not produced by SwiftPM."
-    exit 1
-fi
-cp -R "$BIN_PATH/Sparkle.framework" "$APP_DIR/Contents/Frameworks/"
-install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_DIR/Contents/MacOS/$APP_NAME"
-
 # ── Step 4: Copy Info.plist ──────────────────────────────────────────────────
 echo "→ Copying Info.plist..."
 cp App/Milo/Info.plist "$APP_DIR/Contents/Info.plist"
-if [[ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ]]; then
-    /usr/bin/plutil -replace SUPublicEDKey -string "$SPARKLE_PUBLIC_ED_KEY" "$APP_DIR/Contents/Info.plist"
-fi
 if [[ -n "${MILO_PADDLE_CLIENT_TOKEN:-}" ]]; then
     /usr/bin/plutil -replace MiloPaddleClientToken -string "$MILO_PADDLE_CLIENT_TOKEN" "$APP_DIR/Contents/Info.plist"
 fi
@@ -127,6 +106,15 @@ fi
 if [[ -n "${MILO_PADDLE_ENVIRONMENT:-}" ]]; then
     /usr/bin/plutil -replace MiloPaddleEnvironment -string "$MILO_PADDLE_ENVIRONMENT" "$APP_DIR/Contents/Info.plist"
 fi
+if [[ -n "${MILO_SUPABASE_URL:-}" ]]; then
+    /usr/bin/plutil -replace MiloSupabaseURL -string "$MILO_SUPABASE_URL" "$APP_DIR/Contents/Info.plist"
+fi
+if [[ -n "${MILO_SUPABASE_ANON_KEY:-}" ]]; then
+    /usr/bin/plutil -replace MiloSupabaseAnonKey -string "$MILO_SUPABASE_ANON_KEY" "$APP_DIR/Contents/Info.plist"
+fi
+if [[ -n "${MILO_LICENSE_PUBLIC_KEY:-}" ]]; then
+    /usr/bin/plutil -replace MiloLicensePublicKey -string "$MILO_LICENSE_PUBLIC_KEY" "$APP_DIR/Contents/Info.plist"
+fi
 
 if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
     COPIED_BUNDLE_ID=$(/usr/bin/plutil -extract CFBundleIdentifier raw "$APP_DIR/Contents/Info.plist")
@@ -135,13 +123,13 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
         exit 1
     fi
 
-    COPIED_SPARKLE_KEY=$(/usr/bin/plutil -extract SUPublicEDKey raw "$APP_DIR/Contents/Info.plist")
-    if [[ -z "$COPIED_SPARKLE_KEY" || "$COPIED_SPARKLE_KEY" == *'$('* || "$COPIED_SPARKLE_KEY" == *"REPLACE"* ]]; then
-        echo "✘  Signed release plist does not contain a real Sparkle public key."
-        exit 1
-    fi
-
-    for REQUIRED_KEY in MiloPaddleClientToken MiloPaddlePriceID MiloPaddleEnvironment; do
+    for REQUIRED_KEY in \
+        MiloPaddleClientToken \
+        MiloPaddlePriceID \
+        MiloPaddleEnvironment \
+        MiloSupabaseURL \
+        MiloSupabaseAnonKey \
+        MiloLicensePublicKey; do
         REQUIRED_VALUE=$(/usr/bin/plutil -extract "$REQUIRED_KEY" raw "$APP_DIR/Contents/Info.plist")
         if [[ -z "$REQUIRED_VALUE" || "$REQUIRED_VALUE" == *'$('* || "$REQUIRED_VALUE" == *"REPLACE"* ]]; then
             echo "✘  Signed release plist does not contain $REQUIRED_KEY."
@@ -227,11 +215,6 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
     codesign --force \
         --sign "$DEVELOPER_ID" \
         --options runtime \
-        --timestamp \
-        "$APP_DIR/Contents/Frameworks/Sparkle.framework"
-    codesign --force \
-        --sign "$DEVELOPER_ID" \
-        --options runtime \
         --entitlements "$ENTITLEMENTS_PATH" \
         --timestamp \
         "$APP_DIR/Contents/MacOS/$APP_NAME"
@@ -247,10 +230,6 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
     spctl --assess --type execute "$APP_DIR" 2>&1 || echo "  (spctl may fail until notarized)"
 else
     echo "→ Ad-hoc code signing (local QA only)..."
-    codesign --force \
-        --sign - \
-        --options runtime \
-        "$APP_DIR/Contents/Frameworks/Sparkle.framework"
     codesign --force \
         --sign - \
         --options runtime \

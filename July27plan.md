@@ -496,6 +496,7 @@ No phase may be declared complete solely because code was written. Each phase en
 6. [ ] Turn on Swift 6, complete concurrency, warnings-as-errors, strict SwiftLint, and Xcode security warnings incrementally with tracked exceptions only.
    - [x] **Current SwiftPM baseline completed 2026-07-23:** root Debug tests, MiloKit aggregate tests, and root Release build pass with no compiler warnings under the explicitly selected installed Xcode 27 beta toolchain; strict SwiftLint reports zero violations. The canonical Xcode targets, complete-concurrency migration, and current-beta rerun remain open.
 7. [ ] Establish validated configuration generation for non-secret endpoints/IDs and secure secret injection.
+   - [x] **Reproducible baseline completed 2026-07-23:** the tracked app no longer references the ignored local `Secrets.swift` type. Client-visible values now have a tracked bundle-configuration schema, signed packaging requires every currently consumed value, the verified Team ID is used by the packaging script, and a secret-free checkout compiles in CI. Final per-target generated configuration, environment separation, and removal of the legacy desktop Supabase/Paddle path remain open.
 
 **Exit gate:** clean-clone Debug/Release Pro and Lite builds, helper build, all existing tests pass, zero warnings and zero lint violations. No behavioral release claim yet.
 

@@ -86,7 +86,7 @@ final class LicenseManager: ObservableObject, @unchecked Sendable {
     @Published private(set) var updateChecksAvailable: Bool = false
 
     // The single Public Key embedded in the app. The Private Key NEVER leaves the Supabase server.
-    private let publicKeyBase64 = Secrets.ed25519PublicKeyBase64
+    private let publicKeyBase64 = MiloClientConfiguration.licensePublicKeyBase64
     private let maximumPayloadAge: TimeInterval = 7 * 24 * 60 * 60
     private let maximumFutureSkew: TimeInterval = 5 * 60
 
