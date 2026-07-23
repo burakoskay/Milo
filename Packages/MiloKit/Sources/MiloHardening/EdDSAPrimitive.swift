@@ -11,7 +11,9 @@ public enum MiloHardeningPrimitives {
 }
 
 /// Verifies an Ed25519 signature for the C license verifier.
+#if compiler(>=6.3)
 @used
+#endif
 @_cdecl("mh_ed25519_verify_primitive")
 // swiftlint:disable:next function_parameter_count
 public func mhEd25519VerifyPrimitive(
@@ -36,7 +38,9 @@ public func mhEd25519VerifyPrimitive(
 }
 
 /// Opens a ChaCha20-Poly1305 sealed box for the C honeypot verifier.
+#if compiler(>=6.3)
 @used
+#endif
 @_cdecl("mh_chachapoly_open_primitive")
 // swiftlint:disable:next function_parameter_count
 public func mhChaChaPolyOpenPrimitive(

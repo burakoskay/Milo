@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "MiloLicense", targets: ["MiloLicense"]),
         .library(name: "MiloHardening", targets: ["MiloHardening"]),
         .library(name: "MiloUpdates", targets: ["MiloUpdates"]),
+        .library(name: "MiloSparkle", targets: ["MiloSparkle"]),
         .library(name: "MiloPaywall", targets: ["MiloPaywall"]),
         .library(name: "MiloSettings", targets: ["MiloSettings"]),
         .library(name: "MiloStats", targets: ["MiloStats"]),
@@ -23,7 +24,7 @@ let package = Package(
         .library(name: "MiloTestSupport", targets: ["MiloTestSupport"])
     ],
     dependencies: [
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")
     ],
     targets: [
         .target(name: "MiloDomain", swiftSettings: strictSwiftSettings),
@@ -34,6 +35,7 @@ let package = Package(
                 "ConstantTime.c",
                 "HoneypotChecks.c",
                 "LicenseVerify.c",
+                "KeychainKey.c",
                 "Integrity.c",
                 "Fingerprint.c",
                 "AntiDebug.c",
@@ -65,7 +67,9 @@ let package = Package(
                 "Integrity.c",
                 "Integrity.h",
                 "LicenseVerify.c",
-                "LicenseVerify.h"
+                "LicenseVerify.h",
+                "KeychainKey.c",
+                "KeychainKey.h"
             ],
             sources: [
                 "EdDSAPrimitive.swift",
@@ -75,7 +79,7 @@ let package = Package(
         ),
         .target(
             name: "MiloLicense",
-            dependencies: ["MiloDomain", "MiloHardening"],
+            dependencies: ["MiloDomain", "MiloHardening", "MiloHardeningC"],
             swiftSettings: strictSwiftSettings
         ),
         .target(
@@ -95,9 +99,13 @@ let package = Package(
         ),
         .target(
             name: "MiloUpdates",
+            dependencies: ["MiloDomain", "MiloLicense"],
+            swiftSettings: strictSwiftSettings
+        ),
+        .target(
+            name: "MiloSparkle",
             dependencies: [
-                "MiloDomain",
-                "MiloLicense",
+                "MiloUpdates",
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             swiftSettings: strictSwiftSettings

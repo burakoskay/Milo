@@ -7,8 +7,7 @@ let package = Package(
         .macOS(.v13)
     ],
     dependencies: [
-        .package(path: "Packages/MiloKit"),
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
+        .package(path: "Packages/MiloKit")
     ],
     targets: [
         .executableTarget(
@@ -16,8 +15,7 @@ let package = Package(
             dependencies: [
                 .product(name: "MiloHardening", package: "MiloKit"),
                 .product(name: "MiloLicense", package: "MiloKit"),
-                .product(name: "MiloUpdates", package: "MiloKit"),
-                .product(name: "Sparkle", package: "Sparkle")
+                .product(name: "MiloUpdates", package: "MiloKit")
             ],
             path: "App/Milo",
             exclude: [

@@ -1,24 +1,8 @@
 import CryptoKit
 import Foundation
 import MiloDomain
+import MiloHardeningC
 import Security
-
-@_silgen_name("mh_compute_device_id")
-private func cComputeDeviceID(
-    _ userID: UnsafePointer<CChar>,
-    _ output: UnsafeMutablePointer<CChar>,
-    _ outputLength: Int
-) -> Int32
-
-@_silgen_name("mh_license_verify_envelope_with_public_key")
-private func cVerifyEnvelope(
-    _ envelope: UnsafePointer<UInt8>,
-    _ envelopeLength: Int,
-    _ signature: UnsafePointer<UInt8>,
-    _ signatureLength: Int,
-    _ publicKey: UnsafePointer<UInt8>,
-    _ publicKeyLength: Int
-) -> Int32
 
 /// Errors emitted while creating, enrolling, refreshing, or verifying an MLP-v1 license.
 public enum MLPLicenseError: Error, LocalizedError, Sendable {
@@ -202,7 +186,7 @@ public struct MiloLicenseService: Sendable {
                     guard let publicKeyPointer = publicKeyBuffer.bindMemory(to: UInt8.self).baseAddress else {
                         return false
                     }
-                    return cVerifyEnvelope(
+                    return mh_license_verify_envelope_with_public_key(
                         envelopePointer,
                         envelope.count,
                         signaturePointer,
@@ -600,15 +584,15 @@ public final class MLPDeviceLicenseClient: @unchecked Sendable {
                 guard let outputPointer = outputBuffer.baseAddress else {
                     return 0
                 }
-                return cComputeDeviceID(userIDPointer, outputPointer, outputBuffer.count)
+                return mh_compute_device_id(userIDPointer, outputPointer, outputBuffer.count)
             }
         }
         guard result == 1 else {
             throw MLPLicenseError.deviceFingerprintUnavailable
         }
         let bytes = output.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
-        let fingerprint = String(decoding: bytes, as: UTF8.self)
-        guard fingerprint.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil else {
+        guard let fingerprint = String(bytes: bytes, encoding: .utf8),
+              fingerprint.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil else {
             throw MLPLicenseError.deviceFingerprintUnavailable
         }
         return fingerprint
@@ -798,16 +782,15 @@ private final class MLPDeviceKeyStore: @unchecked Sendable {
     }
 
     private func loadIfPresent() throws -> SecKey? {
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query(returnReference: true) as CFDictionary, &result)
+        var status = errSecSuccess
+        let key = MHCopyKeychainKey(query(returnReference: true) as CFDictionary, &status)
         if status == errSecItemNotFound {
             return nil
         }
-        guard status == errSecSuccess, let result, CFGetTypeID(result) == SecKeyGetTypeID() else {
+        guard status == errSecSuccess, let key else {
             throw MLPLicenseError.keychainFailure(Self.statusMessage(status))
         }
-        // SAFETY: SecItemCopyMatching returned a retained Core Foundation object whose type was checked above.
-        return unsafeBitCast(result, to: SecKey.self)
+        return key
     }
 
     private func create(tokenID: CFString?) throws -> SecKey {

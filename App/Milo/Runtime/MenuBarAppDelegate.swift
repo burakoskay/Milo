@@ -1,13 +1,6 @@
 import Cocoa
 import MiloHardening
-import MiloLicense
-import MiloUpdates
 import SwiftUI
-import Security
-
-#if canImport(Sparkle)
-import Sparkle
-#endif
 
 // MARK: - Binary Hardening (Zero Technical Debt)
 
@@ -87,12 +80,6 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
     private var bloatCountObserver: Any?
     private var globalEventMonitor: Any?
     private var defaultsObserver: Any?
-    private var licenseRefresher: LicenseRefresher?
-
-    #if canImport(Sparkle)
-    private var updaterController: SPUStandardUpdaterController?
-    private var updaterDelegate: MiloSparkleUpdaterDelegate?
-    #endif
 
     private let panelWidth: CGFloat = 360
     private let panelHeight: CGFloat = 520
@@ -111,9 +98,6 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         _ = performRuntimeSignatureCheck()
-        licenseRefresher = LicenseRefresher()
-        LicenseEnvelopeBootstrapper.migrateV1FileIfNeeded()
-        configureUpdater()
 
         windowDelegate.appDelegate = self
         buildMainMenu()
@@ -501,20 +485,5 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
         } else if !panel.isVisible {
             showPanel()
         }
-    }
-
-    private func configureUpdater() {
-        #if canImport(Sparkle)
-        let delegate = MiloSparkleUpdaterDelegate(
-            baseFeedURLProvider: { try MiloUpdateFeedConfiguration.baseURL() },
-            feedStateProvider: { try KeychainEnvelopeStore.verifiedUpdateFeedState() }
-        )
-        updaterDelegate = delegate
-        updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
-            updaterDelegate: delegate,
-            userDriverDelegate: nil
-        )
-        #endif
     }
 }
