@@ -73,9 +73,22 @@ swift build
 
 `MiloHardening` is split into a C target plus a Swift wrapper target because SwiftPM does not support mixed C and Swift source files in a single target. The public design boundary is unchanged: security-critical decisions live in C; Swift coordinates.
 
+MiloKit publishes only implemented boundaries: `MiloDomain`, `MiloHardening`,
+`MiloLicense`, `MiloUpdates`, and `MiloSparkle`. Feature-shaped placeholder
+products are deliberately absent; the active app implementation remains under
+`App/Milo` until a later phase extracts a complete, tested domain boundary.
+
 ## Backend Contract
 
 The backend lives in `/Volumes/Internal HD/Developer/monomacaw/website`. Milo does not own Supabase migrations, Paddle webhooks, or license Edge Functions. The app consumes Monomacaw License Protocol v1 from the website repo.
+
+The Pro app has one licensing path: `LicenseManager` adapts the
+`MLPDeviceLicenseClient` device-key flow. It restores verified Keychain state,
+starts and completes browser-approved pairing, refreshes with signed device
+requests, and fails closed when client configuration is absent or invalid.
+Account authentication and Paddle checkout stay in the system browser. The
+desktop app contains no website session, Supabase user token, Paddle token,
+embedded checkout, or custom auth callback.
 
 The MLP-v1 golden fixture is copied into
 `Packages/MiloKit/Tests/MiloLicenseTests/Fixtures/mlp-v1-golden.json` only so
@@ -175,13 +188,19 @@ Build, sign, notarize, staple, and verify:
 export DEVELOPER_ID="Developer ID Application: <legal Apple developer name> (8N738727QB)"
 export NOTARY_KEYCHAIN_PROFILE="milo-notary"
 export SPARKLE_PUBLIC_ED_KEY="<Sparkle Ed25519 public key>"
+export MILO_SERVICE_BASE_URL="https://monomacaw.com"
+export MILO_LICENSE_PUBLIC_KEY="<MLP Ed25519 public verification key in unpadded base64url>"
 
 ./build_app.sh release notarize
 Tools/verify-build.sh Milo.app
 spctl --assess --type open --context context:primary-signature -vv Milo-2.0.0.dmg
 ```
 
-The signed release path fails before compilation if the Developer ID identity is missing, the Team ID does not match `8N738727QB`, or `SPARKLE_PUBLIC_ED_KEY` is absent or still a placeholder.
+The signed release path fails if the Developer ID identity is missing, the Team
+ID does not match `8N738727QB`, or required public verification/configuration
+values are absent or still placeholders. These are public client inputs; all
+private signing, Paddle, Supabase service-role, and browser-session material
+remains outside the app and its build metadata.
 
 ## Update Feed Release Rows
 

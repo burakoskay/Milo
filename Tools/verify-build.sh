@@ -67,6 +67,31 @@ if strings "$EXECUTABLE" | grep -q "$LEGACY_SUPABASE_URL"; then
   exit 1
 fi
 
+FORBIDDEN_BINARY_MARKERS=(
+  'MiloSupabaseAnonKey'
+  'MiloPaddleClientToken'
+  'Paddle.Initialize'
+  'verifyLicenseAndFetchSignatures'
+  'localDevelopmentUnlockEnabled'
+)
+for MARKER in "${FORBIDDEN_BINARY_MARKERS[@]}"; do
+  if strings "$EXECUTABLE" | grep -Fq "$MARKER"; then
+    echo "forbidden legacy licensing marker leaked in binary: $MARKER" >&2
+    exit 1
+  fi
+done
+
+FORBIDDEN_FRAMEWORKS=(
+  '/AuthenticationServices.framework/'
+  '/WebKit.framework/'
+)
+for FRAMEWORK in "${FORBIDDEN_FRAMEWORKS[@]}"; do
+  if otool -L "$EXECUTABLE" | grep -Fq "$FRAMEWORK"; then
+    echo "forbidden desktop authentication framework linked in binary: $FRAMEWORK" >&2
+    exit 1
+  fi
+done
+
 FORBIDDEN_MARKER='exit''(173)'
 if strings "$EXECUTABLE" | grep -q "$FORBIDDEN_MARKER"; then
   echo "forbidden tamper-exit marker leaked in binary" >&2

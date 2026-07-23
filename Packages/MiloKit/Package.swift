@@ -8,20 +8,10 @@ let package = Package(
     ],
     products: [
         .library(name: "MiloDomain", targets: ["MiloDomain"]),
-        .library(name: "MiloProcessEngine", targets: ["MiloProcessEngine"]),
-        .library(name: "MiloSignatures", targets: ["MiloSignatures"]),
-        .library(name: "MiloPermissions", targets: ["MiloPermissions"]),
         .library(name: "MiloLicense", targets: ["MiloLicense"]),
         .library(name: "MiloHardening", targets: ["MiloHardening"]),
         .library(name: "MiloUpdates", targets: ["MiloUpdates"]),
-        .library(name: "MiloSparkle", targets: ["MiloSparkle"]),
-        .library(name: "MiloPaywall", targets: ["MiloPaywall"]),
-        .library(name: "MiloSettings", targets: ["MiloSettings"]),
-        .library(name: "MiloStats", targets: ["MiloStats"]),
-        .library(name: "MiloDebloat", targets: ["MiloDebloat"]),
-        .library(name: "MiloWhitelist", targets: ["MiloWhitelist"]),
-        .library(name: "MiloUI", targets: ["MiloUI"]),
-        .library(name: "MiloTestSupport", targets: ["MiloTestSupport"])
+        .library(name: "MiloSparkle", targets: ["MiloSparkle"])
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")
@@ -83,21 +73,6 @@ let package = Package(
             swiftSettings: strictSwiftSettings
         ),
         .target(
-            name: "MiloProcessEngine",
-            dependencies: ["MiloDomain", "MiloHardening", "MiloLicense"],
-            swiftSettings: strictSwiftSettings
-        ),
-        .target(
-            name: "MiloSignatures",
-            dependencies: ["MiloDomain", "MiloHardening"],
-            swiftSettings: strictSwiftSettings
-        ),
-        .target(
-            name: "MiloPermissions",
-            dependencies: ["MiloDomain", "MiloHardening"],
-            swiftSettings: strictSwiftSettings
-        ),
-        .target(
             name: "MiloUpdates",
             dependencies: ["MiloDomain", "MiloLicense"],
             swiftSettings: strictSwiftSettings
@@ -108,53 +83,6 @@ let package = Package(
                 "MiloUpdates",
                 .product(name: "Sparkle", package: "Sparkle")
             ],
-            swiftSettings: strictSwiftSettings
-        ),
-        .target(
-            name: "MiloPaywall",
-            dependencies: ["MiloDomain", "MiloLicense"],
-            swiftSettings: strictSwiftSettings
-        ),
-        .target(
-            name: "MiloSettings",
-            dependencies: ["MiloDomain", "MiloPermissions"],
-            swiftSettings: strictSwiftSettings
-        ),
-        .target(
-            name: "MiloStats",
-            dependencies: ["MiloDomain"],
-            swiftSettings: strictSwiftSettings
-        ),
-        .target(
-            name: "MiloDebloat",
-            dependencies: ["MiloDomain", "MiloProcessEngine", "MiloPermissions"],
-            swiftSettings: strictSwiftSettings
-        ),
-        .target(
-            name: "MiloWhitelist",
-            dependencies: ["MiloDomain"],
-            swiftSettings: strictSwiftSettings
-        ),
-        .target(
-            name: "MiloUI",
-            dependencies: [
-                "MiloDomain",
-                "MiloProcessEngine",
-                "MiloSignatures",
-                "MiloPermissions",
-                "MiloLicense",
-                "MiloUpdates",
-                "MiloPaywall",
-                "MiloSettings",
-                "MiloStats",
-                "MiloDebloat",
-                "MiloWhitelist"
-            ],
-            swiftSettings: strictSwiftSettings
-        ),
-        .target(
-            name: "MiloTestSupport",
-            dependencies: ["MiloDomain", "MiloLicense", "MiloHardening"],
             swiftSettings: strictSwiftSettings
         ),
         .testTarget(

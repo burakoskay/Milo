@@ -185,12 +185,6 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls where url.scheme == "milo" {
-            CheckoutManager.shared.handleAuthCallback(url: url)
-        }
-    }
-
     // MARK: - Quit Confirmation
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

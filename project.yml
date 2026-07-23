@@ -112,18 +112,14 @@ targets:
         copy:
           destination: resources
       - package: MiloKit
+        product: MiloDomain
+      - package: MiloKit
         product: MiloHardening
       - package: MiloKit
         product: MiloLicense
-      - package: MiloKit
-        product: MiloUpdates
       - sdk: AppKit.framework
-      - sdk: AuthenticationServices.framework
-      - sdk: CryptoKit.framework
-      - sdk: IOKit.framework
       - sdk: Security.framework
       - sdk: SwiftUI.framework
-      - sdk: WebKit.framework
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: App/Milo/Milo.entitlements

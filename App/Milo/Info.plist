@@ -32,13 +32,7 @@
     <string>Copyright © 2026 monomacaw. All rights reserved.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
-    <key>MiloPaddleClientToken</key>
-    <string>$(MILO_PADDLE_CLIENT_TOKEN)</string>
-    <key>MiloPaddleEnvironment</key>
-    <string>$(MILO_PADDLE_ENVIRONMENT)</string>
-    <key>MiloPaddlePriceID</key>
-    <string>$(MILO_PADDLE_PRICE_ID)</string>
-    <key>MiloSupabaseURL</key>
+    <key>MiloServiceBaseURL</key>
     <string>https://monomacaw.com</string>
     <key>SUEnableDownloaderService</key>
     <true/>
@@ -48,19 +42,6 @@
     <string>https://monomacaw.com/api/milo/update-feed</string>
     <key>SUPublicEDKey</key>
     <string>$(SPARKLE_PUBLIC_ED_KEY)</string>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>com.monomacaw.milo.auth</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>milo</string>
-            </array>
-        </dict>
-    </array>
-    <key>MiloSupabaseAnonKey</key>
-    <string></string>
     <key>MiloLicensePublicKey</key>
     <string></string>
 </dict>

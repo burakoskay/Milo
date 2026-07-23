@@ -14,15 +14,23 @@ version 1.x predates this regime.
 
 ### Changed
 
+- Makes the browser-approved MLP-v1 device-key client the sole Pro licensing path and presents explicit pairing, refresh, account-management, and disconnect states in the paywall.
+- Restricts the Pro bundle to a validated Monomacaw service URL plus the public MLP verification key.
+- Reduces MiloKit to implemented domain, hardening, licensing, update-policy, and Sparkle boundaries.
+
 ### Deprecated
 
 ### Removed
+
+- Removes desktop-held Supabase sessions, native Sign in with Apple, email magic-link handling, the custom auth callback, embedded Paddle/WebKit checkout, and the Debug/Ad Hoc Pro bypass.
+- Removes ten unused feature-shaped package placeholders, including the duplicate unsynchronized package `ProcessManager`.
 
 ### Fixed
 
 ### Security
 
 - Disables Xcode base-entitlement injection for Release builds so distribution artifacts cannot inherit `com.apple.security.get-task-allow`.
+- Adds source and release-binary regression gates that reject legacy desktop authentication/licensing markers and AuthenticationServices/WebKit linkage.
 
 ## [2.0.0] - 2026-XX-XX
 

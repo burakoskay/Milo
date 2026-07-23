@@ -11,6 +11,9 @@
 # Environment variables (for signed releases):
 #   DEVELOPER_ID             – e.g. "Developer ID Application: Your Name (8N738727QB)"
 #   NOTARY_KEYCHAIN_PROFILE  – notarytool profile, defaults to "milo-notary"
+#   SPARKLE_PUBLIC_ED_KEY     – public Sparkle verification key
+#   MILO_SERVICE_BASE_URL    – public MLP service root (`https://monomacaw.com`)
+#   MILO_LICENSE_PUBLIC_KEY  – public MLP Ed25519 verification key (unpadded base64url)
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -97,23 +100,14 @@ cp "$BIN_PATH/$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"
 # ── Step 4: Copy Info.plist ──────────────────────────────────────────────────
 echo "→ Copying Info.plist..."
 cp App/Milo/Info.plist "$APP_DIR/Contents/Info.plist"
-if [[ -n "${MILO_PADDLE_CLIENT_TOKEN:-}" ]]; then
-    /usr/bin/plutil -replace MiloPaddleClientToken -string "$MILO_PADDLE_CLIENT_TOKEN" "$APP_DIR/Contents/Info.plist"
-fi
-if [[ -n "${MILO_PADDLE_PRICE_ID:-}" ]]; then
-    /usr/bin/plutil -replace MiloPaddlePriceID -string "$MILO_PADDLE_PRICE_ID" "$APP_DIR/Contents/Info.plist"
-fi
-if [[ -n "${MILO_PADDLE_ENVIRONMENT:-}" ]]; then
-    /usr/bin/plutil -replace MiloPaddleEnvironment -string "$MILO_PADDLE_ENVIRONMENT" "$APP_DIR/Contents/Info.plist"
-fi
-if [[ -n "${MILO_SUPABASE_URL:-}" ]]; then
-    /usr/bin/plutil -replace MiloSupabaseURL -string "$MILO_SUPABASE_URL" "$APP_DIR/Contents/Info.plist"
-fi
-if [[ -n "${MILO_SUPABASE_ANON_KEY:-}" ]]; then
-    /usr/bin/plutil -replace MiloSupabaseAnonKey -string "$MILO_SUPABASE_ANON_KEY" "$APP_DIR/Contents/Info.plist"
+if [[ -n "${MILO_SERVICE_BASE_URL:-}" ]]; then
+    /usr/bin/plutil -replace MiloServiceBaseURL -string "$MILO_SERVICE_BASE_URL" "$APP_DIR/Contents/Info.plist"
 fi
 if [[ -n "${MILO_LICENSE_PUBLIC_KEY:-}" ]]; then
     /usr/bin/plutil -replace MiloLicensePublicKey -string "$MILO_LICENSE_PUBLIC_KEY" "$APP_DIR/Contents/Info.plist"
+fi
+if [[ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ]]; then
+    /usr/bin/plutil -replace SUPublicEDKey -string "$SPARKLE_PUBLIC_ED_KEY" "$APP_DIR/Contents/Info.plist"
 fi
 
 if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
@@ -124,12 +118,9 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
     fi
 
     for REQUIRED_KEY in \
-        MiloPaddleClientToken \
-        MiloPaddlePriceID \
-        MiloPaddleEnvironment \
-        MiloSupabaseURL \
-        MiloSupabaseAnonKey \
-        MiloLicensePublicKey; do
+        MiloServiceBaseURL \
+        MiloLicensePublicKey \
+        SUPublicEDKey; do
         REQUIRED_VALUE=$(/usr/bin/plutil -extract "$REQUIRED_KEY" raw "$APP_DIR/Contents/Info.plist")
         if [[ -z "$REQUIRED_VALUE" || "$REQUIRED_VALUE" == *'$('* || "$REQUIRED_VALUE" == *"REPLACE"* ]]; then
             echo "✘  Signed release plist does not contain $REQUIRED_KEY."
@@ -189,10 +180,6 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
 <dict>
     <key>com.apple.security.automation.apple-events</key>
     <true/>
-    <key>com.apple.developer.applesignin</key>
-    <array>
-        <string>Default</string>
-    </array>
 </dict>
 </plist>
 EOF
