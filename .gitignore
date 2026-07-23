@@ -28,9 +28,8 @@ _contract/
 
 # macOS
 .DS_Store
-*.xcodeproj
-*.xcworkspace
-xcuserdata/
+**/xcuserdata/
+*.xcuserstate
 
 # Generated icon export sizes; the build consumes only the 1024px sources.
 Icons/Icon Exports/Milo-iOS-*.png
@@ -39,7 +38,6 @@ Icons/Icon Exports/Milo-iOS-*.png
 
 # Secrets & API Keys
 Secrets.swift
-Milo/Sources/Secrets.swift
 **/Secrets.swift
 **/*.keychain
 **/*.keychain-db

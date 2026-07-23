@@ -1,8 +1,32 @@
 # Milo Engineering Bootstrap
 
-Milo is a local-first macOS menu-bar process-management app. The active product architecture is the `App/Milo` SwiftPM executable plus `Packages/MiloKit`.
+Milo is a local-first macOS menu-bar process-management app. The canonical app build is the tracked `Milo.xcworkspace`; reusable domains remain in `Packages/MiloKit` as local Swift packages.
 
 ## Current Build Paths
+
+### Xcode app workspace
+
+Generate the tracked project only with the repository-pinned XcodeGen version:
+
+```bash
+brew install xcodegen
+Tools/generate-xcode-project.sh
+```
+
+`Tools/generate-xcode-project.sh` fails unless XcodeGen 2.46.0 is active. Open `Milo.xcworkspace`, not the nested project. The current canonical Pro build and hostless regression test are:
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+xcodebuild \
+  -workspace Milo.xcworkspace \
+  -scheme MiloPro \
+  -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGNING_ALLOWED=NO \
+  clean test
+```
+
+The generated project is committed so clean CI does not depend on installing XcodeGen. Any change to `project.yml` must regenerate the project and commit both together.
 
 ### MiloKit Package
 
@@ -57,17 +81,23 @@ Required process files live under `.github/`:
 Use this order for local release checks:
 
 ```bash
-cd Packages/MiloKit
-swift package describe
-swift build
+export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+Tools/generate-xcode-project.sh
+xcodebuild \
+  -workspace Milo.xcworkspace \
+  -scheme MiloPro \
+  -configuration Release \
+  -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGNING_ALLOWED=NO \
+  clean build
 
-cd ../..
+swift test --package-path Packages/MiloKit
 swift build -c release
 ./build_app.sh release
 Tools/verify-build.sh /path/to/Milo.app
 ```
 
-`./build_app.sh release` intentionally produces an ad-hoc signed QA artifact. It is not a production release.
+`./build_app.sh release` is retained only for migration-era ad-hoc QA packaging. It is not the canonical Xcode build and does not produce a production release.
 
 ## Release Machine Setup
 
@@ -82,7 +112,7 @@ security find-identity -v -p codesigning
 The identity must be:
 
 ```text
-Developer ID Application: <legal Apple developer name> (883MM2YM4N)
+Developer ID Application: <legal Apple developer name> (8N738727QB)
 ```
 
 Store notarization credentials once on the release machine:
@@ -90,7 +120,7 @@ Store notarization credentials once on the release machine:
 ```bash
 xcrun notarytool store-credentials milo-notary \
   --apple-id "$APPLE_ID" \
-  --team-id 883MM2YM4N \
+  --team-id 8N738727QB \
   --password "$APP_PASSWORD"
 ```
 
@@ -109,7 +139,7 @@ export SPARKLE_PUBLIC_ED_KEY="$(cat /Volumes/Offline/Milo/sparkle-ed25519-public
 Build, sign, notarize, staple, and verify:
 
 ```bash
-export DEVELOPER_ID="Developer ID Application: <legal Apple developer name> (883MM2YM4N)"
+export DEVELOPER_ID="Developer ID Application: <legal Apple developer name> (8N738727QB)"
 export NOTARY_KEYCHAIN_PROFILE="milo-notary"
 export SPARKLE_PUBLIC_ED_KEY="<Sparkle Ed25519 public key>"
 
@@ -118,7 +148,7 @@ Tools/verify-build.sh Milo.app
 spctl --assess --type open --context context:primary-signature -vv Milo-2.0.0.dmg
 ```
 
-The signed release path fails before compilation if the Developer ID identity is missing, the Team ID does not match `883MM2YM4N`, or `SPARKLE_PUBLIC_ED_KEY` is absent or still a placeholder.
+The signed release path fails before compilation if the Developer ID identity is missing, the Team ID does not match `8N738727QB`, or `SPARKLE_PUBLIC_ED_KEY` is absent or still a placeholder.
 
 ## Update Feed Release Rows
 
@@ -169,4 +199,4 @@ Update checks use the device-key signing model documented in the website protoco
 
 ## Secret Rules
 
-`Milo/Sources/Secrets.swift` is ignored and must not be printed, committed, or pasted into logs. Milo 2.0 moves secrets that must ship in the app into the obfuscated string pipeline described in `GEMINI.md`.
+The local compatibility file `App/Milo/Runtime/Secrets.swift` is ignored and must not be printed, committed, or pasted into logs. Tracked app code does not read it. Client-visible configuration is supplied through signed bundle metadata and validated without logging values; server secrets remain in server-side secret storage and are never shipped in the app.

@@ -27,6 +27,7 @@ version 1.x predates this regime.
 - Unified Monomacaw License Protocol v1 direction.
 - C-backed hardening boundary for integrity checks, anti-debugging, anti-instrumentation, device fingerprinting, constant-time comparison, and honeypot consensus.
 - GitHub release governance: Conventional Commits, changelog checks, protected tags, Dependabot, and nightly mirror workflow.
+- Canonical generated Xcode workspace with a strict Swift 6 Pro target and shared hostless regression-test scheme while retaining MiloKit as local Swift packages.
 
 ### Changed
 
@@ -43,6 +44,7 @@ version 1.x predates this regime.
 - Adds TLS SPKI pinning for Monomacaw backend traffic.
 - Adds per-build salt support for integrity hashes, local-state derivation, and honeypot canaries.
 - Adds red-team test scaffolding for crash-on-tamper regression.
+- Aligns the runtime code-signing requirement and release verifier with the live Apple Developer Team ID.
 
 ## [1.x] - pre-SemVer
 
