@@ -13,7 +13,19 @@ brew install xcodegen
 Tools/generate-xcode-project.sh
 ```
 
-`Tools/generate-xcode-project.sh` fails unless XcodeGen 2.46.0 is active. Open `Milo.xcworkspace`, not the nested project. The current canonical Pro build and hostless regression test are:
+`Tools/generate-xcode-project.sh` fails unless XcodeGen 2.46.0 is active. Open `Milo.xcworkspace`, not the nested project. The generated project contains these explicit boundaries:
+
+| Target | Current responsibility |
+|---|---|
+| `MiloPro` | Direct-distribution menu-bar app and the only app target that embeds `MiloPrivilegedHelper`. |
+| `MiloLite` | Standalone sandboxed, networkless, read-only AppKit scanner prototype with no MiloKit, licensing, update, or helper dependency. Sandbox usefulness remains a Phase 12 release gate. |
+| `MiloPrivilegedHelper` | Hardened command-line helper embedded at the `SMAppService` daemon layout. Its current XPC delegate denies every connection; authenticated operations are intentionally not implemented yet. |
+| `MiloRedTeamTests` | Hostless shipping-source security regression tests. |
+| `MiloUnitTests` | Hostless domain unit tests. |
+| `MiloIntegrationTests` | Generated-target, entitlement, helper-layout, and product-boundary contract tests. |
+| `MiloLiteUITests` | Milo Lite launch and truthful-capability UI smoke tests. |
+
+Run the canonical Pro and Lite test schemes with:
 
 ```bash
 export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
@@ -24,9 +36,30 @@ xcodebuild \
   -destination 'platform=macOS,arch=arm64' \
   CODE_SIGNING_ALLOWED=NO \
   clean test
+
+xcodebuild \
+  -workspace Milo.xcworkspace \
+  -scheme MiloLite \
+  -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGNING_ALLOWED=NO \
+  clean test
 ```
 
 The generated project is committed so clean CI does not depend on installing XcodeGen. Any change to `project.yml` must regenerate the project and commit both together.
+
+Build the helper directly when validating it independently from the Pro embedding phase:
+
+```bash
+xcodebuild \
+  -project Milo.xcodeproj \
+  -target MiloPrivilegedHelper \
+  -configuration Release \
+  CODE_SIGNING_ALLOWED=NO \
+  ONLY_ACTIVE_ARCH=NO \
+  'ARCHS=arm64 x86_64' \
+  clean build
+```
 
 ### MiloKit Package
 

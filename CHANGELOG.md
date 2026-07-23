@@ -8,6 +8,10 @@ version 1.x predates this regime.
 
 ### Added
 
+- Separately compiled `MiloLite` sandbox target with a networkless read-only application scanner, explicit capability limitations, and a no-collection privacy manifest.
+- Minimal `MiloPrivilegedHelper` launch-daemon target embedded in the Apple `SMAppService` bundle layout with a deny-all XPC connection boundary.
+- Dedicated red-team, unit, integration, and Milo Lite UI test targets in the canonical Xcode project.
+
 ### Changed
 
 ### Deprecated
@@ -17,6 +21,8 @@ version 1.x predates this regime.
 ### Fixed
 
 ### Security
+
+- Disables Xcode base-entitlement injection for Release builds so distribution artifacts cannot inherit `com.apple.security.get-task-allow`.
 
 ## [2.0.0] - 2026-XX-XX
 

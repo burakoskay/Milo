@@ -29,9 +29,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "8D18A037651E4EC350F7B792"
-               BuildableName = "Milo.app"
-               BlueprintName = "MiloPro"
+               BlueprintIdentifier = "471000557CEEDFF92B66F974"
+               BuildableName = "Milo Lite.app"
+               BlueprintName = "MiloLite"
                ReferencedContainer = "container:Milo.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -43,9 +43,9 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "464D8247F71662E1D034E79F"
-               BuildableName = "MiloRedTeamTests.xctest"
-               BlueprintName = "MiloRedTeamTests"
+               BlueprintIdentifier = "39352BD7B0DEDE94432EF24B"
+               BuildableName = "MiloLiteUITests.xctest"
+               BlueprintName = "MiloLiteUITests"
                ReferencedContainer = "container:Milo.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -75,24 +75,13 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "8D18A037651E4EC350F7B792"
-            BuildableName = "Milo.app"
-            BlueprintName = "MiloPro"
+            BlueprintIdentifier = "471000557CEEDFF92B66F974"
+            BuildableName = "Milo Lite.app"
+            BlueprintName = "MiloLite"
             ReferencedContainer = "container:Milo.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "464D8247F71662E1D034E79F"
-               BuildableName = "MiloRedTeamTests.xctest"
-               BlueprintName = "MiloRedTeamTests"
-               ReferencedContainer = "container:Milo.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
          <TestableReference
             skipped = "NO"
             parallelizable = "NO">
@@ -115,6 +104,17 @@
                ReferencedContainer = "container:Milo.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "39352BD7B0DEDE94432EF24B"
+               BuildableName = "MiloLiteUITests.xctest"
+               BlueprintName = "MiloLiteUITests"
+               ReferencedContainer = "container:Milo.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>
@@ -133,9 +133,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "8D18A037651E4EC350F7B792"
-            BuildableName = "Milo.app"
-            BlueprintName = "MiloPro"
+            BlueprintIdentifier = "471000557CEEDFF92B66F974"
+            BuildableName = "Milo Lite.app"
+            BlueprintName = "MiloLite"
             ReferencedContainer = "container:Milo.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -152,9 +152,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "8D18A037651E4EC350F7B792"
-            BuildableName = "Milo.app"
-            BlueprintName = "MiloPro"
+            BlueprintIdentifier = "471000557CEEDFF92B66F974"
+            BuildableName = "Milo Lite.app"
+            BlueprintName = "MiloLite"
             ReferencedContainer = "container:Milo.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
