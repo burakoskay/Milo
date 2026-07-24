@@ -206,6 +206,7 @@ private struct ResultsToast: View {
 
 struct ContentView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject var updateManager: MiloUpdateManager
     @ObservedObject private var licenseManager = LicenseManager.shared
     @State private var activeSheet: ContentSheet?
     @State private var showPaywall: Bool = false
@@ -304,7 +305,7 @@ struct ContentView: View {
             case .debloat:
                 DebloatView(appState: appState, manager: DebloatManager.shared)
             case .settings:
-                SettingsView(appState: appState)
+                SettingsView(appState: appState, updateManager: updateManager)
             }
         }
         .sheet(isPresented: $showPaywall) {

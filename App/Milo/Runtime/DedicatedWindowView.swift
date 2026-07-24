@@ -22,6 +22,7 @@ enum WindowTab: String, CaseIterable, Identifiable {
 
 struct DedicatedWindowView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject var updateManager: MiloUpdateManager
     @ObservedObject private var licenseManager = LicenseManager.shared
     @ObservedObject private var debloatManager = DebloatManager.shared
     @State private var selectedTab: WindowTab = .home
@@ -59,7 +60,7 @@ struct DedicatedWindowView: View {
                 case .debloat:
                     DebloatView(appState: appState, manager: debloatManager, isEmbedded: true)
                 case .settings:
-                    SettingsView(appState: appState, isEmbedded: true)
+                    SettingsView(appState: appState, updateManager: updateManager, isEmbedded: true)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

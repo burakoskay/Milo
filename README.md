@@ -90,6 +90,14 @@ Account authentication and Paddle checkout stay in the system browser. The
 desktop app contains no website session, Supabase user token, Paddle token,
 embedded checkout, or custom auth callback.
 
+Direct updates use the same enrolled device key. `MiloUpdates` validates the
+MLP-selected HTTPS appcast and exact SHA-256 before a tokenized, loopback-only
+bridge supplies those unchanged bytes to the Pro-only `MiloSparkle` adapter.
+Sparkle 2.9.4 is pinned exactly, signed feeds can never fail open, archives are
+verified before extraction, remote release-note downloads and automatic checks
+are disabled, and Lite contains no updater code. See
+`App/Milo/Sparkle/README.md` for the trust and release configuration.
+
 The MLP-v1 golden fixture is copied into
 `Packages/MiloKit/Tests/MiloLicenseTests/Fixtures/mlp-v1-golden.json` only so
 SwiftPM tests can run without reaching into a sibling checkout at runtime. The

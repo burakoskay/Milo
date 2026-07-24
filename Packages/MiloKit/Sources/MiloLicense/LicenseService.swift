@@ -142,6 +142,11 @@ public struct MLPUpdateFeed: Sendable, Equatable {
     public let appcastURL: URL
     /// Hex-encoded SHA-256 of the returned appcast bytes.
     public let appcastSHA256: String
+
+    public init(appcastURL: URL, appcastSHA256: String) {
+        self.appcastURL = appcastURL
+        self.appcastSHA256 = appcastSHA256
+    }
 }
 
 /// Verifies MLP-v1 signed envelope bytes against a supplied Ed25519 public key.

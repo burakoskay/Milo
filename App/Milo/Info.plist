@@ -34,14 +34,29 @@
     <string>NSApplication</string>
     <key>MiloServiceBaseURL</key>
     <string>https://monomacaw.com</string>
-    <key>SUEnableDownloaderService</key>
-    <true/>
-    <key>SUEnableInstallerLauncherService</key>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+    <key>SUEnableAutomaticChecks</key>
     <false/>
-    <key>SUFeedURL</key>
-    <string>https://monomacaw.com/api/milo/update-feed</string>
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
+    <key>SUAllowsAutomaticUpdates</key>
+    <false/>
+    <key>SUEnableSystemProfiling</key>
+    <false/>
     <key>SUPublicEDKey</key>
     <string>$(SPARKLE_PUBLIC_ED_KEY)</string>
+    <key>SURequireSignedFeed</key>
+    <true/>
+    <key>SUSignedFeedFailureExpirationInterval</key>
+    <integer>0</integer>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
+    <key>SUShowReleaseNotes</key>
+    <false/>
     <key>MiloLicensePublicKey</key>
     <string></string>
 </dict>

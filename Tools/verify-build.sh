@@ -61,6 +61,64 @@ if [[ ! -x "$EXECUTABLE" ]]; then
   exit 65
 fi
 
+SPARKLE_FRAMEWORK="$APP_PATH/Contents/Frameworks/Sparkle.framework"
+if [[ ! -d "$SPARKLE_FRAMEWORK" ]]; then
+  echo "pinned Sparkle framework is not embedded" >&2
+  exit 1
+fi
+if ! otool -L "$EXECUTABLE" | grep -Fq '@rpath/Sparkle.framework/Versions/B/Sparkle'; then
+  echo "Milo executable is not linked to the embedded Sparkle framework" >&2
+  exit 1
+fi
+SPARKLE_VERSION=$(/usr/bin/plutil -extract CFBundleShortVersionString raw "$SPARKLE_FRAMEWORK/Resources/Info.plist")
+if [[ "$SPARKLE_VERSION" != "2.9.4" ]]; then
+  echo "unexpected embedded Sparkle version: $SPARKLE_VERSION" >&2
+  exit 1
+fi
+
+for REQUIRED_SPARKLE_SETTING in \
+  SURequireSignedFeed \
+  SUVerifyUpdateBeforeExtraction; do
+  SETTING_VALUE=$(/usr/bin/plutil -extract "$REQUIRED_SPARKLE_SETTING" raw "$APP_PATH/Contents/Info.plist")
+  if [[ "$SETTING_VALUE" != "true" ]]; then
+    echo "Sparkle security setting is not enabled: $REQUIRED_SPARKLE_SETTING" >&2
+    exit 1
+  fi
+done
+
+for DISABLED_SPARKLE_SETTING in \
+  SUEnableAutomaticChecks \
+  SUAutomaticallyUpdate \
+  SUAllowsAutomaticUpdates \
+  SUEnableSystemProfiling \
+  SUShowReleaseNotes; do
+  SETTING_VALUE=$(/usr/bin/plutil -extract "$DISABLED_SPARKLE_SETTING" raw "$APP_PATH/Contents/Info.plist")
+  if [[ "$SETTING_VALUE" != "false" ]]; then
+    echo "Sparkle setting must remain disabled: $DISABLED_SPARKLE_SETTING" >&2
+    exit 1
+  fi
+done
+
+if /usr/bin/plutil -extract SUFeedURL raw "$APP_PATH/Contents/Info.plist" >/dev/null 2>&1; then
+  echo "static Sparkle feed URL bypasses authenticated one-shot composition" >&2
+  exit 1
+fi
+
+SIGNED_FEED_EXPIRY=$(/usr/bin/plutil -extract SUSignedFeedFailureExpirationInterval raw "$APP_PATH/Contents/Info.plist")
+if [[ "$SIGNED_FEED_EXPIRY" != "0" ]]; then
+  echo "signed feed failure expiration must be disabled" >&2
+  exit 1
+fi
+
+for FORBIDDEN_SPARKLE_KEY in \
+  SUEnableDownloaderService \
+  SUEnableInstallerLauncherService; do
+  if /usr/bin/plutil -extract "$FORBIDDEN_SPARKLE_KEY" raw "$APP_PATH/Contents/Info.plist" >/dev/null 2>&1; then
+    echo "non-sandboxed Pro bundle contains sandbox-only Sparkle key: $FORBIDDEN_SPARKLE_KEY" >&2
+    exit 1
+  fi
+done
+
 LEGACY_SUPABASE_URL='https://seohhuietluiqeadgllu''.''supabase.co'
 if strings "$EXECUTABLE" | grep -q "$LEGACY_SUPABASE_URL"; then
   echo "legacy Supabase URL leaked in binary" >&2
@@ -71,6 +129,7 @@ FORBIDDEN_BINARY_MARKERS=(
   'MiloSupabaseAnonKey'
   'MiloPaddleClientToken'
   'Paddle.Initialize'
+  'AuthenticatedUpdateFeedState'
   'verifyLicenseAndFetchSignatures'
   'localDevelopmentUnlockEnabled'
 )

@@ -14,17 +14,25 @@
 #   SPARKLE_PUBLIC_ED_KEY     – public Sparkle verification key
 #   MILO_SERVICE_BASE_URL    – public MLP service root (`https://monomacaw.com`)
 #   MILO_LICENSE_PUBLIC_KEY  – public MLP Ed25519 verification key (unpadded base64url)
+#   MILO_BUILD_OUTPUT_DIR    – isolated output directory, defaults to repository root
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 APP_NAME="Milo"
-APP_DIR="$APP_NAME.app"
+OUTPUT_ROOT="${MILO_BUILD_OUTPUT_DIR:-.}"
+mkdir -p "$OUTPUT_ROOT"
+OUTPUT_ROOT=$(cd "$OUTPUT_ROOT" && pwd -P)
+if [[ "$OUTPUT_ROOT" == "/" || "$OUTPUT_ROOT" == "$HOME" ]]; then
+    echo "✘  Refusing unsafe build output directory: $OUTPUT_ROOT"
+    exit 64
+fi
+APP_DIR="$OUTPUT_ROOT/$APP_NAME.app"
 TEAM_ID="8N738727QB"
 BUNDLE_ID="com.monomacaw.milo"
 BUILD_MODE="${1:-dev}"     # dev | release
 SIGN_MODE="${2:-}"         # sign | notarize | (empty)
 VERSION=$(grep -A1 CFBundleShortVersionString App/Milo/Info.plist | tail -1 | sed -E 's/.*<string>(.*)<\/string>/\1/')
-ICON_WORK_DIR=".build_icons"
+ICON_WORK_DIR="$OUTPUT_ROOT/.build_icons"
 NOTARY_KEYCHAIN_PROFILE="${NOTARY_KEYCHAIN_PROFILE:-milo-notary}"
 
 if [[ "$BUILD_MODE" != "dev" && "$BUILD_MODE" != "release" ]]; then
@@ -69,7 +77,7 @@ echo ""
 
 # ── Step 1: Clean ────────────────────────────────────────────────────────────
 echo "→ Cleaning previous build..."
-rm -rf "$APP_DIR" "$ICON_WORK_DIR" "${APP_NAME}.dmg"
+rm -rf "$APP_DIR" "$ICON_WORK_DIR" "$OUTPUT_ROOT/${APP_NAME}-${VERSION:-1.0}.dmg"
 
 # ── Step 2: Create bundle structure ──────────────────────────────────────────
 echo "→ Creating app bundle structure..."
@@ -96,6 +104,13 @@ fi
 swift build "${SWIFT_BUILD_FLAGS[@]}"
 BIN_PATH=$(swift build -c "$SWIFTPM_CONFIGURATION" --show-bin-path)
 cp "$BIN_PATH/$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"
+
+SPARKLE_FRAMEWORK_SOURCE="$BIN_PATH/Sparkle.framework"
+if [[ ! -d "$SPARKLE_FRAMEWORK_SOURCE" ]]; then
+    echo "✘  SwiftPM did not produce the pinned Sparkle framework."
+    exit 1
+fi
+/usr/bin/ditto "$SPARKLE_FRAMEWORK_SOURCE" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
 
 # ── Step 4: Copy Info.plist ──────────────────────────────────────────────────
 echo "→ Copying Info.plist..."
@@ -170,35 +185,28 @@ for style in Light Dark; do
         echo "  ⚠  Missing source PNG for $style icon — app will use fallback icon"
     fi
 done
-# ── Step 6: Write entitlements ───────────────────────────────────────────────
-ENTITLEMENTS_PATH=".Milo.entitlements"
-if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
-    cat > "$ENTITLEMENTS_PATH" <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>com.apple.security.automation.apple-events</key>
-    <true/>
-</dict>
-</plist>
-EOF
-else
-    cat > "$ENTITLEMENTS_PATH" <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>com.apple.security.automation.apple-events</key>
-    <true/>
-</dict>
-</plist>
-EOF
-fi
+# ── Step 6: Use the checked-in, reviewed Pro entitlements ───────────────────
+ENTITLEMENTS_PATH="App/Milo/Milo.entitlements"
 
 # ── Step 7: Code signing ────────────────────────────────────────────────────
 if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
     echo "→ Signing with Developer ID..."
+    for NESTED_SPARKLE_COMPONENT in \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc" \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app" \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"; do
+        codesign --force \
+            --sign "$DEVELOPER_ID" \
+            --options runtime \
+            --timestamp \
+            "$NESTED_SPARKLE_COMPONENT"
+    done
+    codesign --force \
+        --sign "$DEVELOPER_ID" \
+        --options runtime \
+        --timestamp \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework"
     codesign --force \
         --sign "$DEVELOPER_ID" \
         --options runtime \
@@ -217,6 +225,20 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
     spctl --assess --type execute "$APP_DIR" 2>&1 || echo "  (spctl may fail until notarized)"
 else
     echo "→ Ad-hoc code signing (local QA only)..."
+    for NESTED_SPARKLE_COMPONENT in \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc" \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app" \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"; do
+        codesign --force \
+            --sign - \
+            --options runtime \
+            "$NESTED_SPARKLE_COMPONENT"
+    done
+    codesign --force \
+        --sign - \
+        --options runtime \
+        "$APP_DIR/Contents/Frameworks/Sparkle.framework"
     codesign --force \
         --sign - \
         --options runtime \
@@ -229,14 +251,12 @@ else
         "$APP_DIR"
 fi
 
-rm -f "$ENTITLEMENTS_PATH"
-
 # ── Step 8: Create DMG (release only) ───────────────────────────────────────
 if [[ "$BUILD_MODE" == "release" ]]; then
-    DMG_NAME="${APP_NAME}-${VERSION:-1.0}.dmg"
+    DMG_NAME="$OUTPUT_ROOT/${APP_NAME}-${VERSION:-1.0}.dmg"
     echo "→ Creating distributable DMG: $DMG_NAME ..."
 
-    DMG_STAGING=".dmg_staging"
+    DMG_STAGING="$OUTPUT_ROOT/.dmg_staging"
     rm -rf "$DMG_STAGING"
     mkdir -p "$DMG_STAGING"
     cp -R "$APP_DIR" "$DMG_STAGING/"
@@ -260,7 +280,7 @@ fi
 
 # ── Step 9: Notarize (if requested) ─────────────────────────────────────────
 if [[ "$SIGN_MODE" == "notarize" ]]; then
-    DMG_NAME="${APP_NAME}-${VERSION:-1.0}.dmg"
+    DMG_NAME="$OUTPUT_ROOT/${APP_NAME}-${VERSION:-1.0}.dmg"
     echo "→ Submitting $DMG_NAME for notarization..."
 
     xcrun notarytool submit "$DMG_NAME" \
@@ -280,6 +300,6 @@ echo ""
 echo "════════════════════════════════════════════"
 echo "  Build complete: $APP_DIR"
 if [[ "$BUILD_MODE" == "release" ]]; then
-    echo "  DMG: ${APP_NAME}-${VERSION:-1.0}.dmg"
+    echo "  DMG: $OUTPUT_ROOT/${APP_NAME}-${VERSION:-1.0}.dmg"
 fi
 echo "════════════════════════════════════════════"

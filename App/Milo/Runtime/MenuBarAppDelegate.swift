@@ -74,6 +74,7 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
     private let panel: StatusBarPanel
     var dedicatedWindow: NSWindow?
     let appState: AppState
+    let updateManager: MiloUpdateManager
     private let windowDelegate = MiloWindowDelegate()
 
     private var appearanceObserver: Any?
@@ -90,10 +91,14 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
 
     override init() {
         let appState = AppState()
+        let updateManager = MiloUpdateManager(licenseManager: LicenseManager.shared)
         self.appState = appState
+        self.updateManager = updateManager
         self.panel = StatusBarPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 520))
         super.init()
-        panel.contentViewController = NSHostingController(rootView: ContentView(appState: appState))
+        panel.contentViewController = NSHostingController(
+            rootView: ContentView(appState: appState, updateManager: updateManager)
+        )
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -398,7 +403,7 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let windowView = DedicatedWindowView(appState: appState)
+        let windowView = DedicatedWindowView(appState: appState, updateManager: updateManager)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 560),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -449,6 +454,7 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu(title: "Milo")
         appMenu.addItem(withTitle: "About Milo", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         appMenu.addItem(.separator())
@@ -478,6 +484,23 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
             }
         } else if !panel.isVisible {
             showPanel()
+        }
+    }
+
+    @objc private func checkForUpdates() {
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            await updateManager.checkForUpdates()
+            if case let .failed(message) = updateManager.state {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = "Unable to Check for Updates"
+                alert.informativeText = message
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
         }
     }
 }

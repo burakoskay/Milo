@@ -134,6 +134,24 @@ final class LicenseManager: ObservableObject {
         }
     }
 
+    /// Obtains the MLP-authenticated update descriptor for the signed license channel.
+    func updateFeedDescriptor() async throws -> (descriptor: MLPUpdateFeed, channel: String) {
+        guard !isVerifying else {
+            throw MLPLicenseError.updateFeedRejected
+        }
+        guard isSubscribed else {
+            throw MLPLicenseError.missingProEntitlement
+        }
+        guard let channel = snapshot.releaseChannel,
+              channel == "stable" || channel == "beta" else {
+            throw MLPLicenseError.invalidEnvelope
+        }
+        guard let client else {
+            throw MLPLicenseError.invalidConfiguration
+        }
+        return (try await client.updateFeed(channel: channel), channel)
+    }
+
     /// Removes all device enrollment and cached license material from this Mac.
     func clearLocalLicenseState() {
         guard !isVerifying else {

@@ -24,7 +24,9 @@ let package = Package(
             dependencies: [
                 .product(name: "MiloDomain", package: "MiloKit"),
                 .product(name: "MiloHardening", package: "MiloKit"),
-                .product(name: "MiloLicense", package: "MiloKit")
+                .product(name: "MiloLicense", package: "MiloKit"),
+                .product(name: "MiloSparkle", package: "MiloKit"),
+                .product(name: "MiloUpdates", package: "MiloKit")
             ],
             path: "App/Milo",
             exclude: appTargetExcludes,
@@ -45,6 +47,7 @@ let package = Package(
                 "Runtime/MenuBarAppDelegate.swift",
                 "Runtime/MiloClientConfiguration.swift",
                 "Runtime/MiloLog.swift",
+                "Runtime/MiloUpdateManager.swift",
                 "Runtime/PaywallView.swift",
                 "Runtime/PrivilegeManager.swift",
                 "Runtime/ProcessData.swift",

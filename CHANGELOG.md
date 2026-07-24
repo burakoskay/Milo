@@ -17,6 +17,7 @@ version 1.x predates this regime.
 - Makes the browser-approved MLP-v1 device-key client the sole Pro licensing path and presents explicit pairing, refresh, account-management, and disconnect states in the paywall.
 - Restricts the Pro bundle to a validated Monomacaw service URL plus the public MLP verification key.
 - Reduces MiloKit to implemented domain, hardening, licensing, update-policy, and Sparkle boundaries.
+- Replaces query-string license/device update routing with device-authenticated MLP discovery, exact SHA-256 appcast preflight, and a Pro-only Sparkle 2.9.4 composition path.
 
 ### Deprecated
 
@@ -31,12 +32,13 @@ version 1.x predates this regime.
 
 - Disables Xcode base-entitlement injection for Release builds so distribution artifacts cannot inherit `com.apple.security.get-task-allow`.
 - Adds source and release-binary regression gates that reject legacy desktop authentication/licensing markers and AuthenticationServices/WebKit linkage.
+- Pins Sparkle exactly, disables its sandbox-only downloader service in Pro, rejects remote appcast redirects and oversized/encoded/untrusted responses, requires signed feeds without fail-open expiry, verifies archives before extraction, and keeps automatic update checks disabled until authenticated scheduling is implemented.
 
 ## [2.0.0] - 2026-XX-XX
 
 ### Added
 
-- Sparkle 2 auto-update with per-license entitlement filtering.
+- Sparkle 2 direct updates selected through authenticated MLP entitlement buckets.
 - Keychain storage for signed license envelopes.
 - Unified Monomacaw License Protocol v1 direction.
 - C-backed hardening boundary for integrity checks, anti-debugging, anti-instrumentation, device fingerprinting, constant-time comparison, and honeypot consensus.

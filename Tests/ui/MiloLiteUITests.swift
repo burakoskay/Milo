@@ -9,6 +9,10 @@ final class MiloLiteUITests: XCTestCase {
     func testLaunchShowsReadOnlyCapabilityAndRescanControl() {
         let application = XCUIApplication()
         application.launchArguments = ["--ui-testing"]
+        application.terminate()
+        addTeardownBlock {
+            application.terminate()
+        }
         application.launch()
 
         XCTAssertTrue(
@@ -20,7 +24,5 @@ final class MiloLiteUITests: XCTestCase {
             "Milo Lite capability limitation did not appear"
         )
         XCTAssertTrue(application.buttons["miloLite.scan"].isEnabled)
-
-        application.terminate()
     }
 }

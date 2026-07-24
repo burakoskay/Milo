@@ -3,6 +3,7 @@ import ServiceManagement
 
 struct SettingsView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject var updateManager: MiloUpdateManager
     var isEmbedded: Bool = false
     @Environment(\.dismiss) var dismiss
 
@@ -385,6 +386,33 @@ struct SettingsView: View {
                 Spacer()
                 Text(ProcessInfo.processInfo.operatingSystemVersionString)
                     .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Software Updates")
+                    Text("Authenticated by your Pro device key and verified by Sparkle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(updateManager.isChecking ? "Checking…" : "Check Now") {
+                    Task {
+                        await updateManager.checkForUpdates()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!updateManager.canCheckForUpdates)
+            }
+
+            if let statusMessage = updateManager.statusMessage {
+                Text(statusMessage)
+                    .font(.caption)
+                    .foregroundStyle(updateManager.statusIsError ? .red : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

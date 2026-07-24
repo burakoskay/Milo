@@ -14,9 +14,11 @@
 		1028F7CD1BBF1294EB338B0D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C652DF2F309F4EE2503A4CFC /* SettingsView.swift */; };
 		161393A8A53235438A19036D /* milo_color.png in Resources */ = {isa = PBXBuildFile; fileRef = 88FBA6F19CCF346C5830848A /* milo_color.png */; };
 		196E4BAA9903EAC045EFBA9A /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45137EDCC84489E603D13994 /* StatsView.swift */; };
+		21D9F1037FF31EFA54634F8B /* MiloSparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 1FEF798E35A3098C1AE2E3AC /* MiloSparkle */; };
 		241789A73F7F7F44611E8DDA /* SharedUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB694BF69591A47395FA88E1 /* SharedUI.swift */; };
 		2689DC92401A8923C046197A /* MiloApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5A52A5354F42BFA597FB1A /* MiloApp.swift */; };
 		30B18BC8CEA8B416F05EFED3 /* TargetBoundaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE4F88FC7999FD043335C5D3 /* TargetBoundaryTests.swift */; };
+		3514AE366141C62B5A29BD78 /* MiloUpdates in Frameworks */ = {isa = PBXBuildFile; productRef = 980E922B34747124E7F5D2B0 /* MiloUpdates */; };
 		3601A4E1DF5FBD2AD3E2BE85 /* LicenseSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8FC69F88245B402FFCEE50 /* LicenseSnapshotTests.swift */; };
 		3C7FB4C24641BB5232E82572 /* MiloPrivilegedHelper in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = 642C1682AD215D9E875A96F9 /* MiloPrivilegedHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3F26FDFD6AFA4FCAE144BEF7 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DBD7F9EE8B4FF5AFDABAEE6D /* PrivacyInfo.xcprivacy */; };
@@ -30,6 +32,7 @@
 		60E587F42A6243022CBE76B8 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8A43163CB7BD3FB2D2F0E3DC /* AppKit.framework */; };
 		6466232190F766F954D4EE10 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FE820EC792E62DC3AB78557 /* AppState.swift */; };
 		660C4E985CEB16EA8821DC41 /* PrivilegeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7B9DED93ED882D43993CE6 /* PrivilegeManager.swift */; };
+		714E9624EC886EB0172DEC92 /* MiloUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9FF24FD37D04267E168624 /* MiloUpdateManager.swift */; };
 		760FAAC65E26489B2EC1C035 /* ProcessData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447310230900239EFAB48C54 /* ProcessData.swift */; };
 		7B708A5E3E03648ABF19531B /* DebloatCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A642611C951B0255771A681 /* DebloatCommand.swift */; };
 		7E779493C9E7AB1B6389A518 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 24B36AA49C51B70DCDD4481E /* SwiftUI.framework */; };
@@ -37,6 +40,7 @@
 		8E7ABDEFE4F7375F50198A22 /* DedicatedWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 685DD83F10A4A33B7338F0E6 /* DedicatedWindowView.swift */; };
 		90A8A404406C9C03CC4BC48C /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6F2A7D543DA61438138925A8 /* Security.framework */; };
 		91B33A2AA44B4F52F10F704F /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1584D263654FE2C84A1F2251 /* PaywallView.swift */; };
+		937A9950089E6E12208D391C /* AuthenticatedUpdateRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFC309890AEE59174B5D1234 /* AuthenticatedUpdateRegressionTests.swift */; };
 		95DE5CA4C050D286399E7F25 /* DebloatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7DA3D7FB4B8575E047034B1 /* DebloatView.swift */; };
 		9AB6559EA8198F8950AF31EA /* CommandRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E2D2EF0C589BBB5BA0BF625 /* CommandRunner.swift */; };
 		9BB7E171E91D417DD4FC09A2 /* MiloLiteUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1461095C6D30FC08F634F479 /* MiloLiteUITests.swift */; };
@@ -144,6 +148,7 @@
 		AAC6BB69824A8F657BA27776 /* MiloLiteApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloLiteApp.swift; sourceTree = "<group>"; };
 		AB3FB3677B226DA246E131EA /* milo_white.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = milo_white.png; sourceTree = "<group>"; };
 		AB694BF69591A47395FA88E1 /* SharedUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedUI.swift; sourceTree = "<group>"; };
+		AB9FF24FD37D04267E168624 /* MiloUpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloUpdateManager.swift; sourceTree = "<group>"; };
 		BDF03A696C418F6D71850967 /* SelfTestRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelfTestRunner.swift; sourceTree = "<group>"; };
 		C652DF2F309F4EE2503A4CFC /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		CA564785E4966D506C8F91F6 /* milo_black.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = milo_black.png; sourceTree = "<group>"; };
@@ -154,6 +159,7 @@
 		E21C651770AC194093A3181E /* LicenseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseManager.swift; sourceTree = "<group>"; };
 		EB76234D338FE431A2576429 /* CloudSignatureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSignatureManager.swift; sourceTree = "<group>"; };
 		EE4F88FC7999FD043335C5D3 /* TargetBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetBoundaryTests.swift; sourceTree = "<group>"; };
+		EFC309890AEE59174B5D1234 /* AuthenticatedUpdateRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticatedUpdateRegressionTests.swift; sourceTree = "<group>"; };
 		F07A37CB0632A845240D8030 /* MiloIntegrationTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MiloIntegrationTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F76DD69DDD9B08A1DA8B275C /* MiloClientConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloClientConfiguration.swift; sourceTree = "<group>"; };
 		F7DB5C51451F853E05CB1F5B /* com.monomacaw.milo.helper.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = com.monomacaw.milo.helper.plist; sourceTree = "<group>"; };
@@ -185,6 +191,8 @@
 				BDA1FCC94D0CC3076136F2CD /* MiloDomain in Frameworks */,
 				EFCD639B4306ABAEB37614CB /* MiloHardening in Frameworks */,
 				F8F313B7D62BDFD4AC926A9C /* MiloLicense in Frameworks */,
+				21D9F1037FF31EFA54634F8B /* MiloSparkle in Frameworks */,
+				3514AE366141C62B5A29BD78 /* MiloUpdates in Frameworks */,
 				60E587F42A6243022CBE76B8 /* AppKit.framework in Frameworks */,
 				90A8A404406C9C03CC4BC48C /* Security.framework in Frameworks */,
 				BE0E3069C96845341A9A4A6B /* SwiftUI.framework in Frameworks */,
@@ -197,6 +205,7 @@
 		0A7B9317BEF5D6E5392CF349 /* redteam */ = {
 			isa = PBXGroup;
 			children = (
+				EFC309890AEE59174B5D1234 /* AuthenticatedUpdateRegressionTests.swift */,
 				36E9B3C1CFD0CAAF1A64B1FA /* Exit173RegressionTest.swift */,
 				610EA18BD33FC14436005470 /* LegacyDesktopAuthRegressionTests.swift */,
 			);
@@ -232,6 +241,7 @@
 				0A07FB9C7D380E9934A7E7D9 /* MenuBarAppDelegate.swift */,
 				F76DD69DDD9B08A1DA8B275C /* MiloClientConfiguration.swift */,
 				90D33C7B35A68BE887B46C07 /* MiloLog.swift */,
+				AB9FF24FD37D04267E168624 /* MiloUpdateManager.swift */,
 				1584D263654FE2C84A1F2251 /* PaywallView.swift */,
 				0F7B9DED93ED882D43993CE6 /* PrivilegeManager.swift */,
 				447310230900239EFAB48C54 /* ProcessData.swift */,
@@ -512,6 +522,8 @@
 				B0079582738AD6D8E83D6F4C /* MiloDomain */,
 				43B4FE58B29C55055BB580BA /* MiloHardening */,
 				E7736458AAB837D2CE7D19C1 /* MiloLicense */,
+				1FEF798E35A3098C1AE2E3AC /* MiloSparkle */,
+				980E922B34747124E7F5D2B0 /* MiloUpdates */,
 			);
 			productName = MiloPro;
 			productReference = 3C9D7A2F011737C6BBB94A7E /* Milo.app */;
@@ -608,6 +620,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				937A9950089E6E12208D391C /* AuthenticatedUpdateRegressionTests.swift in Sources */,
 				48B3522D1209E1AC392CFF3F /* Exit173RegressionTest.swift in Sources */,
 				4A3413D316451560A521B150 /* LegacyDesktopAuthRegressionTests.swift in Sources */,
 			);
@@ -674,6 +687,7 @@
 				2689DC92401A8923C046197A /* MiloApp.swift in Sources */,
 				F2D3775452153E380D80BBD7 /* MiloClientConfiguration.swift in Sources */,
 				A65F504BB9ADC3F4722F46E4 /* MiloLog.swift in Sources */,
+				714E9624EC886EB0172DEC92 /* MiloUpdateManager.swift in Sources */,
 				91B33A2AA44B4F52F10F704F /* PaywallView.swift in Sources */,
 				660C4E985CEB16EA8821DC41 /* PrivilegeManager.swift in Sources */,
 				760FAAC65E26489B2EC1C035 /* ProcessData.swift in Sources */,
@@ -1204,6 +1218,10 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		1FEF798E35A3098C1AE2E3AC /* MiloSparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MiloSparkle;
+		};
 		43B4FE58B29C55055BB580BA /* MiloHardening */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MiloHardening;
@@ -1211,6 +1229,10 @@
 		6BB1EB4839AC61B2A0FC952D /* MiloDomain */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MiloDomain;
+		};
+		980E922B34747124E7F5D2B0 /* MiloUpdates */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MiloUpdates;
 		};
 		B0079582738AD6D8E83D6F4C /* MiloDomain */ = {
 			isa = XCSwiftPackageProductDependency;

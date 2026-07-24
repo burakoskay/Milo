@@ -117,6 +117,10 @@ targets:
         product: MiloHardening
       - package: MiloKit
         product: MiloLicense
+      - package: MiloKit
+        product: MiloSparkle
+      - package: MiloKit
+        product: MiloUpdates
       - sdk: AppKit.framework
       - sdk: Security.framework
       - sdk: SwiftUI.framework
