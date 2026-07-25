@@ -17,11 +17,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Validate PR title
+      - name: Validate PR title or commits
         if: github.event_name == 'pull_request'
         run: |
           title="${{ github.event.pull_request.title }}"
-          echo "$title" | grep -Eq '^(feat|fix|perf|refactor|security|build|docs|test|ci|chore)(\([a-z0-9._-]+\))?!?: .+'
+          pattern='^(feat|fix|perf|refactor|security|build|docs|test|ci|chore)(\([a-z0-9._-]+\))?!?: .+'
+
+          if echo "$title" | grep -Eq "$pattern"; then
+            exit 0
+          fi
+
+          git fetch --no-tags origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+          git log --format=%s "origin/${{ github.base_ref }}..HEAD" | while read -r subject; do
+            echo "$subject" | grep -Eq "$pattern" || {
+              echo "Non-conventional PR title and commit: $subject"
+              exit 1
+            }
+          done
       - name: Validate commits on main
         if: github.event_name == 'push'
         run: |
