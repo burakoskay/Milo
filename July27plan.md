@@ -505,6 +505,7 @@ No phase may be declared complete solely because code was written. Each phase en
 ### Phase 2 — Build the state/error/concurrency foundation
 
 1. [ ] Define exhaustive domain states and typed errors for scan, process action, launchd, helper, license, pairing, payment handoff, update, policy sync, persistence, tuning, export, and notification.
+   - [x] **Shared lifecycle primitive completed 2026-07-26:** `MiloDomain` now defines all 13 operation kinds, stable typed failure categories, operation identity/deadline context, explicit success/partial/failure/cancellation terminal states, and a lifecycle that rejects stale or post-terminal results. Individual runtime surfaces still need migration before item 1 can close.
 2. [ ] Mark UI models `@MainActor`; replace shared mutable singletons with injected actors/services.
 3. [ ] Add cancellation, generation, deadlines, and resource caps to every asynchronous/subprocess operation.
 4. [ ] Introduce capability enforcement at use-case boundaries.

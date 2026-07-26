@@ -97,6 +97,11 @@ let package = Package(
                 .process("Fixtures")
             ],
             swiftSettings: strictSwiftSettings
+        ),
+        .testTarget(
+            name: "MiloDomainTests",
+            dependencies: ["MiloDomain"],
+            swiftSettings: strictSwiftSettings
         )
     ]
 )
