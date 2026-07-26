@@ -1,15 +1,38 @@
 import Foundation
 import AppKit
+import MiloDomain
 
-struct CommandResult {
+enum CommandTermination: Equatable, Sendable {
+    case exited
+    case policyRejected
+    case launchFailed
+    case outputLimitExceeded
+    case invalidOutputEncoding
+}
+
+struct CommandResult: Sendable {
     let status: Int32
     let stdout: String
     let stderr: String
+    let termination: CommandTermination
 
-    var succeeded: Bool { status == 0 }
+    var succeeded: Bool { status == 0 && termination == .exited }
+
+    init(
+        status: Int32,
+        stdout: String,
+        stderr: String,
+        termination: CommandTermination = .exited
+    ) {
+        self.status = status
+        self.stdout = stdout
+        self.stderr = stderr
+        self.termination = termination
+    }
 }
 
 enum CommandRunner {
+    private static let defaultMaximumOutputBytes = 1_048_576
     private static let allowedExecutables: Set<String> = [
         "/bin/echo",
         "/bin/kill",
@@ -28,32 +51,66 @@ enum CommandRunner {
         "/usr/sbin/purge"
     ]
 
-    /// SAFETY: `storage` is accessed only while `lock` is held.
-    private final class LockedData: @unchecked Sendable {
+    /// SAFETY: `output` is accessed only while `lock` is held.
+    private final class LockedOutput: @unchecked Sendable {
         private let lock = NSLock()
-        private var storage = Data()
+        private var output: MiloBoundedCommandOutput
 
-        func append(_ data: Data) {
+        init(maximumBytes: Int) throws {
+            output = try MiloBoundedCommandOutput(maximumBytes: maximumBytes)
+        }
+
+        func append(_ data: Data, to stream: MiloCommandOutputStream) {
             lock.lock()
-            storage.append(data)
+            output.append(data, to: stream)
             lock.unlock()
         }
 
-        func snapshot() -> Data {
+        func snapshot() -> MiloBoundedCommandOutput {
             lock.lock()
-            let data = storage
+            let snapshot = output
             lock.unlock()
-            return data
+            return snapshot
         }
     }
 
     @discardableResult
-    static func run(_ executable: String, arguments: [String] = []) -> CommandResult {
+    static func run(
+        _ executable: String,
+        arguments: [String] = [],
+        maximumOutputBytes: Int = defaultMaximumOutputBytes
+    ) -> CommandResult {
+        guard maximumOutputBytes > 0,
+              maximumOutputBytes <= defaultMaximumOutputBytes else {
+            return CommandResult(
+                status: 126,
+                stdout: "",
+                stderr: "Invalid command output limit",
+                termination: .policyRejected
+            )
+        }
         guard isAllowedExecutable(executable),
               arguments.allSatisfy(isSafeArgument(_:)),
               isAllowedInvocation(executable: executable, arguments: arguments) else {
             MiloLog.error("Rejected command outside allowlist: \(executable)", category: .security)
-            return CommandResult(status: 126, stdout: "", stderr: "Executable or argument rejected by Milo command policy")
+            return CommandResult(
+                status: 126,
+                stdout: "",
+                stderr: "Executable or argument rejected by Milo command policy",
+                termination: .policyRejected
+            )
+        }
+
+        let output: LockedOutput
+        do {
+            output = try LockedOutput(maximumBytes: maximumOutputBytes)
+        } catch {
+            return CommandResult(
+                status: 126,
+                stdout: "",
+                stderr: "Invalid command output limit",
+                termination: .policyRejected
+            )
         }
 
         let task = Process()
@@ -64,40 +121,113 @@ enum CommandRunner {
         let stderrPipe = Pipe()
         task.standardOutput = stdoutPipe
         task.standardError = stderrPipe
-        let stdoutData = LockedData()
-        let stderrData = LockedData()
-        attachDrainHandler(to: stdoutPipe, output: stdoutData)
-        attachDrainHandler(to: stderrPipe, output: stderrData)
+        attachDrainHandler(to: stdoutPipe, output: output, stream: .standardOutput)
+        attachDrainHandler(to: stderrPipe, output: output, stream: .standardError)
 
         do {
             try task.run()
             task.waitUntilExit()
             stdoutPipe.fileHandleForReading.readabilityHandler = nil
             stderrPipe.fileHandleForReading.readabilityHandler = nil
-            stdoutData.append(stdoutPipe.fileHandleForReading.readDataToEndOfFile())
-            stderrData.append(stderrPipe.fileHandleForReading.readDataToEndOfFile())
-
-            return CommandResult(
-                status: task.terminationStatus,
-                stdout: String(data: stdoutData.snapshot(), encoding: .utf8) ?? "",
-                stderr: String(data: stderrData.snapshot(), encoding: .utf8) ?? ""
+            try drainRemaining(
+                from: stdoutPipe.fileHandleForReading,
+                output: output,
+                stream: .standardOutput
             )
+            try drainRemaining(
+                from: stderrPipe.fileHandleForReading,
+                output: output,
+                stream: .standardError
+            )
+            return commandResult(status: task.terminationStatus, output: output.snapshot())
         } catch {
             stdoutPipe.fileHandleForReading.readabilityHandler = nil
             stderrPipe.fileHandleForReading.readabilityHandler = nil
-            return CommandResult(status: 1, stdout: "", stderr: error.localizedDescription)
+            return boundedResult(
+                status: 1,
+                stdout: "",
+                stderr: error.localizedDescription,
+                termination: .launchFailed
+            )
         }
     }
 
-    private static func attachDrainHandler(to pipe: Pipe, output: LockedData) {
+    private static func attachDrainHandler(
+        to pipe: Pipe,
+        output: LockedOutput,
+        stream: MiloCommandOutputStream
+    ) {
         pipe.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
             guard !data.isEmpty else {
                 handle.readabilityHandler = nil
                 return
             }
-            output.append(data)
+            output.append(data, to: stream)
         }
+    }
+
+    private static func drainRemaining(
+        from handle: FileHandle,
+        output: LockedOutput,
+        stream: MiloCommandOutputStream
+    ) throws {
+        while let data = try handle.read(upToCount: 65_536), !data.isEmpty {
+            output.append(data, to: stream)
+        }
+    }
+
+    private static func commandResult(status: Int32, output: MiloBoundedCommandOutput) -> CommandResult {
+        guard let stdout = String(bytes: output.standardOutput, encoding: .utf8),
+              let stderr = String(bytes: output.standardError, encoding: .utf8) else {
+            return CommandResult(
+                status: 74,
+                stdout: "",
+                stderr: "Command output was not valid UTF-8",
+                termination: .invalidOutputEncoding
+            )
+        }
+        return CommandResult(
+            status: output.wasTruncated ? 74 : status,
+            stdout: stdout,
+            stderr: stderr,
+            termination: output.wasTruncated ? .outputLimitExceeded : .exited
+        )
+    }
+
+    private static func boundedResult(
+        status: Int32,
+        stdout: String,
+        stderr: String,
+        termination: CommandTermination = .exited
+    ) -> CommandResult {
+        let output: MiloBoundedCommandOutput
+        do {
+            var boundedOutput = try MiloBoundedCommandOutput(maximumBytes: defaultMaximumOutputBytes)
+            boundedOutput.append(Data(stdout.utf8), to: .standardOutput)
+            boundedOutput.append(Data(stderr.utf8), to: .standardError)
+            output = boundedOutput
+        } catch {
+            return CommandResult(
+                status: 126,
+                stdout: "",
+                stderr: "Invalid command output limit",
+                termination: .policyRejected
+            )
+        }
+        if output.wasTruncated {
+            return commandResult(status: status, output: output)
+        }
+        guard let decodedStdout = String(bytes: output.standardOutput, encoding: .utf8),
+              let decodedStderr = String(bytes: output.standardError, encoding: .utf8) else {
+            return CommandResult(
+                status: 74,
+                stdout: "",
+                stderr: "Command output was not valid UTF-8",
+                termination: .invalidOutputEncoding
+            )
+        }
+        return CommandResult(status: status, stdout: decodedStdout, stderr: decodedStderr, termination: termination)
     }
 
     @discardableResult
@@ -107,7 +237,12 @@ enum CommandRunner {
               arguments.allSatisfy(isSafeArgument(_:)),
               isAllowedInvocation(executable: executable, arguments: arguments) else {
             MiloLog.error("Rejected privileged command outside allowlist: \(executable)", category: .security)
-            return CommandResult(status: 126, stdout: "", stderr: "Privileged executable or argument rejected by Milo command policy")
+            return CommandResult(
+                status: 126,
+                stdout: "",
+                stderr: "Privileged executable or argument rejected by Milo command policy",
+                termination: .policyRejected
+            )
         }
 
         if PrivilegeManager.shared.isConfigured {
@@ -129,24 +264,42 @@ enum CommandRunner {
                   cmd.arguments.allSatisfy(isSafeArgument(_:)),
                   isAllowedInvocation(executable: cmd.executable, arguments: cmd.arguments) else {
                 MiloLog.error("Rejected privileged command outside allowlist: \(cmd.executable)", category: .security)
-                return CommandResult(status: 126, stdout: "", stderr: "Privileged executable or argument rejected by Milo command policy")
+                return CommandResult(
+                    status: 126,
+                    stdout: "",
+                    stderr: "Privileged executable or argument rejected by Milo command policy",
+                    termination: .policyRejected
+                )
             }
         }
 
         if PrivilegeManager.shared.isConfigured {
             var finalStatus: Int32 = 0
-            var finalStdout = ""
-            var finalStderr = ""
+            let aggregateOutput: LockedOutput
+            do {
+                aggregateOutput = try LockedOutput(maximumBytes: defaultMaximumOutputBytes)
+            } catch {
+                return CommandResult(
+                    status: 126,
+                    stdout: "",
+                    stderr: "Invalid command output limit",
+                    termination: .policyRejected
+                )
+            }
             for cmd in commands {
                 let res = run("/usr/bin/sudo", arguments: ["-n", cmd.executable] + cmd.arguments)
-                finalStdout += res.stdout + "\n"
-                finalStderr += res.stderr + "\n"
+                aggregateOutput.append(Data((res.stdout + "\n").utf8), to: .standardOutput)
+                aggregateOutput.append(Data((res.stderr + "\n").utf8), to: .standardError)
                 if !res.succeeded {
                     finalStatus = res.status
                 }
             }
+            let aggregateSnapshot = aggregateOutput.snapshot()
+            if aggregateSnapshot.wasTruncated {
+                return commandResult(status: finalStatus, output: aggregateSnapshot)
+            }
             if finalStatus == 0 {
-                return CommandResult(status: 0, stdout: finalStdout, stderr: finalStderr)
+                return commandResult(status: 0, output: aggregateSnapshot)
             }
             PrivilegeManager.shared.resetVerification()
         }
@@ -157,16 +310,16 @@ enum CommandRunner {
 
         var error: NSDictionary?
         guard let appleScript = NSAppleScript(source: script) else {
-            return CommandResult(status: 1, stdout: "", stderr: "Failed to create administrator prompt")
+            return boundedResult(status: 1, stdout: "", stderr: "Failed to create administrator prompt")
         }
 
         let descriptor = appleScript.executeAndReturnError(&error)
         if let error {
             let message = error["NSAppleScriptErrorMessage"] as? String ?? "Administrator access denied"
-            return CommandResult(status: 1, stdout: "", stderr: message)
+            return boundedResult(status: 1, stdout: "", stderr: message)
         }
 
-        return CommandResult(status: 0, stdout: descriptor.stringValue ?? "", stderr: "")
+        return boundedResult(status: 0, stdout: descriptor.stringValue ?? "", stderr: "")
     }
 
     static func shellEscapedCommand(_ executable: String, arguments: [String]) -> String {
@@ -179,16 +332,16 @@ enum CommandRunner {
 
         var error: NSDictionary?
         guard let appleScript = NSAppleScript(source: script) else {
-            return CommandResult(status: 1, stdout: "", stderr: "Failed to create administrator prompt")
+            return boundedResult(status: 1, stdout: "", stderr: "Failed to create administrator prompt")
         }
 
         let descriptor = appleScript.executeAndReturnError(&error)
         if let error {
             let message = error["NSAppleScriptErrorMessage"] as? String ?? "Administrator access denied"
-            return CommandResult(status: 1, stdout: "", stderr: message)
+            return boundedResult(status: 1, stdout: "", stderr: message)
         }
 
-        return CommandResult(status: 0, stdout: descriptor.stringValue ?? "", stderr: "")
+        return boundedResult(status: 0, stdout: descriptor.stringValue ?? "", stderr: "")
     }
 
     private static func shellQuote(_ value: String) -> String {

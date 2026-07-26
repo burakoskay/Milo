@@ -509,6 +509,7 @@ No phase may be declared complete solely because code was written. Each phase en
 2. [ ] Mark UI models `@MainActor`; replace shared mutable singletons with injected actors/services.
 3. [ ] Add cancellation, generation, deadlines, and resource caps to every asynchronous/subprocess operation.
    - [x] **Process scan generation control completed 2026-07-26:** starting a scan cancels the prior worker, assigns a new typed lifecycle context, and accepts completion only for the current context. Scan command failure is typed and user-visible instead of becoming an empty “clean” result. Subprocess termination deadlines/output caps and other async surfaces remain open.
+   - [x] **Subprocess output bound completed 2026-07-26:** direct and administrator-mediated command results share an exact 1 MiB combined stdout/stderr budget; excess output is truncated in bounded storage and returned as an explicit failed `outputLimitExceeded` termination. Process-group-safe deadlines and cancellation remain open.
 4. [ ] Introduce capability enforcement at use-case boundaries.
 5. [ ] Implement structured redacted logging and support diagnostics.
 

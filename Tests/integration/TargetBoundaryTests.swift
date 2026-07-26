@@ -149,6 +149,19 @@ final class TargetBoundaryTests: XCTestCase {
         XCTAssertTrue(dedicatedView.contains("appState.scanResultIsClean"))
     }
 
+    func testCommandOutputIsBoundedAcrossEveryExecutionPath() throws {
+        let commandRunner = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/CommandRunner.swift")
+        )
+
+        XCTAssertTrue(commandRunner.contains("MiloBoundedCommandOutput"))
+        XCTAssertTrue(commandRunner.contains("maximumOutputBytes: Int = defaultMaximumOutputBytes"))
+        XCTAssertTrue(commandRunner.contains("maximumOutputBytes <= defaultMaximumOutputBytes"))
+        XCTAssertTrue(commandRunner.contains("case outputLimitExceeded"))
+        XCTAssertTrue(commandRunner.contains("output.wasTruncated ? 74 : status"))
+        XCTAssertFalse(commandRunner.contains("private var storage = Data()"))
+    }
+
     private func readText(at url: URL) throws -> String {
         try String(contentsOf: url, encoding: .utf8)
     }
