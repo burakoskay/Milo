@@ -1,0 +1,91 @@
+{
+  "repository": "burakoskay/Milo",
+  "governance": {
+    "release_approvers": ["burakoskay"],
+    "solo_founder": true,
+    "required_approving_review_count": 0,
+    "required_review_thread_resolution": true,
+    "cooling_off_clean_checkout_review": true,
+    "independent_external_review_required_for_public_production": [
+      "cryptography",
+      "privileged-helper",
+      "payments",
+      "updates"
+    ]
+  },
+  "rulesets": [
+    {
+      "name": "Protect main",
+      "target": "branch",
+      "enforcement": "active",
+      "bypass_actors": [],
+      "conditions": {
+        "ref_name": {
+          "include": ["~DEFAULT_BRANCH"],
+          "exclude": []
+        }
+      },
+      "rules": [
+        { "type": "deletion" },
+        { "type": "non_fast_forward" },
+        { "type": "required_linear_history" },
+        {
+          "type": "pull_request",
+          "parameters": {
+            "required_approving_review_count": 0,
+            "dismiss_stale_reviews_on_push": true,
+            "required_reviewers": [],
+            "require_code_owner_review": false,
+            "require_last_push_approval": false,
+            "required_review_thread_resolution": true,
+            "allowed_merge_methods": ["squash", "rebase"]
+          }
+        },
+        {
+          "type": "required_status_checks",
+          "parameters": {
+            "strict_required_status_checks_policy": true,
+            "do_not_enforce_on_create": false,
+            "required_status_checks": [
+              { "context": "unit-tests" },
+              { "context": "conventional-commits" },
+              { "context": "changelog-check" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Protect finalization branches",
+      "target": "branch",
+      "enforcement": "active",
+      "bypass_actors": [],
+      "conditions": {
+        "ref_name": {
+          "include": ["refs/heads/codex/*"],
+          "exclude": []
+        }
+      },
+      "rules": [
+        { "type": "deletion" },
+        { "type": "non_fast_forward" }
+      ]
+    },
+    {
+      "name": "Protect immutable baselines",
+      "target": "tag",
+      "enforcement": "active",
+      "bypass_actors": [],
+      "conditions": {
+        "ref_name": {
+          "include": ["refs/tags/baseline/*"],
+          "exclude": []
+        }
+      },
+      "rules": [
+        { "type": "deletion" },
+        { "type": "non_fast_forward" }
+      ]
+    }
+  ]
+}

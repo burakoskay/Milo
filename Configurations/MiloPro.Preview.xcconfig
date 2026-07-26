@@ -1,0 +1,8 @@
+#include "Shared.xcconfig"
+
+MILO_PRODUCT_FLAVOR = development-preview
+MILO_BUNDLE_ID = com.monomacaw.milo.preview
+MILO_CONFIGURATION_ENVIRONMENT = development-preview
+MILO_SERVICE_BASE_URL =
+MILO_LICENSE_PUBLIC_KEY =
+SPARKLE_PUBLIC_ED_KEY =

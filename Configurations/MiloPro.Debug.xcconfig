@@ -1,0 +1,8 @@
+#include "Shared.xcconfig"
+
+MILO_PRODUCT_FLAVOR = pro
+MILO_BUNDLE_ID = com.monomacaw.milo
+MILO_CONFIGURATION_ENVIRONMENT = development
+MILO_SERVICE_BASE_URL = https:/$()/milo-development.invalid
+MILO_LICENSE_PUBLIC_KEY = A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg
+SPARKLE_PUBLIC_ED_KEY =

@@ -1,5 +1,5 @@
 # Milo SwiftLint Configuration
-# Designed for pragmatism and to prevent unnecessary CI failures
+# Lints first-party Swift sources while excluding generated and vendored code.
 
 disabled_rules:
   - inclusive_language # We use "whitelist" which is standard in this context
@@ -10,6 +10,15 @@ opt_in_rules:
   - force_unwrapping
   - implicitly_unwrapped_optional
   - missing_docs
+
+excluded:
+  - .claude
+  - .build
+  - build
+  - dist
+  - Packages/MiloKit/.build
+  - Server
+  - supabase
 
 line_length:
   warning: 250

@@ -1,177 +1,197 @@
-# 💀 Milo
+<div align="center">
 
-**Milo** is a high-performance macOS status bar application for power users, developers, and music producers who want explicit control over background processes and auto-start services.
+# Milo
 
-Milo is intentionally local-first: no analytics, no network calls, no accounts, and no telemetry. It scans your Mac locally, asks before destructive process kills by default, and keeps passwordless privileged mode optional.
+**A local-first macOS utility for taking back control of background processes.**
 
-## 🚀 Key Features
+Milo finds the background processes, launch agents, telemetry daemons, and Apple Intelligence
+services running on your Mac, shows you what each one actually costs you in CPU and memory, and
+lets you stop the ones you did not ask for.
 
-- **Explicit Process Termination:** Detect and terminate selected resource-heavy helper processes from Adobe, Microsoft, Avid, and more.
-- **Apple Intelligence Controls:** Detect Apple Intelligence, Siri, and telemetry-adjacent daemons (`siriknowledged`, `biomed`, `intelligenceplatformd`, etc.) so you can decide what to stop.
-- **System Debloat:** Full macOS Tahoe debloat suite with 14 categories — animations, visual effects, Apple Intelligence, Safari/Mail privacy, Finder/Dock tuning, system daemons, Adobe background services, stock-app blocking, and advanced SIP-off tweaks. Every tweak is individually toggleable and revertible.
-- **Auto-Start Manager:** Scans `LaunchAgents` and `LaunchDaemons` to detect persistent services. Toggle them `Enabled` or `Disabled` with immediate effect.
-- **Preferences (⌘,):** Settings panel with Start at Login, auto-scan intervals, badge toggle, kill confirmation, privilege management, and system info.
-- **Scan & Select UI:** See exactly what is running before you kill it. Choose individual processes or nuke them all.
-- **SIP Awareness:** Real-time monitoring of System Integrity Protection (SIP) status. SIP-dependent debloat categories are clearly marked.
-- **Native & Lightweight:** Written in Swift and SwiftUI. The expensive debloat state loads only when the Debloat sheet is opened.
+[![Download](https://img.shields.io/badge/Download-Development%20Preview-blue?style=for-the-badge)](https://github.com/burakoskay/Milo/releases/latest)
+[![Platform](https://img.shields.io/badge/macOS-13.0%2B-lightgrey?style=for-the-badge)](#building-from-source)
+[![Swift](https://img.shields.io/badge/Swift-6-orange?style=for-the-badge)](#building-from-source)
 
-## 🎯 Targeted Vendors
+</div>
 
-Milo comes pre-configured to detect common background helpers from:
-- **Adobe Creative Cloud:** (CCXProcess, Core Sync, Adobe Desktop Service, etc.)
-- **Audio Licensing:** (UAD, Antelope, Waves, PACE/iLok)
-- **Utilities:** (CleanMyMac and similar cleanup/menu helpers)
-- **Microsoft Office:** (AutoUpdate, Office365Service, Widgets)
-- **Apple Telemetry:** (Siri, Biome, Triald, Knowledge-agent, etc.)
+<br>
 
-Password managers, VPNs, firewalls, and backup tools are deliberately excluded from the default target lists.
+<div align="center">
+  <img src="Screenshots/home.jpg" width="90%" alt="Milo scanning background processes, showing per-process CPU and memory and persistent launch items">
+</div>
 
-## 🔧 System Debloat Categories
+<br>
 
-The built-in debloat engine provides 14 categories of system-level tweaks. Each tweak can be toggled individually and reverted at any time.
+> [!IMPORTANT]
+> This is a **Development Preview**. It is a signed development build, not a paid release.
+> Every local capability is unlocked with no account, payment, or network dependency. It is
+> **not notarized**, so macOS will warn on first launch — see [Installing](#installing).
+> Commercial licensing, updates, and notarized distribution are tracked in [ROADMAP.md](ROADMAP.md).
 
-| # | Category | SIP Required | What it does |
-|---|----------|:---:|---|
-| 1 | **Kill Animations** | No | Disable window, Mission Control, and dialog animations |
-| 2 | **Visual Effects** | No | Remove Liquid Glass transparency, increase contrast |
-| 3 | **Apple Intelligence & Siri** | No | Disable AI features, Writing Tools, inline predictions, Siri |
-| 4 | **Background Services** | No | Kill Game Center, Tips, knowledge daemons, analytics |
-| 5 | **Finder — Pro Mode** | No | POSIX paths, hidden files, path bar, no .DS_Store on USB |
-| 6 | **Dock — Minimal** | No | Hide recent apps, auto-hide Dock |
-| 7 | **Safari & Mail** | No | Safari developer mode, tracking protection, remote-content controls |
-| 8 | **Privacy Hardening** | No | Block ad tracking, disable Handoff, remote events |
-| 9 | **Keyboard & Input** | No | Disable autocorrect, fast key repeat, full keyboard access |
-| 10 | **Performance Tweaks** | No | Disable quarantine dialogs, save to disk by default |
-| 11 | **System Daemons** | **Yes** | Disable AI/ML daemons, analytics, media analysis, Screen Time |
-| 12 | **Adobe Bloatware** | No | Disable CC agents, sync, update helpers, Finder extensions, installer daemon |
-| 13 | **Block Stock Apps** | **Yes** | Quarantine Chess, News, Stocks, TV, Tips, etc. |
-| 14 | **Advanced** | **Yes** | Disable Sidecar, Universal Control, Continuity, Journal |
+## What it does
 
-> Categories 11, 13–14 require SIP to be disabled (`csrutil disable` from Recovery). All other categories work with SIP enabled.
+**Sees what is actually running.** Milo scans for known background processes, telemetry agents,
+and launch items, groups them by vendor, and measures each one's real CPU and memory cost.
 
-## ⚙️ Settings & Preferences
+**Measures CPU honestly.** CPU is sampled the way Activity Monitor does it — by differentiating
+cumulative task CPU time across two observations. Tools that read `ps -o %cpu` report a
+*lifetime average*, which makes a daemon that was busy at login and has idled for hours look
+permanently idle.
 
-Milo's settings panel is accessible via **⌘,** or the gear icon in the toolbar.
+**Terminates the exact process you selected.** Every action carries a `ProcessIdentity` — PID,
+absolute executable path, and kernel process start time. That identity is revalidated
+immediately before `SIGTERM` and again before `SIGKILL`. A PID is not an identity; PIDs get
+reused, and Milo will not signal a process whose identity no longer matches.
 
-| Setting | Description |
-|---------|-------------|
-| **Start at Login** | Automatically launch Milo when you log in (uses SMAppService) |
-| **Confirm Before Kill** | Show a confirmation dialog before terminating processes |
-| **Scan on Open** | Auto-scan for bloat each time the popover opens |
-| **Auto-Rescan Interval** | Periodically re-scan while open (30s / 1m / 2m / 5m / off) |
-| **Status Bar Badge** | Show bloat count next to the 💀 icon |
-| **Memory in Header** | Show memory pressure bar in the main view |
-| **Privileges** | Optional passwordless sudo mode for faster privileged actions |
+**Tells the truth about what happened.** If launchd restarts an on-demand agent after Milo
+terminates it, that is reported as a restart, not as a failure. It is a different outcome and
+calls for a different fix — disabling the launch item rather than killing the process again.
 
-## 🛠 Installation & Usage
+**Asks for one permission, once.** No sudoers rule. No repeated password prompts.
 
-### Build from Source
-If you have Swift installed, you can build the `.app` bundle using the included script:
+<table>
+<tr>
+<td width="50%"><img src="Screenshots/tuning.jpg" alt="System Tuning showing 91 reversible tweaks grouped by category with risk labels and SIP status"></td>
+<td width="50%"><img src="Screenshots/settings.jpg" alt="Milo settings showing view mode, window close behaviour, scanning, and appearance options"></td>
+</tr>
+<tr>
+<td align="center"><b>System Tuning</b> — reversible tweaks with explicit risk labels and SIP awareness</td>
+<td align="center"><b>Settings</b> — menu bar or window mode, both fully featured</td>
+</tr>
+</table>
+
+## Installing
+
+1. Download the DMG from [Releases](https://github.com/burakoskay/Milo/releases/latest).
+2. Drag `Milo.app` to `/Applications` and open it.
+3. **First launch will be blocked.** The preview is signed with an Apple Development
+   certificate, not a notarized Developer ID certificate, so Gatekeeper will refuse it.
+   Right-click the app → **Open** → **Open**, or allow it under
+   **System Settings → Privacy & Security**.
+4. Milo appears in the menu bar. Scanning works immediately.
+5. For system-level actions only, click **Enable** in the background-helper banner once.
+
+Step 3 is expected, not a defect. Notarization is [on the roadmap](ROADMAP.md); until then this
+is a build for people who are willing to inspect what they run.
+
+## Permission model
+
+Milo does **not** install a sudoers rule and does **not** use AppleScript password prompts.
+
+Ordinary user processes are signalled directly. Actions that genuinely require root go through
+an embedded, separately signed helper registered via Apple's `SMAppService` API. The helper:
+
+- accepts connections only from the signed Milo app, verified by Team ID and signing identifier
+- refuses to run if the calling process is root
+- exposes a fixed command and argument grammar, with no shell execution anywhere
+- bounds request size, output size, and execution deadline
+- independently revalidates process identity before every privileged signal
+
+If you decline approval, scanning and all user-level features keep working. Milo reports that a
+specific action needs the helper. It never retries registration in a loop.
+
+Apple owns the final approval step. Milo can open the correct Settings pane; it cannot click it
+for you, and does not try.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI["SwiftUI menu bar and window UI"] --> State["Typed AppState operations"]
+    State --> Scan["Local process and launchd scanner"]
+    State --> User["Direct user-level actions"]
+    State --> XPC["Authenticated NSXPCConnection"]
+    XPC --> Helper["SMAppService privileged helper"]
+    Helper --> Policy["Fixed command and argument policy"]
+    Policy --> Kernel["Identity-checked process and launchd actions"]
+```
+
+Exactly one presentation surface — the menu bar panel or the dedicated window — owns a SwiftUI
+hosting controller at a time. Both roots bind alerts to the same state, so two live hosts would
+each present the same confirmation and force the inactive window on screen.
+
+Reusable cryptography, domain, licensing, and update-policy code lives in `Packages/MiloKit`.
+Preview builds keep the production architecture compiled and tested but make no backend calls.
+
+| Path | Responsibility |
+|---|---|
+| `App/Milo/Runtime` | Application UI and coordination |
+| `Helper/MiloPrivilegedHelper` | Privileged helper and XPC policy |
+| `App/MiloLite` | Sandboxed, read-only App Store prototype |
+| `Packages/MiloKit` | Domain, hardening, licensing, update policy |
+| `Tests` | Red-team, unit, integration, and UI regression tests |
+| `Tools` | Generation, verification, signing, and packaging |
+
+## Building from source
+
+Requires macOS 13.0+ to run; macOS 26/27 and a matching Xcode to build.
+
 ```bash
-chmod +x build_app.sh
-./build_app.sh              # Dev build (ad-hoc signed)
-./build_app.sh release      # Optimised release build + DMG
-./build_app.sh release sign # Release + Developer ID signing
-./build_app.sh release notarize # Full notarization pipeline
+export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+Tools/build-development-preview.sh
 ```
 
-For signing and notarization, set these environment variables:
+That performs a clean `Preview` build, verifies app and helper signatures and exact bundle
+identifiers, runs a six-check packaged-app smoke suite, and produces
+`dist/Milo-Development-Preview.dmg` with a verified checksum.
+
+Verification spine:
+
 ```bash
-export DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)"
-export APPLE_ID="you@example.com"
-export APPLE_TEAM_ID="XXXXXXXXXX"
-export APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"
+swift test
+swift test --package-path Packages/MiloKit
+xcodebuild -workspace Milo.xcworkspace -scheme MiloPro -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
 ```
 
-### Running the App
-1. Open `Milo.app`.
-2. Look for the 💀 icon in your macOS Status Bar.
-3. Click to scan for active bloatware.
-4. Select the items you want to terminate and hit **Kill Selected**.
+The project uses Swift 6 complete concurrency checking, treats compiler warnings as errors, and
+enforces source-level security regression tests — including assertions that the privileged
+helper contains no shell invocation and that process identity checks cannot be removed.
 
-> **Note:** Modification of system services and some process operations require Administrator privileges. By default, macOS prompts for approval. Passwordless mode is optional and should be used only if you accept that sudoers rules apply to every process running as your macOS user.
+`project.yml` is canonical. After editing it, run `Tools/generate-xcode-project.sh` and commit
+the regenerated project alongside it.
 
-### Self-Test
-```bash
-swift build -c release
-.build/release/Milo --self-test
-```
+## Keyboard shortcuts
 
-The default self-test is safe: it does not clear real user caches, flush DNS, purge memory, toggle login items, create LaunchAgents, or mutate real debloat settings. Destructive integration checks are available with `--self-test-destructive`.
+| Action | Shortcut |
+|---|---|
+| Rescan now | <kbd>⌘R</kbd> |
+| Select all detected | <kbd>⇧⌘A</kbd> |
+| Deselect all | <kbd>⇧⌘D</kbd> |
+| Kill selected | <kbd>⌘K</kbd> |
+| Kill all detected | <kbd>⇧⌘K</kbd> |
+| Settings | <kbd>⌘,</kbd> |
+| Show Milo | <kbd>⌘0</kbd> |
+| Quit | <kbd>⌘Q</kbd> |
 
-## ⚠️ Disclaimer
-Milo is a powerful cleanup tool. Disabling audio drivers, launch agents, or system services can stop dependent hardware or macOS features until you re-enable them. Review each item before applying changes.
+Plain <kbd>⌘A</kbd> is deliberately left to the text field editor.
 
----
+## Scope and limitations
 
-## 📋 Project Status
+Stated plainly, because a tool that signals processes should not overstate what it knows:
 
-### February 10, 2026 — Distribution Readiness Pass
+- **Not notarized.** The DMG is Apple Development signed for local use, not a public installer.
+- **Preview licensing is unconditional and local.** It is not DRM and must not be described as
+  the commercial entitlement system.
+- **Updates are disabled** in preview builds. Rebuild or download a new release.
+- **SIP-protected changes stay locked** while SIP is enabled. Milo does not disable SIP.
+- **launchd-managed agents restart on demand.** Terminating them is temporary by design;
+  disabling the launch item is the durable fix.
+- **Apple and vendor launchd labels change between releases.** A missing or protected service
+  returns a failure rather than broadening the match.
+- **Some tuning changes affect Apple features.** Check the risk label and use the revert action.
+- **System Tuning has not been validated on clean VMs across every supported macOS release.**
 
-The following improvements were made to bring Milo from a working prototype to a distribution-ready v1.0:
+## Roadmap
 
-#### Architecture & Code Quality
-- **Extracted shared UI components** — `VisualEffectBlur`, `GlassCard`, and `StatCard` were duplicated across `ContentView.swift`, `StatsView.swift`, and `WhitelistView.swift`. All three are now in a single `SharedUI.swift`.
-- **Split ProcessManager** — The monolithic 1,674-line `ProcessManager.swift` was split into `ProcessData.swift` (957 lines of pure data: target lists, vendor patterns, launchd mappings, friendly descriptions) and `ProcessManager.swift` (502 lines of logic only).
-- **Added `Package.swift`** — Swift Package Manager manifest targeting macOS 13+ for proper IDE integration and dependency management.
+Commercial licensing, notarized distribution, the Mac App Store Lite funnel, and the reversible
+system-tuning matrix are in progress and tracked in **[ROADMAP.md](ROADMAP.md)**. Nothing
+unfinished is hidden behind a fake success state in the shipping UI.
 
-#### Security Hardening
-- **Tightened sudoers rule** — Removed the dangerous `NOPASSWD: /bin/sh -c *` entry (effectively unrestricted root) from the privilege manager. The sudoers file now only grants passwordless access to the 6 specific binaries Milo needs: `pkill`, `launchctl`, `kill`, `killall`, `purge`, `dscacheutil`.
-- **Per-binary sudo wrapping** — Added `wrapCommandsWithSudo()` in `PrivilegeManager.swift` to prefix each privileged binary call with `sudo -n` individually instead of wrapping whole command strings in a root shell.
+## Security
 
-#### Error Handling & UX
-- **Fallback app icon** — `IconManager.swift` now draws a procedural 💀 icon at runtime when `.icns` assets are missing, instead of silently failing.
-- **Privilege setup error feedback** — The setup banner now shows inline error messages when the one-time sudoers configuration fails.
-- **Version display** — The popover header now shows the app version from `Info.plist` instead of static text.
+Security policy and reporting: **[SECURITY.md](SECURITY.md)**.
 
-#### Distribution & Packaging
-- **Upgraded build script** (`build_app.sh`) — Now supports 4 modes: `dev`, `release`, `release sign`, `release notarize`. Release builds use `-O -whole-module-optimization`, hardened runtime, and entitlements. Automatically creates a DMG with an `/Applications` symlink for drag-install. Full `notarytool` + `stapler` notarization pipeline via environment variables.
-- **Added entitlements** — `com.apple.security.automation.apple-events` entitlement applied during code signing for AppleScript privilege escalation.
-- **Added `NSAppleEventsUsageDescription`** to `Info.plist` (required for notarization compliance).
-- **Added `.gitignore`** — Covers build artifacts (`.app`, `.dmg`, `.build_icons`, `.dmg_staging`), SPM cache, Xcode junk, and `.DS_Store`.
+## License
 
-#### File Structure After Changes
-```
-Milo/Sources/
-  AppState.swift          — Central ObservableObject state hub
-  ContentView.swift       — Main popover UI
-  DebloatManager.swift    — Debloat engine: 14 categories, apply/revert logic
-  DebloatView.swift       — Debloat settings UI with per-tweak toggles
-  IconManager.swift       — App icon management with fallback
-  main.swift              — AppDelegate, status bar item, Cmd+, menu
-  MemoryManager.swift     — vm_stat memory stats + purge
-  PrivilegeManager.swift  — Sudoers rule management (hardened)
-  ProcessData.swift       — All target lists & data dictionaries
-  ProcessManager.swift    — Process scanning & killing logic (slimmed)
-  SettingsManager.swift   — [NEW] Persistent preferences & login item management
-  SettingsView.swift      — [NEW] Preferences UI (⌘,)
-  SharedUI.swift          — Shared VisualEffectBlur, GlassCard, StatCard
-  SIPChecker.swift        — SIP status check
-  StatsManager.swift      — Kill history persistence
-  StatsView.swift         — Statistics dashboard
-  WhitelistManager.swift  — Process exclusion list
-  WhitelistView.swift     — Whitelist management UI
-```
-
-#### What Remains for Future Work
-- **Dedicated test target** — The built-in safe self-test covers scanning, confirmation, kill flows, whitelist persistence, memory parsing, protected-target exclusions, and packaging smoke checks. A formal Swift test target would still be useful for faster CI.
-- **Sparkle / auto-update** — No update mechanism. Consider integrating Sparkle for delta updates via an appcast feed.
-- **Scheduled scans** — Auto-rescan while the popover is open exists; a detached scheduler could be added later if the app needs background monitoring.
-- **Debloat profiles** — Pre-built profiles (e.g., "Music Producer", "Developer", "Privacy Max") that pre-select appropriate tweaks.
-
-### February 10, 2026 — System Debloat Integration
-
-Integrated a Tahoe-focused debloat suite into Milo as a native GUI feature.
-
-#### New Features
-- **DebloatManager** (`DebloatManager.swift`) — Data-driven debloat engine with 14 categories and 50+ individually-toggleable tweaks. Each tweak stores both apply and revert commands. User-level `defaults write` commands run directly; system-level commands (`launchctl disable system/*`, `mdutil`, `systemsetup`, `xattr`) run through `PrivilegeManager` or AppleScript elevation.
-- **DebloatView** (`DebloatView.swift`) — Full SwiftUI sheet with expandable categories, per-tweak checkboxes, category-level and global Apply/Revert buttons, SIP-awareness (SIP-required categories are visually dimmed and disabled), applied-count badges, and a "Restart UI" button to reload Finder/Dock/SystemUIServer.
-- **Debloat persistence** — Applied tweaks are tracked in UserDefaults so the app remembers what was changed across sessions.
-
-#### Changes to Existing Files
-- **AppState.swift** — Added `showingDebloat` published property.
-- **ContentView.swift** — Added debloat button (wand icon) to the footer bar, opening `DebloatView` as a sheet.
-- **PrivilegeManager.swift** — Added `mdutil`, `systemsetup`, and `xattr` to the sudoers allowlist and the `privilegedBinaries` set, enabling passwordless debloat operations after initial setup.
-
----
-*Created for the elite who want their Mac to be a workstation, not a playground for background daemons.*
+Copyright © monomacaw. All rights reserved.

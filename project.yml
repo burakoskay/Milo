@@ -1,0 +1,329 @@
+name: Milo
+
+options:
+  minimumXcodeGenVersion: 2.46.0
+  xcodeVersion: "27.0"
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  localPackagesGroup: Packages
+  schemePathPrefix: ../
+
+configs:
+  Debug: debug
+  Preview: release
+  Release: release
+
+packages:
+  MiloKit:
+    path: Packages/MiloKit
+
+settings:
+  base:
+    ALWAYS_SEARCH_USER_PATHS: NO
+    CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED: YES
+    CLANG_ANALYZER_NONNULL: YES
+    CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION: YES_AGGRESSIVE
+    CLANG_ENABLE_MODULES: YES
+    CLANG_ENABLE_OBJC_ARC: YES
+    CLANG_ENABLE_OBJC_WEAK: YES
+    CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING: YES
+    CLANG_WARN_BOOL_CONVERSION: YES
+    CLANG_WARN_COMMA: YES
+    CLANG_WARN_CONSTANT_CONVERSION: YES
+    CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS: YES
+    CLANG_WARN_DIRECT_OBJC_ISA_USAGE: YES_ERROR
+    CLANG_WARN_DOCUMENTATION_COMMENTS: YES
+    CLANG_WARN_EMPTY_BODY: YES
+    CLANG_WARN_ENUM_CONVERSION: YES
+    CLANG_WARN_INFINITE_RECURSION: YES
+    CLANG_WARN_INT_CONVERSION: YES
+    CLANG_WARN_NON_LITERAL_NULL_CONVERSION: YES
+    CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF: YES
+    CLANG_WARN_OBJC_LITERAL_CONVERSION: YES
+    CLANG_WARN_OBJC_ROOT_CLASS: YES_ERROR
+    CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER: YES
+    CLANG_WARN_RANGE_LOOP_ANALYSIS: YES
+    CLANG_WARN_STRICT_PROTOTYPES: YES
+    CLANG_WARN_SUSPICIOUS_MOVE: YES
+    CLANG_WARN_UNGUARDED_AVAILABILITY: YES_AGGRESSIVE
+    CLANG_WARN_UNREACHABLE_CODE: YES
+    CLANG_WARN__DUPLICATE_METHOD_MATCH: YES
+    COPY_PHASE_STRIP: NO
+    DEAD_CODE_STRIPPING: YES
+    ENABLE_STRICT_OBJC_MSGSEND: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    GCC_C_LANGUAGE_STANDARD: gnu17
+    GCC_NO_COMMON_BLOCKS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_WARN_64_TO_32_BIT_CONVERSION: YES
+    GCC_WARN_ABOUT_RETURN_TYPE: YES_ERROR
+    GCC_WARN_UNDECLARED_SELECTOR: YES
+    GCC_WARN_UNINITIALIZED_AUTOS: YES_AGGRESSIVE
+    GCC_WARN_UNUSED_FUNCTION: YES
+    GCC_WARN_UNUSED_VARIABLE: YES
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    LM_FORCE_LINK_GENERATION: YES
+    SWIFT_COMPILATION_MODE: wholemodule
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    SWIFT_VERSION: "6.0"
+  configs:
+    Debug:
+      DEBUG_INFORMATION_FORMAT: dwarf
+      ENABLE_TESTABILITY: YES
+      GCC_OPTIMIZATION_LEVEL: "0"
+      ONLY_ACTIVE_ARCH: YES
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+      SWIFT_OPTIMIZATION_LEVEL: -Onone
+    Release:
+      CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      ENABLE_NS_ASSERTIONS: NO
+      ONLY_ACTIVE_ARCH: NO
+      SWIFT_COMPILATION_MODE: wholemodule
+      SWIFT_OPTIMIZATION_LEVEL: -O
+      VALIDATE_PRODUCT: YES
+    Preview:
+      CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      ENABLE_NS_ASSERTIONS: NO
+      ONLY_ACTIVE_ARCH: YES
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: MILO_DEVELOPMENT_PREVIEW
+      SWIFT_COMPILATION_MODE: wholemodule
+      SWIFT_OPTIMIZATION_LEVEL: -O
+      VALIDATE_PRODUCT: YES
+
+targets:
+  MiloPro:
+    type: application
+    platform: macOS
+    productName: Milo
+    deploymentTarget: "13.0"
+    configFiles:
+      Debug: Configurations/MiloPro.Debug.xcconfig
+      Preview: Configurations/MiloPro.Preview.xcconfig
+      Release: Configurations/MiloPro.Release.xcconfig
+    sources:
+      - path: App/Milo
+        excludes:
+          - Info.plist
+          - Milo.entitlements
+          - Runtime/Secrets.swift
+          - Sparkle
+      - path: Milo/Resources
+        buildPhase: resources
+        type: group
+      - path: Helper/MiloPrivilegedHelper/com.monomacaw.milo.helper.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchDaemons
+    dependencies:
+      - target: MiloPrivilegedHelper
+        embed: true
+        link: false
+        codeSign: true
+        copy:
+          destination: resources
+      - package: MiloKit
+        product: MiloDomain
+      - package: MiloKit
+        product: MiloHardening
+      - package: MiloKit
+        product: MiloLicense
+      - package: MiloKit
+        product: MiloSparkle
+      - package: MiloKit
+        product: MiloUpdates
+      - sdk: AppKit.framework
+      - sdk: Security.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: App/Milo/Milo.entitlements
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/Milo/Info.plist
+        LD_RUNPATH_SEARCH_PATHS:
+          - $(inherited)
+          - "@executable_path/../Frameworks"
+        PRODUCT_BUNDLE_IDENTIFIER: $(MILO_BUNDLE_ID)
+        PRODUCT_MODULE_NAME: Milo
+        PRODUCT_NAME: Milo
+        SKIP_INSTALL: NO
+      configs:
+        Preview:
+          CODE_SIGN_ENTITLEMENTS: App/Milo/MiloPreview.entitlements
+
+  MiloLite:
+    type: application
+    platform: macOS
+    productName: Milo Lite
+    deploymentTarget: "13.0"
+    configFiles:
+      Debug: Configurations/MiloLite.Debug.xcconfig
+      Release: Configurations/MiloLite.Release.xcconfig
+    sources:
+      - path: App/MiloLite
+        excludes:
+          - Info.plist
+          - MiloLite.entitlements
+          - PrivacyInfo.xcprivacy
+      - path: App/MiloLite/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - sdk: AppKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: App/MiloLite/MiloLite.entitlements
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/MiloLite/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: $(MILO_BUNDLE_ID)
+        PRODUCT_MODULE_NAME: MiloLite
+        PRODUCT_NAME: Milo Lite
+        SKIP_INSTALL: NO
+
+  MiloPrivilegedHelper:
+    type: tool
+    platform: macOS
+    productName: MiloPrivilegedHelper
+    deploymentTarget: "13.0"
+    configFiles:
+      Debug: Configurations/MiloPrivilegedHelper.Debug.xcconfig
+      Preview: Configurations/MiloPrivilegedHelper.Preview.xcconfig
+      Release: Configurations/MiloPrivilegedHelper.Release.xcconfig
+    sources:
+      - path: Helper/MiloPrivilegedHelper
+        excludes:
+          - com.monomacaw.milo.helper.plist
+    dependencies:
+      - package: MiloKit
+        product: MiloDomain
+    settings:
+      base:
+        CODE_SIGN_STYLE: Automatic
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(MILO_BUNDLE_ID)
+        PRODUCT_NAME: MiloPrivilegedHelper
+        SKIP_INSTALL: YES
+
+  MiloRedTeamTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests/redteam
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo.redteam-tests
+
+  MiloUnitTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests/unit
+    dependencies:
+      - package: MiloKit
+        product: MiloDomain
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo.unit-tests
+
+  MiloIntegrationTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests/integration
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo.integration-tests
+
+  MiloLiteUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests/ui
+    dependencies:
+      - target: MiloLite
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo.lite.ui-tests
+
+schemes:
+  MiloPro:
+    build:
+      targets:
+        MiloPro: all
+        MiloRedTeamTests: [test]
+        MiloUnitTests: [test]
+        MiloIntegrationTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - name: MiloRedTeamTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: MiloUnitTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: MiloIntegrationTests
+          parallelizable: false
+          randomExecutionOrder: false
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  MiloLite:
+    build:
+      targets:
+        MiloLite: all
+        MiloUnitTests: [test]
+        MiloIntegrationTests: [test]
+        MiloLiteUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - name: MiloUnitTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: MiloIntegrationTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: MiloLiteUITests
+          parallelizable: false
+          randomExecutionOrder: false
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
