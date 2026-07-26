@@ -149,6 +149,18 @@ final class TargetBoundaryTests: XCTestCase {
         XCTAssertTrue(dedicatedView.contains("appState.scanResultIsClean"))
     }
 
+    func testProcessScanningReceivesCloudRulesByInjection() throws {
+        let processManager = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/ProcessManager.swift")
+        )
+
+        XCTAssertTrue(processManager.contains("init(cloudSignatureManager: CloudSignatureManager = .shared)"))
+        XCTAssertTrue(processManager.contains("cloudSignatureManager.hasCloudLocatorCandidate"))
+        XCTAssertTrue(processManager.contains("cloudSignatureManager.matchCloudSignature"))
+        XCTAssertFalse(processManager.contains("CloudSignatureManager.shared.hasCloudLocatorCandidate"))
+        XCTAssertFalse(processManager.contains("CloudSignatureManager.shared.matchCloudSignature"))
+    }
+
     func testCommandOutputIsBoundedAcrossEveryExecutionPath() throws {
         let commandRunner = try readText(
             at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/CommandRunner.swift")

@@ -70,7 +70,7 @@ final class CloudSignatureManager: @unchecked Sendable {
     private var cloudRules: [TelemetrySignature]
     private let lock = NSLock()
 
-    private init() {
+    init() {
         cloudRules = Self.validatedRules(Self.bundledFallbackRules)
     }
 

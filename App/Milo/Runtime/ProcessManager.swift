@@ -25,6 +25,11 @@ final class ProcessManager: Sendable {
     static let shared = ProcessManager()
 
     private typealias PrivilegedCommand = (executable: String, arguments: [String])
+    private let cloudSignatureManager: CloudSignatureManager
+
+    init(cloudSignatureManager: CloudSignatureManager = .shared) {
+        self.cloudSignatureManager = cloudSignatureManager
+    }
 
     // MARK: - Direct Execution Safety
 
@@ -369,7 +374,7 @@ final class ProcessManager: Sendable {
             return heuristic
         }
 
-        guard CloudSignatureManager.shared.hasCloudLocatorCandidate(
+        guard cloudSignatureManager.hasCloudLocatorCandidate(
             executablePath: executablePath,
             executableName: executableName,
             command: command
@@ -385,7 +390,7 @@ final class ProcessManager: Sendable {
             codeSignature: codeSignature(forExecutablePath: executablePath)
         )
 
-        if let cloudMatch = CloudSignatureManager.shared.matchCloudSignature(observation: observation) {
+        if let cloudMatch = cloudSignatureManager.matchCloudSignature(observation: observation) {
             let kind: TargetKind = cloudMatch.signature.category == .bloat ? .bloat : .intelligence
             return TargetDetection(kind: kind, name: cloudMatch.signature.displayName, telemetryMatch: cloudMatch)
         }

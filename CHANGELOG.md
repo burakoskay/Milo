@@ -15,6 +15,7 @@ version 1.x predates this regime.
 
 ### Changed
 
+- Injects the cloud-rule service into process scanning instead of resolving mutable global state inside scan logic.
 - Moves Pro, Lite, and helper identity/environment values into explicit per-target Xcode configuration files and makes the canonical Xcode product the only input to app/DMG packaging.
 - Migrates every shipping target to Swift 6 complete concurrency checking, main-actor-isolates UI and persistence state, and makes the MLP device-license client an actor.
 - Makes the browser-approved MLP-v1 device-key client the sole Pro licensing path and presents explicit pairing, refresh, account-management, and disconnect states in the paywall.
