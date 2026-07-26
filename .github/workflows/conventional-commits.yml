@@ -1,0 +1,57 @@
+name: conventional-commits
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  conventional-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Validate PR title or commits
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|perf|refactor|security|build|docs|test|ci|chore)(\([a-z0-9._-]+\))?!?: .+'
+
+          if printf '%s\n' "$PR_TITLE" | grep -Eq "$pattern"; then
+            exit 0
+          fi
+
+          git cat-file -e "${PR_BASE_SHA}^{commit}"
+          git cat-file -e "${PR_HEAD_SHA}^{commit}"
+
+          commit_count="$(git rev-list --count "${PR_BASE_SHA}..${PR_HEAD_SHA}")"
+          if [ "$commit_count" -eq 0 ]; then
+            echo "PR has no commits to validate"
+            exit 1
+          fi
+
+          while IFS= read -r subject; do
+            printf '%s\n' "$subject" | grep -Eq "$pattern" || {
+              echo "Non-conventional PR title and commit: $subject"
+              exit 1
+            }
+          done < <(git log --format=%s "${PR_BASE_SHA}..${PR_HEAD_SHA}")
+      - name: Validate commits on main
+        if: github.event_name == 'push'
+        run: |
+          base="$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)"
+          git log --format=%s "$base"..HEAD | while read -r subject; do
+            echo "$subject" | grep -Eq '^(feat|fix|perf|refactor|security|build|docs|test|ci|chore)(\([a-z0-9._-]+\))?!?: .+' || {
+              echo "Non-conventional commit: $subject"
+              exit 1
+            }
+          done

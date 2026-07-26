@@ -1,0 +1,63 @@
+{
+  "name": "mlp-v1-device-request-golden",
+  "privateKeyTestOnlyBase64Url": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "publicKeySpkiBase64Url": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEelkxgIYMQDfIPBJ0mEXI7hQk3Sl_rcuJXjWCVdLH0rKoyiVYDyYm_leQYv8bmf-RwkoNoG-zK1viAUjJJJ9WUA",
+  "method": "POST",
+  "url": "https://Api.Example.Monomacaw.invalid:8443/functions/v1/license-refresh?channel=stable%20candidate&cohort=a%2Fb",
+  "authority": "api.example.monomacaw.invalid:8443",
+  "requestTarget": "/functions/v1/license-refresh?channel=stable%20candidate&cohort=a%2Fb",
+  "timestamp": "2026-07-23T12:34:56.789Z",
+  "nonce": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "bodyUtf8": "{\"appId\":\"milo\",\"appVersion\":\"2.0.0\",\"deviceFingerprint\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"macosVersion\":\"27.0.0\",\"protocolVersion\":1}",
+  "bodyBase64Url": "eyJhcHBJZCI6Im1pbG8iLCJhcHBWZXJzaW9uIjoiMi4wLjAiLCJkZXZpY2VGaW5nZXJwcmludCI6IjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYiLCJtYWNvc1ZlcnNpb24iOiIyNy4wLjAiLCJwcm90b2NvbFZlcnNpb24iOjF9",
+  "bodySha256Base64Url": "Ua2X7ajIMd5qMj_Q_3MAwB0zXQF57Lzmj8r8pqpPkuo",
+  "message": "MLP1\nPOST\napi.example.monomacaw.invalid:8443\n/functions/v1/license-refresh?channel=stable%20candidate&cohort=a%2Fb\n2026-07-23T12:34:56.789Z\nAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\nUa2X7ajIMd5qMj_Q_3MAwB0zXQF57Lzmj8r8pqpPkuo",
+  "messageBase64Url": "TUxQMQpQT1NUCmFwaS5leGFtcGxlLm1vbm9tYWNhdy5pbnZhbGlkOjg0NDMKL2Z1bmN0aW9ucy92MS9saWNlbnNlLXJlZnJlc2g_Y2hhbm5lbD1zdGFibGUlMjBjYW5kaWRhdGUmY29ob3J0PWElMkZiCjIwMjYtMDctMjNUMTI6MzQ6NTYuNzg5WgpBQUVDQXdRRkJnY0lDUW9MREEwT0R4QVJFaE1VRlJZWEdCa2FHeHdkSGg4ClVhMlg3YWpJTWQ1cU1qX1FfM01Bd0IwelhRRjU3THptajhyOHBxcFBrdW8",
+  "signatureDerBase64Url": "MEYCIQD7y7s3xzyX3SFZfxV-J6WVG6uP3j1LQn3yU-PtvO4wIAIhAOyMVwzA_VtXtHosyqTupxOnzgYPqloKDv6BBuDnlILN",
+  "normalizedSignatureDerBase64Url": "MEUCIQD7y7s3xzyX3SFZfxV-J6WVG6uP3j1LQn3yU-PtvO4wIAIgE3Oo8j8CpKlLhdM1WxFY7BUY9J38vZR19TjD4hTOooQ",
+  "signatureP1363Base64Url": "-8u7N8c8l90hWX8VfiellRurj949S0J98lPj7bzuMCATc6jyPwKkqUuF0zVbEVjsFRj0nfy9lHX1OMPiFM6ihA",
+  "negativeCases": [
+    {
+      "name": "der-on-wire",
+      "replaceField": "signatureP1363Base64Url",
+      "value": "MEYCIQD7y7s3xzyX3SFZfxV-J6WVG6uP3j1LQn3yU-PtvO4wIAIhAOyMVwzA_VtXtHosyqTupxOnzgYPqloKDv6BBuDnlILN",
+      "expectedError": "invalid-signature-encoding"
+    },
+    {
+      "name": "high-s-p1363",
+      "replaceField": "signatureP1363Base64Url",
+      "value": "-8u7N8c8l90hWX8VfiellRurj949S0J98lPj7bzuMCDsjFcMwP1bV7R6LMqk7qcTp84GD6paCg7-gQbg55SCzQ",
+      "expectedError": "non-canonical-signature"
+    },
+    {
+      "name": "padded-base64url",
+      "replaceField": "nonce",
+      "value": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "expectedError": "invalid-base64url"
+    },
+    {
+      "name": "short-nonce",
+      "replaceField": "nonce",
+      "value": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHg",
+      "expectedError": "invalid-nonce"
+    },
+    {
+      "name": "non-canonical-timestamp",
+      "replaceField": "timestamp",
+      "value": "2026-07-23T12:34:56Z",
+      "expectedError": "invalid-timestamp"
+    },
+    {
+      "name": "tampered-body",
+      "replaceField": "bodyUtf8",
+      "value": "{\"appId\":\"milo\",\"appVersion\":\"2.0.1\",\"deviceFingerprint\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"macosVersion\":\"27.0.0\",\"protocolVersion\":1}",
+      "expectedError": "device-signature-invalid"
+    },
+    {
+      "name": "tampered-authority",
+      "replaceField": "authority",
+      "value": "api.example.monomacaw.invalid",
+      "expectedError": "device-signature-invalid"
+    }
+  ]
+}
