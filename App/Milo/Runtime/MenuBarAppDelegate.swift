@@ -24,9 +24,72 @@ private func performRuntimeSignatureCheck() -> Bool {
     return true
 }
 
+// MARK: - Typed Notification Names
+
+extension Notification.Name {
+    /// Posted when the active presentation surface becomes visible to the user.
+    static let miloSurfaceDidOpen = Notification.Name("MiloSurfaceDidOpen")
+    /// Posted when the active presentation surface is hidden or torn down.
+    static let miloSurfaceDidClose = Notification.Name("MiloSurfaceDidClose")
+    /// Posted when the active surface regains focus and cheap state should be refreshed.
+    static let miloSurfaceDidActivate = Notification.Name("MiloSurfaceDidActivate")
+    /// Posted when the user asks for Settings from the menu bar or a keyboard shortcut.
+    static let miloOpenSettings = Notification.Name("MiloOpenSettings")
+    /// Posted when the menu bar badge needs the current detected-process count.
+    static let miloRequestCurrentBloatCount = Notification.Name("MiloRequestCurrentBloatCount")
+    /// Posted with the current detected-process count as the notification object.
+    static let miloBloatCountChanged = Notification.Name("MiloBloatCountChanged")
+    /// Posted with the new badge preference as the notification object.
+    static let miloBadgeSettingChanged = Notification.Name("MiloBadgeSettingChanged")
+    /// Posted when locally cached signature rules changed and a rescan is warranted.
+    static let miloCloudSignaturesChanged = Notification.Name("MiloCloudSignaturesChanged")
+}
+
+// MARK: - Defaults Keys
+
+enum MiloDefaultsKey {
+    static let viewMode = "Milo.viewMode"
+    static let appearance = "Milo.appAppearance"
+    static let quitBehavior = "Milo.quitBehavior"
+    static let windowCloseBehavior = "Milo.windowCloseBehavior"
+}
+
+/// What the dedicated window's close button does. Milo is an `LSUIElement` agent, so hiding to
+/// the menu bar is the default, but closing a window to quit is an equally valid expectation.
+enum MiloWindowCloseBehavior: String, CaseIterable {
+    case hide
+    case quit
+
+    static var current: MiloWindowCloseBehavior {
+        MiloWindowCloseBehavior(
+            rawValue: UserDefaults.standard.string(forKey: MiloDefaultsKey.windowCloseBehavior) ?? ""
+        ) ?? .hide
+    }
+}
+
+// MARK: - Presentation Surface
+
+/// Milo presents its UI through exactly one surface at a time.
+///
+/// This is an invariant, not a preference. Both `ContentView` and `DedicatedWindowView`
+/// bind alert presentation to the same `AppState` flags, so two live SwiftUI hosts would
+/// each try to present the same confirmation — forcing the inactive host's window on
+/// screen at an unpositioned frame. Only the active surface may own a hosting controller.
+private enum MiloSurface: String {
+    case menuBar
+    case dedicatedWindow
+
+    init(defaultsValue: String?) {
+        self = MiloSurface(rawValue: defaultsValue ?? "") ?? .menuBar
+    }
+}
+
 // MARK: - Floating Panel (borderless — no arrow, no titlebar gap)
 
 final class StatusBarPanel: NSPanel {
+    /// Matches the corner radius macOS uses for menu bar popovers.
+    private static let cornerRadius: CGFloat = 16
+
     override var canBecomeKey: Bool { true }
 
     init(contentRect: NSRect) {
@@ -38,31 +101,55 @@ final class StatusBarPanel: NSPanel {
         )
         isMovableByWindowBackground = false
         isFloatingPanel = true
+        isReleasedWhenClosed = false
         level = .statusBar
         hasShadow = true
         isOpaque = false
         backgroundColor = .clear
         animationBehavior = .utilityWindow
+        applyCornerMask()
+    }
 
-        contentView?.wantsLayer = true
-        contentView?.layer?.cornerRadius = 12
-        contentView?.layer?.masksToBounds = true
+    /// Rounds the current content view.
+    ///
+    /// Assigning `contentViewController` replaces `contentView` outright, so a radius applied
+    /// in `init` is discarded and the panel renders with square corners. This must be re-applied
+    /// every time the hosted content changes.
+    override var contentViewController: NSViewController? {
+        didSet {
+            applyCornerMask()
+        }
+    }
+
+    private func applyCornerMask() {
+        guard let contentView else { return }
+        contentView.wantsLayer = true
+        contentView.layer?.cornerRadius = Self.cornerRadius
+        contentView.layer?.cornerCurve = .continuous
+        contentView.layer?.masksToBounds = true
     }
 }
 
-// MARK: - Window Delegate (intercept close button)
+// MARK: - Window Delegate
 
-class MiloWindowDelegate: NSObject, NSWindowDelegate {
+/// Closing the dedicated window hides Milo back to the menu bar rather than quitting.
+/// Milo is an `LSUIElement` agent; the status item remains the way back in.
+final class MiloWindowDelegate: NSObject, NSWindowDelegate {
     weak var appDelegate: MenuBarAppDelegate?
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard let appDelegate = appDelegate else { return true }
-        appDelegate.showQuitConfirmation(from: sender)
+        switch MiloWindowCloseBehavior.current {
+        case .hide:
+            appDelegate.hideDedicatedWindow()
+        case .quit:
+            NSApplication.shared.terminate(nil)
+        }
         return false
     }
 
-    func windowWillClose(_ notification: Notification) {
-        // No-op — windowShouldClose handles everything
+    func windowDidBecomeKey(_ notification: Notification) {
+        NotificationCenter.default.post(name: .miloSurfaceDidActivate, object: nil)
     }
 }
 
@@ -70,35 +157,45 @@ class MiloWindowDelegate: NSObject, NSWindowDelegate {
 
 @MainActor
 final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
+    private enum QuitDecision {
+        case quit
+        case runInBackground
+        case cancel
+    }
+
     private var statusItem: NSStatusItem?
-    private let panel: StatusBarPanel
-    var dedicatedWindow: NSWindow?
+    private var panel: StatusBarPanel?
+    private(set) var dedicatedWindow: NSWindow?
     let appState: AppState
     let updateManager: MiloUpdateManager
     private let windowDelegate = MiloWindowDelegate()
 
     private var appearanceObserver: Any?
     private var bloatCountObserver: Any?
+    private var badgeSettingObserver: Any?
     private var globalEventMonitor: Any?
     private var defaultsObserver: Any?
 
-    private let panelWidth: CGFloat = 360
-    private let panelHeight: CGFloat = 520
+    /// The surface that is currently constructed. Guarantees the single-surface invariant.
+    private var activeSurface: MiloSurface?
+    /// Last appearance actually applied, so unrelated defaults writes do not churn windows.
+    private var appliedAppearance: String?
 
-    private var currentViewMode: String {
-        UserDefaults.standard.string(forKey: "Milo.viewMode") ?? "menuBar"
+    private let panelWidth = MiloPanelMetrics.width
+    private let panelHeight = MiloPanelMetrics.height
+
+    private var preferredSurface: MiloSurface {
+        MiloSurface(defaultsValue: UserDefaults.standard.string(forKey: MiloDefaultsKey.viewMode))
+    }
+
+    private var preferredAppearance: String {
+        UserDefaults.standard.string(forKey: MiloDefaultsKey.appearance) ?? "Auto"
     }
 
     override init() {
-        let appState = AppState()
-        let updateManager = MiloUpdateManager(licenseManager: LicenseManager.shared)
-        self.appState = appState
-        self.updateManager = updateManager
-        self.panel = StatusBarPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 520))
+        self.appState = AppState()
+        self.updateManager = MiloUpdateManager(licenseManager: LicenseManager.shared)
         super.init()
-        panel.contentViewController = NSHostingController(
-            rootView: ContentView(appState: appState, updateManager: updateManager)
-        )
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -107,23 +204,49 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
         windowDelegate.appDelegate = self
         buildMainMenu()
 
-        applyAppearance()
+        appliedAppearance = preferredAppearance
 
-        // Status item
+        installStatusItem()
+        installObservers()
+
+        // Build the surface the user last selected. The menu bar panel stays hidden until
+        // the user asks for it, unless onboarding needs to present the first-launch prompt.
+        let surface = preferredSurface
+        switch surface {
+        case .dedicatedWindow:
+            showSurface(surface)
+        case .menuBar:
+            if appState.showingFirstLaunchPrivilegePrompt {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                    self?.showSurface(.menuBar)
+                }
+            }
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        removeGlobalEventMonitor()
+    }
+
+    // MARK: - Status Item
+
+    private func installStatusItem() {
         let createdStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.statusItem = createdStatusItem
-        if let button = createdStatusItem.button {
-            if let image = NSImage(named: "MenuBarIcon") {
-                image.size = NSSize(width: 18, height: 18)
-                image.isTemplate = true
-                button.image = image
-            }
-            button.title = ""
-            button.action = #selector(handleStatusItemClick(_:))
-            button.target = self
+        guard let button = createdStatusItem.button else { return }
+        if let image = NSImage(named: "MenuBarIcon") {
+            image.size = NSSize(width: 18, height: 18)
+            image.isTemplate = true
+            button.image = image
         }
+        button.title = ""
+        button.action = #selector(handleStatusItemClick(_:))
+        button.target = self
+    }
 
-        // App icon sync
+    // MARK: - Observers
+
+    private func installObservers() {
         IconManager.applyAppIcon(for: NSApplication.shared.effectiveAppearance)
         appearanceObserver = DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
@@ -135,9 +258,8 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Badge observer
         bloatCountObserver = NotificationCenter.default.addObserver(
-            forName: Notification.Name("MiloBloatCountChanged"),
+            forName: .miloBloatCountChanged,
             object: nil,
             queue: .main
         ) { [weak self] notification in
@@ -146,46 +268,37 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
                 if SettingsManager.shared.showBadgeCount {
                     self?.updateBadge(count: count)
                 } else {
-                    self?.statusItem?.button?.attributedTitle = NSAttributedString(string: "")
-                    self?.statusItem?.button?.title = ""
+                    self?.clearBadge()
                 }
             }
         }
 
-        NotificationCenter.default.addObserver(
-            forName: Notification.Name("MiloBadgeSettingChanged"),
+        badgeSettingObserver = NotificationCenter.default.addObserver(
+            forName: .miloBadgeSettingChanged,
             object: nil,
             queue: .main
         ) { [weak self] notification in
             guard let enabled = notification.object as? Bool else { return }
             Task { @MainActor [weak self] in
                 if enabled {
-                    NotificationCenter.default.post(name: .init("MiloRequestCurrentBloatCount"), object: nil)
+                    NotificationCenter.default.post(name: .miloRequestCurrentBloatCount, object: nil)
                 } else {
-                    self?.statusItem?.button?.attributedTitle = NSAttributedString(string: "")
-                    self?.statusItem?.button?.title = ""
+                    self?.clearBadge()
                 }
             }
         }
 
-        // Defaults observer — appearance + view mode
+        // `UserDefaults.didChangeNotification` fires for every write in the app domain —
+        // window frame autosaves, status item positions, and unrelated preferences included.
+        // Only act when a value we actually own has changed.
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.applyAppearance()
-                self?.syncViewMode()
-            }
-        }
-
-        // Initial view mode
-        if currentViewMode == "dedicatedWindow" {
-            openDedicatedWindow()
-        } else if appState.showingFirstLaunchPrivilegePrompt {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-                self?.showPanel()
+                self?.applyAppearanceIfChanged()
+                self?.applySurfaceIfChanged()
             }
         }
     }
@@ -193,23 +306,30 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Quit Confirmation
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let quitBehavior = UserDefaults.standard.string(forKey: "Milo.quitBehavior") ?? "ask"
-
-        if quitBehavior == "quit" {
+        switch UserDefaults.standard.string(forKey: MiloDefaultsKey.quitBehavior) {
+        case "quit":
             return .terminateNow
-        }
-
-        if quitBehavior == "background" {
-            hideToBackground()
+        case "background":
+            hideActiveSurface()
             return .terminateCancel
+        default:
+            switch runQuitConfirmation() {
+            case .quit:
+                return .terminateNow
+            case .runInBackground:
+                hideActiveSurface()
+                return .terminateCancel
+            case .cancel:
+                return .terminateCancel
+            }
         }
-
-        // Show confirmation dialog
-        showQuitConfirmation(from: nil)
-        return .terminateCancel
     }
 
-    func showQuitConfirmation(from window: NSWindow?) {
+    /// Runs the quit confirmation synchronously so the decision can be returned directly to
+    /// `applicationShouldTerminate`. An asynchronous sheet cannot be used here: once
+    /// `.terminateCancel` is returned, `reply(toApplicationShouldTerminate:)` is a no-op and
+    /// the user's "Quit" choice would be silently discarded.
+    private func runQuitConfirmation() -> QuitDecision {
         let alert = NSAlert()
         alert.messageText = "Quit Milo?"
 
@@ -218,192 +338,265 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
         let cpuUsed = String(format: "%.1f%%", appState.totalCPUUsage)
 
         if bloatCount > 0 {
-            alert.informativeText = "Milo is monitoring \(bloatCount) background processes consuming \(ramUsed) RAM and \(cpuUsed) CPU.\n\nKeep Milo running in the menu bar to continue protecting your system."
+            alert.informativeText = """
+                Milo is monitoring \(bloatCount) background processes consuming \(ramUsed) RAM and \(cpuUsed) CPU.
+
+                Keep Milo running in the menu bar to continue monitoring your system.
+                """
         } else {
-            alert.informativeText = "Milo will stop monitoring your system for bloatware and telemetry.\n\nYou can keep it running silently in the menu bar."
+            alert.informativeText = """
+                Milo will stop monitoring your system for background processes and telemetry.
+
+                You can keep it running silently in the menu bar.
+                """
         }
 
         alert.addButton(withTitle: "Run in Background")
         alert.addButton(withTitle: "Quit")
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
-
         alert.showsSuppressionButton = true
         alert.suppressionButton?.title = "Remember my choice"
 
-        let response: NSApplication.ModalResponse
-        if let window = window {
-            alert.beginSheetModal(for: window) { [weak self] modalResponse in
-                self?.handleQuitResponse(modalResponse, suppressionState: alert.suppressionButton?.state ?? .off)
-            }
-            return
-        } else {
-            response = alert.runModal()
+        // The status bar panel floats above normal modal levels; raise the alert above it so
+        // the dialog can never be hidden behind the surface that triggered it.
+        if let panel = panel, panel.isVisible {
+            alert.window.level = NSWindow.Level(rawValue: panel.level.rawValue + 1)
         }
 
-        handleQuitResponse(response, suppressionState: alert.suppressionButton?.state ?? .off)
-    }
+        let response = alert.runModal()
+        let remember = alert.suppressionButton?.state == .on
 
-    private func handleQuitResponse(_ response: NSApplication.ModalResponse, suppressionState: NSControl.StateValue) {
         switch response {
         case .alertFirstButtonReturn:
-            // Run in Background
-            if suppressionState == .on {
-                UserDefaults.standard.set("background", forKey: "Milo.quitBehavior")
+            if remember {
+                UserDefaults.standard.set("background", forKey: MiloDefaultsKey.quitBehavior)
             }
-            hideToBackground()
+            return .runInBackground
         case .alertSecondButtonReturn:
-            // Quit
-            if suppressionState == .on {
-                UserDefaults.standard.set("quit", forKey: "Milo.quitBehavior")
+            if remember {
+                UserDefaults.standard.set("quit", forKey: MiloDefaultsKey.quitBehavior)
             }
-            NSApplication.shared.reply(toApplicationShouldTerminate: true)
+            return .quit
         default:
-            break
+            return .cancel
         }
-    }
-
-    private func hideToBackground() {
-        closePanel()
-        closeDedicatedWindow()
     }
 
     // MARK: - Appearance
 
-    private func applyAppearance() {
-        let mode = UserDefaults.standard.string(forKey: "Milo.appAppearance") ?? "Auto"
-        let appearance: NSAppearance?
+    private func applyAppearanceIfChanged() {
+        let mode = preferredAppearance
+        guard mode != appliedAppearance else { return }
+        appliedAppearance = mode
+        let appearance = resolvedAppearance(for: mode)
+        panel?.appearance = appearance
+        dedicatedWindow?.appearance = appearance
+    }
+
+    private func resolvedAppearance(for mode: String) -> NSAppearance? {
         switch mode {
         case "Light":
-            appearance = NSAppearance(named: .aqua)
+            return NSAppearance(named: .aqua)
         case "Dark":
-            appearance = NSAppearance(named: .darkAqua)
+            return NSAppearance(named: .darkAqua)
         default:
-            appearance = nil
+            return nil
         }
-        panel.appearance = appearance
-        dedicatedWindow?.appearance = appearance
     }
 
     // MARK: - Badge
 
     private func updateBadge(count: Int) {
         guard let button = self.statusItem?.button else { return }
-        if count > 0 {
-            let attributed = NSMutableAttributedString(string: "")
-            let badge = NSAttributedString(
-                string: " \(count)",
-                attributes: [
-                    .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
-                    .foregroundColor: NSColor.systemRed
-                ]
-            )
-            attributed.append(badge)
-            button.attributedTitle = attributed
-        } else {
+        guard count > 0 else {
             button.attributedTitle = NSAttributedString(string: "")
+            return
         }
+        let badge = NSAttributedString(
+            string: " \(count)",
+            attributes: [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+                .foregroundColor: NSColor.systemRed
+            ]
+        )
+        button.attributedTitle = badge
+    }
+
+    private func clearBadge() {
+        guard let button = statusItem?.button else { return }
+        button.attributedTitle = NSAttributedString(string: "")
+        button.title = ""
     }
 
     // MARK: - Status Item Click
 
     @objc func handleStatusItemClick(_ sender: AnyObject?) {
-        if currentViewMode == "dedicatedWindow" {
-            // Toggle dedicated window visibility
-            if let window = dedicatedWindow, window.isVisible {
-                window.orderOut(nil)
-            } else {
-                openDedicatedWindow()
-            }
+        let surface = preferredSurface
+        if isSurfaceVisible(surface) {
+            hideActiveSurface()
         } else {
-            // Toggle menu bar panel
-            if panel.isVisible {
-                closePanel()
-            } else {
-                showPanel()
-            }
+            showSurface(surface)
         }
     }
 
-    // MARK: - View Mode Switching
+    // MARK: - Surface State Machine
 
-    private func syncViewMode() {
-        let mode = currentViewMode
-        if mode == "dedicatedWindow" {
-            if dedicatedWindow == nil {
-                closePanel()
-                openDedicatedWindow()
-            }
-        } else {
-            // Switching from Window → Menu Bar: close window and immediately show panel
-            if dedicatedWindow != nil {
-                closeDedicatedWindow()
-                showPanel()
-            }
+    private func isSurfaceVisible(_ surface: MiloSurface) -> Bool {
+        guard activeSurface == surface else { return false }
+        switch surface {
+        case .menuBar:
+            return panel?.isVisible == true
+        case .dedicatedWindow:
+            return dedicatedWindow?.isVisible == true
+        }
+    }
+
+    /// Reacts to an actual view-mode change only. Called from the defaults observer, which
+    /// fires far more often than the preference itself changes.
+    private func applySurfaceIfChanged() {
+        let desired = preferredSurface
+        guard let current = activeSurface, current != desired else { return }
+        let wasVisible = isSurfaceVisible(current)
+        tearDownSurface(current)
+        guard wasVisible else { return }
+        showSurface(desired)
+        // The view mode can only be changed from Settings, so land the user back there
+        // instead of dropping them on the home screen of the new surface.
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .miloOpenSettings, object: nil)
+        }
+    }
+
+    private func showSurface(_ surface: MiloSurface) {
+        if let current = activeSurface, current != surface {
+            tearDownSurface(current)
+        }
+        // Each show path claims `activeSurface` only once it has a window on screen, so a
+        // surface that cannot be presented never leaves the state machine claiming it is.
+        switch surface {
+        case .menuBar:
+            showPanel()
+        case .dedicatedWindow:
+            showDedicatedWindow()
+        }
+    }
+
+    private func hideActiveSurface() {
+        guard let surface = activeSurface else { return }
+        switch surface {
+        case .menuBar:
+            hidePanel()
+        case .dedicatedWindow:
+            hideDedicatedWindow()
+        }
+    }
+
+    /// Releases a surface's SwiftUI hosting controller. Releasing the host is what enforces the
+    /// single-surface invariant: a window with no host cannot present an alert bound to shared
+    /// `AppState`, so it can never be forced on screen behind the user's back.
+    ///
+    /// The `NSWindow` itself is retained and reused. Closing and re-creating it would discard
+    /// the autosaved frame and invite the classic `isReleasedWhenClosed` over-release hazard
+    /// for a window still referenced from a Swift property.
+    private func tearDownSurface(_ surface: MiloSurface) {
+        switch surface {
+        case .menuBar:
+            hidePanel()
+            panel?.contentViewController = nil
+        case .dedicatedWindow:
+            hideDedicatedWindow()
+            dedicatedWindow?.contentViewController = nil
+        }
+        if activeSurface == surface {
+            activeSurface = nil
         }
     }
 
     // MARK: - Menu Bar Panel
 
+    private func makePanel() -> StatusBarPanel {
+        let created = StatusBarPanel(
+            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
+        )
+        created.appearance = resolvedAppearance(for: preferredAppearance)
+        return created
+    }
+
     private func showPanel() {
         guard let button = statusItem?.button,
               let buttonWindow = button.window else { return }
 
+        let panel = self.panel ?? makePanel()
+        self.panel = panel
+        if panel.contentViewController == nil {
+            panel.contentViewController = NSHostingController(
+                rootView: ContentView(appState: appState, updateManager: updateManager)
+            )
+        }
+
         let buttonRect = button.convert(button.bounds, to: nil)
         let screenRect = buttonWindow.convertToScreen(buttonRect)
 
-        let xOrigin = screenRect.midX - panelWidth / 2
-        let yOrigin = screenRect.minY - panelHeight - 4
-
-        var finalX = xOrigin
-        if let screen = NSScreen.main {
+        var origin = CGPoint(
+            x: screenRect.midX - panelWidth / 2,
+            y: screenRect.minY - panelHeight - 4
+        )
+        if let screen = buttonWindow.screen ?? NSScreen.main {
             let visibleFrame = screen.visibleFrame
-            finalX = max(visibleFrame.minX + 8, min(finalX, visibleFrame.maxX - panelWidth - 8))
+            origin.x = max(visibleFrame.minX + 8, min(origin.x, visibleFrame.maxX - panelWidth - 8))
+            origin.y = max(visibleFrame.minY + 8, origin.y)
         }
 
-        panel.setFrame(NSRect(x: finalX, y: yOrigin, width: panelWidth, height: panelHeight), display: true)
+        panel.setFrame(
+            NSRect(x: origin.x, y: origin.y, width: panelWidth, height: panelHeight),
+            display: true
+        )
         panel.makeKeyAndOrderFront(nil)
-
-        if #available(macOS 14.0, *) {
-            NSApplication.shared.activate()
-        } else {
-            NSApplication.shared.activate(ignoringOtherApps: true)
-        }
+        activateApp()
 
         statusItem?.button?.isHighlighted = true
-        NotificationCenter.default.post(name: Notification.Name("MiloPopoverWillOpen"), object: nil)
+        activeSurface = .menuBar
+        postSurfaceDidOpen()
+        installGlobalEventMonitor()
+    }
 
-        globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            self?.closePanel()
+    private func hidePanel() {
+        removeGlobalEventMonitor()
+        statusItem?.button?.isHighlighted = false
+        guard let panel = panel, panel.isVisible else { return }
+        panel.orderOut(nil)
+        NotificationCenter.default.post(name: .miloSurfaceDidClose, object: nil)
+    }
+
+    private func installGlobalEventMonitor() {
+        removeGlobalEventMonitor()
+        globalEventMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.dismissPanelForOutsideClick()
+            }
         }
     }
 
-    private func closePanel() {
-        guard panel.isVisible else { return }
-        panel.orderOut(nil)
-        statusItem?.button?.isHighlighted = false
-        NotificationCenter.default.post(name: Notification.Name("MiloPopoverDidClose"), object: nil)
+    private func removeGlobalEventMonitor() {
+        guard let monitor = globalEventMonitor else { return }
+        NSEvent.removeMonitor(monitor)
+        globalEventMonitor = nil
+    }
 
-        if let monitor = globalEventMonitor {
-            NSEvent.removeMonitor(monitor)
-            globalEventMonitor = nil
-        }
+    /// A click outside Milo dismisses the panel, except while the panel owns a modal
+    /// presentation. Dismissing then would orphan a confirmation the user must still answer.
+    private func dismissPanelForOutsideClick() {
+        guard let panel = panel, panel.isVisible else { return }
+        guard panel.attachedSheet == nil, NSApplication.shared.modalWindow == nil else { return }
+        hidePanel()
     }
 
     // MARK: - Dedicated Window
 
-    private func openDedicatedWindow() {
-        guard dedicatedWindow == nil else {
-            dedicatedWindow?.makeKeyAndOrderFront(nil)
-            if #available(macOS 14.0, *) {
-                NSApplication.shared.activate()
-            } else {
-                NSApplication.shared.activate(ignoringOtherApps: true)
-            }
-            return
-        }
-
-        let windowView = DedicatedWindowView(appState: appState, updateManager: updateManager)
+    private func makeDedicatedWindow() -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 560),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -414,36 +607,49 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.toolbarStyle = .unifiedCompact
-        window.contentViewController = NSHostingController(rootView: windowView)
+        window.isReleasedWhenClosed = false
         window.center()
         window.setFrameAutosaveName("MiloDedicatedWindow")
         window.delegate = windowDelegate
+        window.appearance = resolvedAppearance(for: preferredAppearance)
+        return window
+    }
 
-        // Apply appearance
-        let mode = UserDefaults.standard.string(forKey: "Milo.appAppearance") ?? "Auto"
-        switch mode {
-        case "Light":
-            window.appearance = NSAppearance(named: .aqua)
-        case "Dark":
-            window.appearance = NSAppearance(named: .darkAqua)
-        default:
-            window.appearance = nil
+    private func showDedicatedWindow() {
+        let window = dedicatedWindow ?? makeDedicatedWindow()
+        dedicatedWindow = window
+        if window.contentViewController == nil {
+            window.contentViewController = NSHostingController(
+                rootView: DedicatedWindowView(appState: appState, updateManager: updateManager)
+            )
         }
-
         window.makeKeyAndOrderFront(nil)
+        activateApp()
+        activeSurface = .dedicatedWindow
+        postSurfaceDidOpen()
+    }
+
+    /// Hides the dedicated window without destroying it, preserving its frame and tab state.
+    func hideDedicatedWindow() {
+        guard let window = dedicatedWindow, window.isVisible else { return }
+        window.orderOut(nil)
+        NotificationCenter.default.post(name: .miloSurfaceDidClose, object: nil)
+    }
+
+    private func postSurfaceDidOpen() {
+        // Posted on the next runloop pass so a freshly created SwiftUI host has installed its
+        // `onReceive` subscriptions before the notification is delivered.
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .miloSurfaceDidOpen, object: nil)
+        }
+    }
+
+    private func activateApp() {
         if #available(macOS 14.0, *) {
             NSApplication.shared.activate()
         } else {
             NSApplication.shared.activate(ignoringOtherApps: true)
         }
-
-        self.dedicatedWindow = window
-        NotificationCenter.default.post(name: Notification.Name("MiloPopoverWillOpen"), object: nil)
-    }
-
-    private func closeDedicatedWindow() {
-        dedicatedWindow?.orderOut(nil)
-        dedicatedWindow = nil
     }
 
     // MARK: - Main Menu
@@ -453,16 +659,43 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
 
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu(title: "Milo")
-        appMenu.addItem(withTitle: "About Milo", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(
+            withTitle: "About Milo",
+            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: ""
+        )
         if !MiloBuildMode.isDevelopmentPreview {
             appMenu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
         }
         appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Show Milo", action: #selector(showMilo), keyEquivalent: "0")
         appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Milo", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
+
+        // Actions live in a real menu rather than hidden zero-opacity buttons. NSMenu owns the
+        // key equivalents, so they fire reliably in both presentation modes, and the menu is
+        // the only place a user can discover that these shortcuts exist at all.
+        let actionsMenuItem = NSMenuItem()
+        let actionsMenu = NSMenu(title: "Actions")
+        addActionItem(to: actionsMenu, title: "Rescan Now", action: #selector(rescanNow), key: "r", modifiers: [.command])
+        actionsMenu.addItem(.separator())
+        addActionItem(
+            to: actionsMenu,
+            title: "Select All Detected",
+            action: #selector(selectAllDetected),
+            key: "a",
+            // Deliberately not plain ⌘A: that belongs to the field editor for text selection.
+            modifiers: [.command, .shift]
+        )
+        addActionItem(to: actionsMenu, title: "Deselect All", action: #selector(deselectAll), key: "d", modifiers: [.command, .shift])
+        actionsMenu.addItem(.separator())
+        addActionItem(to: actionsMenu, title: "Kill Selected", action: #selector(killSelected), key: "k", modifiers: [.command])
+        addActionItem(to: actionsMenu, title: "Kill All Detected", action: #selector(killAllDetected), key: "k", modifiers: [.command, .shift])
+        actionsMenuItem.submenu = actionsMenu
+        mainMenu.addItem(actionsMenuItem)
 
         let editMenuItem = NSMenuItem()
         let editMenu = NSMenu(title: "Edit")
@@ -476,16 +709,49 @@ final class MenuBarAppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.mainMenu = mainMenu
     }
 
+    private func addActionItem(
+        to menu: NSMenu,
+        title: String,
+        action: Selector,
+        key: String,
+        modifiers: NSEvent.ModifierFlags
+    ) {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+        item.keyEquivalentModifierMask = modifiers
+        item.target = self
+        menu.addItem(item)
+    }
+
+    @objc private func rescanNow() {
+        appState.scanProcesses()
+        appState.refreshMemoryStats()
+    }
+
+    @objc private func selectAllDetected() {
+        appState.selectAll(true)
+    }
+
+    @objc private func deselectAll() {
+        appState.selectAll(false)
+    }
+
+    @objc private func killSelected() {
+        appState.requestKill()
+    }
+
+    @objc private func killAllDetected() {
+        appState.killAllDetected()
+    }
+
+    @objc func showMilo() {
+        showSurface(preferredSurface)
+    }
+
     @objc func openSettings() {
-        NotificationCenter.default.post(name: Notification.Name("MiloOpenSettings"), object: nil)
-        if currentViewMode == "dedicatedWindow" {
-            if let window = dedicatedWindow {
-                window.makeKeyAndOrderFront(nil)
-            } else {
-                openDedicatedWindow()
-            }
-        } else if !panel.isVisible {
-            showPanel()
+        showSurface(preferredSurface)
+        // Posted after the surface is on screen so a newly created host receives it.
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .miloOpenSettings, object: nil)
         }
     }
 

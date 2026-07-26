@@ -18,6 +18,7 @@ struct SettingsView: View {
     @AppStorage("Milo.appThemeColor") var appThemeColor: String = "System"
     @AppStorage("Milo.liquidGlass") var liquidGlass: String = "Auto"
     @AppStorage("Milo.viewMode") var viewMode: String = "menuBar"
+    @AppStorage(MiloDefaultsKey.windowCloseBehavior) var windowCloseBehavior: String = MiloWindowCloseBehavior.hide.rawValue
 
     private let scanIntervalOptions = [0, 60, 120, 300, 600]
 
@@ -41,6 +42,7 @@ struct SettingsView: View {
                         automationSection
                         scanSection
                         uiSection
+                        shortcutsSection
                         privilegesSection
                         aboutSection
                     }
@@ -48,7 +50,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .frame(width: isEmbedded ? nil : 360, height: isEmbedded ? nil : 520)
+        .frame(width: isEmbedded ? nil : MiloPanelMetrics.width, height: isEmbedded ? nil : MiloPanelMetrics.height)
         .onAppear {
             refreshState()
             appState.refreshHelperStatus()
@@ -92,8 +94,73 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if viewMode == "dedicatedWindow" {
+                Divider()
+
+                HStack {
+                    Text("Closing the window")
+                    Spacer()
+                    Picker("", selection: $windowCloseBehavior) {
+                        Text("Hides Milo").tag(MiloWindowCloseBehavior.hide.rawValue)
+                        Text("Quits Milo").tag(MiloWindowCloseBehavior.quit.rawValue)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
+                }
+
+                Text(windowCloseBehavior == MiloWindowCloseBehavior.quit.rawValue
+                     ? "The red close button quits Milo entirely."
+                     : "The red close button leaves Milo running in the menu bar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
+
+    // MARK: - Keyboard Shortcuts
+
+    private var shortcutsSection: some View {
+        GlassCard {
+            Label("Keyboard Shortcuts", systemImage: "command")
+                .font(.headline)
+
+            ForEach(Self.shortcutReference, id: \.action) { entry in
+                HStack {
+                    Text(entry.action)
+                        .font(.subheadline)
+                    Spacer()
+                    Text(entry.keys)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(.quaternary.opacity(0.5))
+                        )
+                }
+            }
+
+            Text("All of these are also listed in the Actions menu in the menu bar.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Mirrors the Actions menu built in `MenuBarAppDelegate`.
+    private static let shortcutReference: [(action: String, keys: String)] = [
+        ("Rescan now", "⌘R"),
+        ("Select all detected", "⇧⌘A"),
+        ("Deselect all", "⇧⌘D"),
+        ("Kill selected", "⌘K"),
+        ("Kill all detected", "⇧⌘K"),
+        ("Settings", "⌘,"),
+        ("Show Milo", "⌘0"),
+        ("Quit Milo", "⌘Q")
+    ]
 
     // MARK: - General
 

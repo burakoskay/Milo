@@ -365,11 +365,11 @@ enum SelfTestRunner {
     private static func testPopoverScanBehavior(using appState: AppState) -> [SelfTestResult] {
         var results: [SelfTestResult] = []
 
-        appState.handlePopoverClosed()
+        appState.handleSurfaceClosed()
         SettingsManager.shared.autoScanOnOpen = false
         SettingsManager.shared.autoScanInterval = 0
         appState.lastScanDate = nil
-        appState.handlePopoverOpened()
+        appState.handleSurfaceOpened()
         let stayedIdle = waitUntil(timeout: 1.5) { appState.lastScanDate == nil }
 
         results.append(
@@ -378,11 +378,11 @@ enum SelfTestRunner {
             : SelfTestResult(name: "Scan on Open disabled", status: .fail, detail: "Opening the popover still triggered a scan when the setting was off")
         )
 
-        appState.handlePopoverClosed()
+        appState.handleSurfaceClosed()
         SettingsManager.shared.autoScanOnOpen = true
         SettingsManager.shared.autoScanInterval = 0
         appState.lastScanDate = nil
-        appState.handlePopoverOpened()
+        appState.handleSurfaceOpened()
         let scannedOnOpen = waitUntil(timeout: 8) { appState.lastScanDate != nil && !appState.isScanning }
 
         results.append(
@@ -391,12 +391,12 @@ enum SelfTestRunner {
             : SelfTestResult(name: "Scan on Open enabled", status: .fail, detail: "Opening the popover did not trigger a scan when the setting was on")
         )
 
-        appState.handlePopoverClosed()
+        appState.handleSurfaceClosed()
         SettingsManager.shared.autoScanOnOpen = false
         SettingsManager.shared.autoScanInterval = 1
         appState.lastScanDate = Date(timeIntervalSince1970: 1)
         let baseline = appState.lastScanDate ?? Date(timeIntervalSince1970: 1)
-        appState.handlePopoverOpened()
+        appState.handleSurfaceOpened()
         let rescannedWhileOpen = waitUntil(timeout: 4) { (appState.lastScanDate ?? baseline) > baseline && !appState.isScanning }
 
         let openResult = rescannedWhileOpen
@@ -404,7 +404,7 @@ enum SelfTestRunner {
             : SelfTestResult(name: "Auto-rescan while open", status: .fail, detail: "The timer did not refresh the scan while the popover was open")
         results.append(openResult)
 
-        appState.handlePopoverClosed()
+        appState.handleSurfaceClosed()
         let closedStamp = appState.lastScanDate ?? Date()
         let stayedStopped = waitUntil(timeout: 1.8) { (appState.lastScanDate ?? closedStamp) == closedStamp }
         results.append(
@@ -414,7 +414,7 @@ enum SelfTestRunner {
         )
 
         SettingsManager.shared.autoScanInterval = 0
-        appState.handlePopoverClosed()
+        appState.handleSurfaceClosed()
         return results
     }
 

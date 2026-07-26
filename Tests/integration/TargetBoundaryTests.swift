@@ -247,6 +247,103 @@ final class TargetBoundaryTests: XCTestCase {
         XCTAssertFalse(selfTestRunner.contains("Process()"))
     }
 
+    func testOnlyOnePresentationSurfaceCanOwnASwiftUIHost() throws {
+        let appDelegate = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/MenuBarAppDelegate.swift")
+        )
+
+        // Both root views bind alerts to the same AppState flags. Two live hosting controllers
+        // would each present the same confirmation, forcing the inactive surface's window on
+        // screen at an unpositioned frame. Tearing down the host is the only defence.
+        XCTAssertTrue(appDelegate.contains("private var activeSurface: MiloSurface?"))
+        XCTAssertTrue(appDelegate.contains("private func tearDownSurface(_ surface: MiloSurface)"))
+        XCTAssertTrue(appDelegate.contains("panel?.contentViewController = nil"))
+        XCTAssertTrue(appDelegate.contains("dedicatedWindow?.contentViewController = nil"))
+
+        // The hosting controllers must be built on demand, never eagerly in `init`, or the
+        // menu bar host would stay alive while the dedicated window is the active surface.
+        let initializer = try contents(
+            between: "override init() {",
+            and: "func applicationDidFinishLaunching",
+            in: appDelegate
+        )
+        XCTAssertFalse(initializer.contains("NSHostingController"))
+    }
+
+    func testViewModeChangesDoNotReactToUnrelatedDefaultsWrites() throws {
+        let appDelegate = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/MenuBarAppDelegate.swift")
+        )
+
+        // `UserDefaults.didChangeNotification` fires for window frame autosaves and status item
+        // positions too. Acting on it unconditionally resurrects surfaces the user dismissed.
+        XCTAssertTrue(appDelegate.contains("guard let current = activeSurface, current != desired else { return }"))
+        XCTAssertTrue(appDelegate.contains("guard mode != appliedAppearance else { return }"))
+    }
+
+    func testQuitConfirmationReturnsTheUsersDecisionToAppKit() throws {
+        let appDelegate = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/MenuBarAppDelegate.swift")
+        )
+
+        // Once applicationShouldTerminate returns .terminateCancel, a later deferred reply is
+        // a no-op and the user's "Quit" choice is silently discarded.
+        XCTAssertFalse(appDelegate.contains("reply(toApplicationShouldTerminate: "))
+        XCTAssertTrue(appDelegate.contains("private func runQuitConfirmation() -> QuitDecision"))
+        XCTAssertTrue(appDelegate.contains("case .quit:\n                return .terminateNow"))
+
+        // Closing the dedicated window hides Milo to the menu bar; it must not run the
+        // termination flow from a delegate callback that cannot report a decision.
+        XCTAssertTrue(appDelegate.contains("appDelegate.hideDedicatedWindow()"))
+    }
+
+    func testBothSurfacesHandleEverySharedNotification() throws {
+        let contentView = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/ContentView.swift")
+        )
+        let dedicatedView = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/DedicatedWindowView.swift")
+        )
+
+        for notification in [
+            ".miloOpenSettings",
+            ".miloSurfaceDidOpen",
+            ".miloSurfaceDidClose",
+            ".miloSurfaceDidActivate",
+            ".miloRequestCurrentBloatCount",
+            ".miloCloudSignaturesChanged"
+        ] {
+            XCTAssertTrue(
+                contentView.contains("publisher(for: \(notification))"),
+                "ContentView must handle \(notification)"
+            )
+            XCTAssertTrue(
+                dedicatedView.contains("publisher(for: \(notification))"),
+                "DedicatedWindowView must handle \(notification)"
+            )
+        }
+
+        // Stringly-typed names silently stop matching when one call site is renamed.
+        XCTAssertFalse(contentView.contains("Notification.Name(\""))
+        XCTAssertFalse(dedicatedView.contains("Notification.Name(\""))
+    }
+
+    func testPrimaryKillActionDoesNotDependOnMemoryStatistics() throws {
+        let dedicatedView = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/DedicatedWindowView.swift")
+        )
+
+        // `memoryCard` only renders once `memoryStats` resolves. The kill affordance must live
+        // outside it so a failed memory read cannot remove the window's primary action.
+        let memoryCard = try contents(
+            between: "private func memoryCard(memory: MemoryStats) -> some View {",
+            and: "// MARK: - Bottom Bar",
+            in: dedicatedView
+        )
+        XCTAssertFalse(memoryCard.contains("handleKillRequest()"))
+        XCTAssertTrue(dedicatedView.contains("private var bottomBar: some View"))
+    }
+
     private func readText(at url: URL) throws -> String {
         try String(contentsOf: url, encoding: .utf8)
     }

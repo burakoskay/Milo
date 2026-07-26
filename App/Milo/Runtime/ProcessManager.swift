@@ -26,7 +26,6 @@ final class ProcessManager: Sendable {
 
     private typealias PrivilegedCommand = (executable: String, arguments: [String])
     private struct MatchStats {
-        var cpu: Double = 0
         var mem: Double = 0
         var pids: Set<Int32> = []
         var identities: Set<ProcessIdentity> = []
@@ -147,6 +146,55 @@ final class ProcessManager: Sendable {
         return actual == expected ? .same : .changed
     }
 
+    // MARK: - Instantaneous CPU Sampling
+
+    /// Cumulative CPU time consumed by a process, in mach absolute units.
+    ///
+    /// Returns `nil` when the process has exited or its task cannot be inspected.
+    private func cumulativeCPUTicks(pid: Int32) -> UInt64? {
+        guard pid > 0 else { return nil }
+        var information = proc_taskinfo()
+        let informationSize = Int32(MemoryLayout<proc_taskinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &information, informationSize) == informationSize else {
+            return nil
+        }
+        return information.pti_total_user &+ information.pti_total_system
+    }
+
+    /// Measures CPU utilisation the way Activity Monitor does: by differentiating cumulative
+    /// CPU time across two observations.
+    ///
+    /// `ps -o %cpu` reports the average over the process's entire lifetime, so a daemon that
+    /// was briefly busy at login and has idled for hours reads as 0.0% forever — which is why
+    /// every row showed 0.0%. CPU time and wall-clock time are both taken in mach absolute
+    /// units, so the timebase cancels in the ratio and no conversion is needed.
+    private func sampleCPUPercentages(for pids: Set<Int32>, interval: TimeInterval = 0.3) -> [Int32: Double] {
+        guard !pids.isEmpty else { return [:] }
+
+        var firstCPU: [Int32: UInt64] = [:]
+        for pid in pids {
+            if let ticks = cumulativeCPUTicks(pid: pid) {
+                firstCPU[pid] = ticks
+            }
+        }
+        guard !firstCPU.isEmpty else { return [:] }
+
+        let firstWall = mach_absolute_time()
+        Thread.sleep(forTimeInterval: interval)
+        let secondWall = mach_absolute_time()
+        guard secondWall > firstWall else { return [:] }
+        let elapsed = Double(secondWall - firstWall)
+
+        var percentages: [Int32: Double] = [:]
+        for (pid, startTicks) in firstCPU {
+            // A process that exited mid-sample simply has no reading; it is not reported as idle.
+            guard let endTicks = cumulativeCPUTicks(pid: pid), endTicks >= startTicks else { continue }
+            let consumed = Double(endTicks - startTicks)
+            percentages[pid] = min(consumed / elapsed * 100.0, 100.0 * Double(ProcessInfo.processInfo.activeProcessorCount))
+        }
+        return percentages
+    }
+
     private func executableName(from path: String) -> String {
         let lastPathComponent = URL(fileURLWithPath: path).lastPathComponent
         return lastPathComponent.isEmpty ? path : lastPathComponent
@@ -243,6 +291,32 @@ final class ProcessManager: Sendable {
 
     func getLaunchdInfo(_ processName: String) -> LaunchdProcess? {
         return ProcessData.launchdManagedProcesses[processName.lowercased()]
+    }
+
+    /// Maps currently running PIDs to their launchd labels.
+    ///
+    /// The static catalogue in `ProcessData` only covers processes Milo ships a rule for, so a
+    /// launchd-managed agent outside it (SafariBookmarksSyncAgent, for one) was treated as an
+    /// ordinary process: Milo signalled it, launchd restarted it on demand, and the rescan
+    /// reported a plain failure. Asking launchd directly makes that relationship visible.
+    func launchdLabelsByPID() -> [Int32: String] {
+        let result = CommandRunner.run("/bin/launchctl", arguments: ["list"])
+        guard result.succeeded else {
+            MiloLog.warning(.launchdLabelResolutionFailed, category: .process, detail: "status=\(result.status)")
+            return [:]
+        }
+
+        var labels: [Int32: String] = [:]
+        for line in result.stdout.components(separatedBy: .newlines).dropFirst() {
+            // Format is "PID\tStatus\tLabel"; an unloaded job reports "-" for its PID.
+            let columns = line.split(separator: "\t", omittingEmptySubsequences: false)
+            guard columns.count >= 3,
+                  let pid = Int32(columns[0].trimmingCharacters(in: .whitespaces)) else { continue }
+            let label = columns[2].trimmingCharacters(in: .whitespaces)
+            guard !label.isEmpty else { continue }
+            labels[pid] = label
+        }
+        return labels
     }
 
     func requiresPrivilegedHelper(for item: ProcessItem) -> Bool {
@@ -464,7 +538,8 @@ final class ProcessManager: Sendable {
             guard parts.count >= 5 else { continue }
 
             guard let pid = Int32(String(parts[0])) else { continue }
-            let cpu = Double(parts[1]) ?? 0.0
+            // parts[1] is ps's lifetime-average %cpu. It is deliberately unused: instantaneous
+            // utilisation is measured below by differentiating cumulative task CPU time.
             let memKB = Double(parts[2]) ?? 0.0
             let memMB = memKB / 1024.0
             let executable = resolvedExecutablePath(pid: pid, fallback: String(parts[3]))
@@ -476,7 +551,6 @@ final class ProcessManager: Sendable {
                 case .bloat:
                     var existing = bloatMatches[detection.name]
                         ?? MatchStats(telemetryMatch: detection.telemetryMatch)
-                    existing.cpu += cpu
                     existing.mem += memMB
                     existing.pids.insert(pid)
                     existing.identities.insert(identity)
@@ -487,7 +561,6 @@ final class ProcessManager: Sendable {
                 case .intelligence:
                     var existing = intelMatches[detection.name]
                         ?? MatchStats(telemetryMatch: detection.telemetryMatch)
-                    existing.cpu += cpu
                     existing.mem += memMB
                     existing.pids.insert(pid)
                     existing.identities.insert(identity)
@@ -499,6 +572,19 @@ final class ProcessManager: Sendable {
             }
         }
 
+        // One sampling window covers every matched process, so scan cost does not grow with
+        // the number of detections.
+        let matchedPIDs = Set(bloatMatches.values.flatMap { $0.pids })
+            .union(intelMatches.values.flatMap { $0.pids })
+        let cpuByPID = sampleCPUPercentages(for: matchedPIDs)
+        let cpuFor: (Set<Int32>) -> Double = { pids in
+            pids.reduce(0.0) { $0 + (cpuByPID[$1] ?? 0.0) }
+        }
+        let launchdLabels = launchdLabelsByPID()
+        let isLaunchdBacked: (Set<Int32>) -> Bool = { pids in
+            pids.contains { launchdLabels[$0] != nil }
+        }
+
         let bloatItems = bloatMatches.map { name, stats in
             let launchdInfo = getLaunchdInfo(name)
             let telemetrySignature = stats.telemetryMatch?.signature
@@ -506,9 +592,9 @@ final class ProcessManager: Sendable {
                 name: name,
                 description: telemetrySignature.map { "\($0.vendor) · Signed telemetry rule" } ?? friendlyDescription(for: name),
                 vendor: telemetrySignature?.vendor ?? vendorFor(processName: name),
-                cpuUsage: stats.cpu,
+                cpuUsage: cpuFor(stats.pids),
                 memoryMB: stats.mem,
-                isLaunchdManaged: launchdInfo != nil || telemetrySignature?.launchdLabel != nil,
+                isLaunchdManaged: launchdInfo != nil || telemetrySignature?.launchdLabel != nil || isLaunchdBacked(stats.pids),
                 isSystemProcess: launchdInfo?.isSystem ?? telemetryRequiresSystemPrivilege(telemetrySignature),
                 matchedPIDs: stats.pids,
                 matchedIdentities: stats.identities,
@@ -526,9 +612,9 @@ final class ProcessManager: Sendable {
                 name: name,
                 description: telemetrySignature.map { "\($0.vendor) · Signed telemetry rule" } ?? friendlyDescription(for: name),
                 vendor: telemetrySignature?.vendor ?? vendorFor(processName: name),
-                cpuUsage: stats.cpu,
+                cpuUsage: cpuFor(stats.pids),
                 memoryMB: stats.mem,
-                isLaunchdManaged: launchdInfo != nil || telemetrySignature?.launchdLabel != nil,
+                isLaunchdManaged: launchdInfo != nil || telemetrySignature?.launchdLabel != nil || isLaunchdBacked(stats.pids),
                 isSystemProcess: launchdInfo?.isSystem ?? telemetryRequiresSystemPrivilege(telemetrySignature),
                 matchedPIDs: stats.pids,
                 matchedIdentities: stats.identities,
@@ -652,14 +738,25 @@ final class ProcessManager: Sendable {
             let (remainingBloat, remainingIntel) = scanForRunningTargets()
             let remaining = Set((remainingBloat + remainingIntel).map { $0.lowercased() })
 
+            // A launchd-managed agent that is running again after a successful signal was
+            // restarted on demand, not left untouched. Reporting that as a failure told the
+            // user the action did not work when the process really had been terminated.
+            let launchdBackedNames = Set(
+                launchdLabelsByPID().keys
+                    .compactMap { pid in regularProcesses.first { $0.matchedPIDs.contains(pid) }?.name.lowercased() }
+            )
             for result in regularPIDResults {
                 let stillRunning = remaining.contains(result.item.name.lowercased())
+                let respawned = result.success
+                    && stillRunning
+                    && (result.item.isLaunchdManaged || launchdBackedNames.contains(result.item.name.lowercased()))
                 results.append(
                     KillResult(
                         name: result.item.name,
-                        success: result.success && !stillRunning,
-                        isLaunchdManaged: false,
-                        requiresSIPDisabled: false
+                        success: result.success && (!stillRunning || respawned),
+                        isLaunchdManaged: result.item.isLaunchdManaged || respawned,
+                        requiresSIPDisabled: false,
+                        wasRespawned: respawned
                     )
                 )
             }

@@ -60,7 +60,7 @@ final class SettingsManager {
         set {
             defaults.set(newValue, forKey: Key.showBadgeCount)
             // Post notification so AppDelegate picks it up
-            NotificationCenter.default.post(name: .init("MiloBadgeSettingChanged"), object: newValue)
+            NotificationCenter.default.post(name: .miloBadgeSettingChanged, object: newValue)
         }
     }
 

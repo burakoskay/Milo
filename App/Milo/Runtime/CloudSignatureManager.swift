@@ -84,8 +84,8 @@ final class CloudSignatureManager: @unchecked Sendable {
         lock.unlock()
 
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: NSNotification.Name("MiloCloudSignaturesChanged"), object: signatureSetVersion)
-            NotificationCenter.default.post(name: NSNotification.Name("MiloRequestCurrentBloatCount"), object: nil)
+            NotificationCenter.default.post(name: Notification.Name.miloCloudSignaturesChanged, object: signatureSetVersion)
+            NotificationCenter.default.post(name: Notification.Name.miloRequestCurrentBloatCount, object: nil)
         }
     }
 
@@ -97,7 +97,7 @@ final class CloudSignatureManager: @unchecked Sendable {
         lock.unlock()
 
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: NSNotification.Name("MiloCloudSignaturesChanged"), object: nil)
+            NotificationCenter.default.post(name: Notification.Name.miloCloudSignaturesChanged, object: nil)
         }
     }
 

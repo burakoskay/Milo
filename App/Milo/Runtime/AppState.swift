@@ -43,12 +43,24 @@ struct KillResult: Identifiable, Sendable {
     let success: Bool
     let isLaunchdManaged: Bool
     let requiresSIPDisabled: Bool
+    /// The signal was delivered and the process exited, but launchd started it again.
+    ///
+    /// This is a distinct outcome from failure: nothing went wrong, and reporting it as a
+    /// failure told the user their action did not work when in fact it did.
+    let wasRespawned: Bool
 
-    init(name: String, success: Bool, isLaunchdManaged: Bool = false, requiresSIPDisabled: Bool = false) {
+    init(
+        name: String,
+        success: Bool,
+        isLaunchdManaged: Bool = false,
+        requiresSIPDisabled: Bool = false,
+        wasRespawned: Bool = false
+    ) {
         self.name = name
         self.success = success
         self.isLaunchdManaged = isLaunchdManaged
         self.requiresSIPDisabled = requiresSIPDisabled
+        self.wasRespawned = wasRespawned
     }
 }
 
@@ -422,26 +434,23 @@ final class AppState: ObservableObject {
         }
     }
 
-    func handlePopoverOpened() {
+    func handleSurfaceOpened() {
         refreshHelperStatus()
         if SettingsManager.shared.autoScanOnOpen {
             scanProcesses()
             refreshMemoryStats()
         }
 
-        let interval = SettingsManager.shared.autoScanInterval
-        if interval > 0 {
-            configureAutoScan(interval: interval)
-        }
+        configureAutoScan(interval: SettingsManager.shared.autoScanInterval)
     }
 
-    func handlePopoverClosed() {
+    func handleSurfaceClosed() {
         autoScanTimer?.invalidate()
         autoScanTimer = nil
     }
 
     func postCurrentBloatCount() {
-        NotificationCenter.default.post(name: .init("MiloBloatCountChanged"), object: totalBloatCount)
+        NotificationCenter.default.post(name: .miloBloatCountChanged, object: totalBloatCount)
     }
 
     func confirmKill() {

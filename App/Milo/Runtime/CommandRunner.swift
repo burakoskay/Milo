@@ -300,6 +300,12 @@ enum CommandRunner {
     private static func isAllowedLaunchctlInvocation(_ arguments: [String]) -> Bool {
         guard let action = arguments.first else { return false }
 
+        // Read-only enumeration of loaded jobs, used to tell a launchd-restarted process apart
+        // from one Milo failed to terminate. Takes no operand, so it cannot target a service.
+        if action == "list", arguments.count == 1 {
+            return true
+        }
+
         if action == "print-disabled", arguments.count == 2 {
             return isSafeLaunchctlDomain(arguments[1])
         }

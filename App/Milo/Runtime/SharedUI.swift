@@ -1,6 +1,62 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Menu Bar Panel Geometry
+
+/// Geometry for the menu bar panel and every sheet presented inside it.
+///
+/// These were previously repeated as literals across six views and the app delegate, which let
+/// the panel drift narrower than its own header and footer and clip them at both edges.
+enum MiloPanelMetrics {
+    static let width: CGFloat = 400
+    static let height: CGFloat = 560
+}
+
+// MARK: - Rounded Sheet Window
+
+/// Rounds the corners of the `NSWindow` that macOS creates for a SwiftUI sheet.
+///
+/// The status bar panel masks its own content view, but a sheet is a separate window layered on
+/// top and is not clipped by that mask, so sheets rendered square-cornered over a rounded panel.
+private struct RoundedSheetWindow: NSViewRepresentable {
+    let cornerRadius: CGFloat
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        // The view has no window until it is in the hierarchy, so this must run a turn later.
+        DispatchQueue.main.async {
+            applyRounding(to: view.window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        applyRounding(to: nsView.window)
+    }
+
+    private func applyRounding(to window: NSWindow?) {
+        guard let window, let contentView = window.contentView else { return }
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        // The content view is not the outermost layer: AppKit's frame view sits behind it and
+        // paints the square backdrop that remains visible at the corners. Both must be masked.
+        for view in [contentView, contentView.superview].compactMap({ $0 }) {
+            view.wantsLayer = true
+            view.layer?.cornerRadius = cornerRadius
+            view.layer?.cornerCurve = .continuous
+            view.layer?.masksToBounds = true
+            view.layer?.backgroundColor = NSColor.clear.cgColor
+        }
+    }
+}
+
+extension View {
+    /// Applies the panel's corner treatment to a sheet presented over it.
+    func roundedSheetWindow(cornerRadius: CGFloat = 16) -> some View {
+        background(RoundedSheetWindow(cornerRadius: cornerRadius))
+    }
+}
+
 // MARK: - Liquid Glass Aware Visual Effect
 
 /// Reads the user's Liquid Glass preference and maps it to the correct NSVisualEffectView.Material.
@@ -65,6 +121,9 @@ struct GlassCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             content
         }
+        // Without this the card shrinks to its content, so a section with short controls
+        // renders narrower and centred while its neighbours fill the column.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)

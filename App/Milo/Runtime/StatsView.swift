@@ -146,7 +146,7 @@ struct StatsView: View {
                 }
             }
         }
-        .frame(width: 360, height: 520)
+        .frame(width: MiloPanelMetrics.width, height: MiloPanelMetrics.height)
     }
 
     private func formatNumber(_ number: Int) -> String {

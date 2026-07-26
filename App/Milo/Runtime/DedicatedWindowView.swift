@@ -18,6 +18,13 @@ enum WindowTab: String, CaseIterable, Identifiable {
     }
 }
 
+private enum WindowSheet: String, Identifiable {
+    case stats
+    case whitelist
+
+    var id: String { rawValue }
+}
+
 // MARK: - Dedicated Window Root
 
 struct DedicatedWindowView: View {
@@ -27,6 +34,7 @@ struct DedicatedWindowView: View {
     @ObservedObject private var debloatManager = DebloatManager.shared
     @State private var selectedTab: WindowTab = .home
     @State private var showPaywall: Bool = false
+    @State private var activeSheet: WindowSheet?
     @Namespace private var tabAnimation
 
     @AppStorage("Milo.appThemeColor") var appThemeColor: String = "System"
@@ -78,12 +86,22 @@ struct DedicatedWindowView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            bottomBar
         }
         .ignoresSafeArea(.container, edges: .top)
         .frame(minWidth: 720, minHeight: 520)
         .background(VisualEffectBlur().ignoresSafeArea())
         .sheet(isPresented: $showPaywall) {
             PaywallView()
+        }
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .stats:
+                StatsView(appState: appState)
+            case .whitelist:
+                WhitelistView(appState: appState)
+            }
         }
         .alert("Confirm Kill", isPresented: $appState.showingKillConfirmation) {
             Button("Cancel", role: .cancel) {
@@ -122,16 +140,22 @@ struct DedicatedWindowView: View {
             Text("This action needs Milo's approved background helper. Enabling it is a one-time macOS permission step.")
         }
         .tint(tintColorOverride)
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MiloPopoverWillOpen"))) { _ in
-            appState.handlePopoverOpened()
+        .onReceive(NotificationCenter.default.publisher(for: .miloOpenSettings)) { _ in
+            selectedTab = .settings
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MiloPopoverDidClose"))) { _ in
-            appState.handlePopoverClosed()
+        .onReceive(NotificationCenter.default.publisher(for: .miloSurfaceDidOpen)) { _ in
+            appState.handleSurfaceOpened()
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MiloRequestCurrentBloatCount"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .miloSurfaceDidClose)) { _ in
+            appState.handleSurfaceClosed()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .miloSurfaceDidActivate)) { _ in
+            appState.refreshHelperStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .miloRequestCurrentBloatCount)) { _ in
             appState.postCurrentBloatCount()
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MiloCloudSignaturesChanged"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .miloCloudSignaturesChanged)) { _ in
             appState.scanProcesses()
         }
     }
@@ -173,26 +197,25 @@ struct DedicatedWindowView: View {
 
             Spacer()
 
-            // Right: User avatar / status
-            HStack(spacing: 10) {
-                // Scan button
-                Button {
-                    appState.scanProcesses()
-                } label: {
-                    if appState.isScanning {
-                        ProgressView()
-                            .scaleEffect(0.6)
-                            .frame(width: 14, height: 14)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 12, weight: .medium))
-                    }
+            // Only the rescan control lives here. Everything else moved to the bottom bar:
+            // crowding this row squeezed the tab bar until its labels wrapped one letter per line.
+            Button {
+                appState.scanProcesses()
+            } label: {
+                if appState.isScanning {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                        .frame(width: 14, height: 14)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12, weight: .medium))
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(appState.isScanning)
-                .help("Rescan (⌘R)")
             }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(appState.isScanning)
+            .help("Rescan (⌘R)")
+            .accessibilityLabel("Rescan processes")
         }
     }
 
@@ -237,6 +260,9 @@ struct DedicatedWindowView: View {
                         .strokeBorder(.quaternary, lineWidth: 1)
                 )
         )
+        // The tab bar must never be compressed; without this it absorbs the shortfall when the
+        // surrounding row runs out of width and wraps each label to one character per line.
+        .fixedSize()
     }
 
     // MARK: - Home (Dashboard + Processes + Memory)
@@ -254,6 +280,9 @@ struct DedicatedWindowView: View {
 
                 // Processes
                 processesContent
+
+                // Persistent launch items
+                launchItemsCard
 
                 // Toast overlay
                 if appState.showingMemoryMessage {
@@ -407,13 +436,103 @@ struct DedicatedWindowView: View {
                 .disabled(appState.isFlushingDNS)
 
                 Spacer()
+            }
+        }
+    }
 
-                // Kill all button
-                if appState.totalBloatCount > 0 {
+    // MARK: - Bottom Bar
+
+    /// Persistent tool and kill affordances.
+    ///
+    /// The kill action deliberately lives here rather than inside the memory card: that card
+    /// only renders once `memoryStats` resolves, and the window's primary action must never
+    /// depend on an unrelated subsystem succeeding.
+    private var bottomBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            HStack(spacing: 8) {
+                Button {
+                    activeSheet = .stats
+                } label: {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Statistics & Impact")
+                .accessibilityLabel("View statistics")
+
+                Button {
+                    activeSheet = .whitelist
+                } label: {
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Manage Hidden Processes")
+                .accessibilityLabel("Manage hidden processes")
+
+                Divider().frame(height: 16)
+
+                selectionControls
+
+                Spacer(minLength: 8)
+
+                Button("Quit") {
+                    NSApplication.shared.terminate(nil)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Quit Milo (⌘Q)")
+            }
+            .frame(height: 24)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+        }
+    }
+
+    @ViewBuilder
+    private var selectionControls: some View {
+        if appState.isKilling || !appState.selectedForKill.isEmpty {
+            HStack(spacing: 10) {
+                if appState.isKilling {
+                    // A vendor "Kill All" runs from a pending set rather than the selection, so
+                    // reporting the selection count here would read "0" mid-termination.
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 14, height: 14)
+
+                    Text("Terminating \(appState.pendingKillCount) process\(appState.pendingKillCount == 1 ? "" : "es")…")
+                        .font(.system(size: 12, weight: .medium))
+
+                    Spacer()
+                } else {
+                    Text("\(appState.selectedForKill.count) selected")
+                        .font(.system(size: 12, weight: .semibold))
+
+                    Text(String(format: "%.1f%% CPU", appState.selectedCPUUsage))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text(String(format: "%.0f MB", appState.selectedMemoryMB))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button("Clear") {
+                        appState.selectAll(false)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
                     Button(role: .destructive) {
                         handleKillRequest()
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 5) {
                             Image(systemName: "xmark.circle.fill")
                             Text("Kill Selected (\(appState.selectedForKill.count))")
                         }
@@ -421,7 +540,9 @@ struct DedicatedWindowView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                    .disabled(appState.selectedForKill.isEmpty || appState.isKilling)
+                    .tint(.red)
+                    .help("Kill selected processes (⌘K)")
+                    .accessibilityLabel("Kill selected processes")
                 }
             }
         }
@@ -536,6 +657,64 @@ struct DedicatedWindowView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
+            }
+        }
+    }
+
+    // MARK: - Launch Items
+
+    @ViewBuilder
+    private var launchItemsCard: some View {
+        if !appState.visibleLaunchItems.isEmpty {
+            GlassCard {
+                HStack(spacing: 8) {
+                    Image(systemName: "bolt.fill")
+                        .foregroundStyle(.yellow)
+                    Text("Persistent Launch Items")
+                        .font(.headline)
+                    Spacer()
+                    Text("\(appState.visibleLaunchItems.count)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider().opacity(0.35)
+
+                ForEach(appState.visibleLaunchItems, id: \.self) { item in
+                    HStack(alignment: .center, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(URL(fileURLWithPath: item.path).lastPathComponent)
+                                .font(.subheadline)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+
+                            if let desc = item.description, !desc.isEmpty {
+                                Text(desc)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+
+                            Text(item.isLoaded ? "Running" : "Stopped")
+                                .font(.system(size: 10))
+                                .foregroundStyle(item.isLoaded ? .green : .secondary)
+                        }
+
+                        Spacer(minLength: 12)
+
+                        Button(item.isLoaded ? "Disable" : "Enable") {
+                            appState.toggleLaunchItem(item)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .accessibilityLabel("\(item.isLoaded ? "Disable" : "Enable") \(item.label)")
+                    }
+                    .hoverHighlight()
+
+                    if item != appState.visibleLaunchItems.last {
+                        Divider().opacity(0.15)
+                    }
+                }
             }
         }
     }

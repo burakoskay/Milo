@@ -25,7 +25,7 @@ struct DebloatView: View {
             Divider().opacity(0.3)
             footer
         }
-        .frame(width: isEmbedded ? nil : 360, height: isEmbedded ? nil : 520)
+        .frame(width: isEmbedded ? nil : MiloPanelMetrics.width, height: isEmbedded ? nil : MiloPanelMetrics.height)
         .background {
             if !isEmbedded {
                 VisualEffectBlur()

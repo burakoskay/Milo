@@ -96,7 +96,7 @@ struct WhitelistView: View {
                 }
             }
         }
-        .frame(width: 360, height: 480)
+        .frame(width: MiloPanelMetrics.width, height: MiloPanelMetrics.height)
         .onAppear {
             refreshList()
         }

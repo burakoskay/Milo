@@ -217,6 +217,7 @@ private struct ResultsToast: View {
     var successCount: Int { results.filter { $0.success }.count }
     var failCount: Int { results.filter { !$0.success }.count }
     var systemProcessCount: Int { results.filter { $0.requiresSIPDisabled && isSIPEnabled }.count }
+    var respawnedCount: Int { results.filter(\.wasRespawned).count }
 
     var body: some View {
         Group {
@@ -226,6 +227,13 @@ private struct ResultsToast: View {
                     iconColor: .orange,
                     message: "Killed \(successCount) process\(successCount == 1 ? "" : "es")",
                     detail: "\(systemProcessCount) system process\(systemProcessCount == 1 ? "" : "es") will respawn (SIP enabled)"
+                )
+            } else if failCount == 0, respawnedCount > 0 {
+                ToastView(
+                    icon: "arrow.clockwise.circle.fill",
+                    iconColor: .orange,
+                    message: "Killed \(successCount) process\(successCount == 1 ? "" : "es")",
+                    detail: "launchd restarted \(respawnedCount == 1 ? "one" : "\(respawnedCount)"): disable the launch item to stop it"
                 )
             } else if failCount == 0 {
                 ToastView(
@@ -256,6 +264,32 @@ struct ContentView: View {
 
     private var isKillDisabled: Bool {
         appState.selectedForKill.isEmpty || appState.isKilling
+    }
+
+    private var killButtonLabel: some View {
+        HStack(spacing: 8) {
+            if appState.isKilling {
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .frame(width: 14, height: 14)
+            } else {
+                Image(systemName: "xmark.circle.fill")
+                    .symbolRenderingMode(.hierarchical)
+            }
+            Text(killButtonTitle)
+                .fontWeight(.semibold)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 2)
+    }
+
+    private var killButtonTitle: String {
+        if appState.isKilling {
+            let count = appState.pendingKillCount
+            return "Terminating \(count) process\(count == 1 ? "" : "es")…"
+        }
+        let count = appState.selectedForKill.count
+        return count > 0 ? "Kill Selected (\(count))" : "Kill Selected"
     }
 
     private var hasProAccess: Bool {
@@ -333,36 +367,43 @@ struct ContentView: View {
                 .animation(.spring(response: 0.4), value: appState.showingMemoryMessage)
             }
         }
-        .frame(width: 360, height: 520)
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MiloOpenSettings"))) { _ in
+        .frame(width: MiloPanelMetrics.width, height: MiloPanelMetrics.height)
+        .onReceive(NotificationCenter.default.publisher(for: .miloOpenSettings)) { _ in
             activeSheet = .settings
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MiloPopoverWillOpen"))) { _ in
-            appState.handlePopoverOpened()
+        .onReceive(NotificationCenter.default.publisher(for: .miloSurfaceDidOpen)) { _ in
+            appState.handleSurfaceOpened()
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MiloPopoverDidClose"))) { _ in
-            appState.handlePopoverClosed()
+        .onReceive(NotificationCenter.default.publisher(for: .miloSurfaceDidClose)) { _ in
+            appState.handleSurfaceClosed()
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MiloRequestCurrentBloatCount"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .miloSurfaceDidActivate)) { _ in
+            appState.refreshHelperStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .miloRequestCurrentBloatCount)) { _ in
             appState.postCurrentBloatCount()
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MiloCloudSignaturesChanged"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .miloCloudSignaturesChanged)) { _ in
             appState.scanProcesses()
         }
         .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .stats:
-                StatsView(appState: appState)
-            case .whitelist:
-                WhitelistView(appState: appState)
-            case .debloat:
-                DebloatView(appState: appState, manager: DebloatManager.shared)
-            case .settings:
-                SettingsView(appState: appState, updateManager: updateManager)
+            Group {
+                switch sheet {
+                case .stats:
+                    StatsView(appState: appState)
+                case .whitelist:
+                    WhitelistView(appState: appState)
+                case .debloat:
+                    DebloatView(appState: appState, manager: DebloatManager.shared)
+                case .settings:
+                    SettingsView(appState: appState, updateManager: updateManager)
+                }
             }
+            .roundedSheetWindow()
         }
         .sheet(isPresented: $showPaywall) {
             PaywallView()
+                .roundedSheetWindow()
         }
         .alert("Confirm Kill", isPresented: $appState.showingKillConfirmation) {
             Button("Cancel", role: .cancel) {
@@ -400,36 +441,8 @@ struct ContentView: View {
         } message: {
             Text("This action needs Milo's approved background helper. Enabling it is a one-time macOS permission step.")
         }
-        // Keyboard shortcuts
-        .background(
-            Group {
-                Button("") { handleKillRequest() }
-                    .keyboardShortcut("k", modifiers: .command)
-                    .opacity(0)
-
-                Button("") { appState.scanProcesses() }
-                    .keyboardShortcut("r", modifiers: .command)
-                    .opacity(0)
-
-                Button("") { appState.selectAll(appState.selectedForKill.isEmpty) }
-                    .keyboardShortcut("a", modifiers: .command)
-                    .opacity(0)
-
-                Button("") { activeSheet = .settings }
-                    .keyboardShortcut(",", modifiers: .command)
-                    .opacity(0)
-
-                Button("") {
-                    if hasProAccess {
-                        appState.killAllDetected()
-                    } else {
-                        showPaywall = true
-                    }
-                }
-                    .keyboardShortcut("k", modifiers: [.command, .shift])
-                    .opacity(0)
-            }
-        )
+        // Keyboard shortcuts are owned by the Actions menu in MenuBarAppDelegate rather than by
+        // hidden buttons here, so they work in both presentation modes and are discoverable.
         .tint(tintColorOverride)
     }
 
@@ -468,24 +481,17 @@ struct ContentView: View {
                     Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                     if MiloBuildMode.isDevelopmentPreview {
                         Text("Development Preview")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(.orange)
+                            .lineLimit(1)
                     }
                 }
-                .fixedSize()
+                .layoutPriority(1)
 
-                Spacer()
-
-                Picker("", selection: $appState.sortOrder) {
-                    ForEach(ProcessSortOrder.allCases, id: \.self) { order in
-                        Text(order.rawValue).tag(order)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 78)
-                .controlSize(.small)
+                Spacer(minLength: 8)
 
                 SIPPill(isEnabled: appState.isSIPEnabled)
 
@@ -507,15 +513,37 @@ struct ContentView: View {
                 .disabled(appState.isScanning)
             }
 
-            // Resource summary bar
-            if appState.totalBloatCount > 0 {
-                HStack(spacing: 12) {
-                    Label("\(appState.totalBloatCount) processes", systemImage: "cpu")
-                    Label(String(format: "%.1f%% CPU", appState.totalCPUUsage), systemImage: "gauge.medium")
-                    Label(String(format: "%.0f MB", appState.totalMemoryMB), systemImage: "memorychip")
+            // Resource summary and sort. The sort control lives here rather than on the title
+            // row so the row above never has to compete for width with the app identity.
+            HStack(spacing: 10) {
+                if appState.totalBloatCount > 0 {
+                    HStack(spacing: 10) {
+                        Label("\(appState.totalBloatCount) processes", systemImage: "cpu")
+                        Label(String(format: "%.1f%% CPU", appState.totalCPUUsage), systemImage: "gauge.medium")
+                        Label(String(format: "%.0f MB", appState.totalMemoryMB), systemImage: "memorychip")
+                    }
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                } else {
+                    Text(appState.isScanning ? "Scanning…" : "No target processes detected")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
+
+                Spacer(minLength: 8)
+
+                Picker("", selection: $appState.sortOrder) {
+                    ForEach(ProcessSortOrder.allCases, id: \.self) { order in
+                        Text(order.rawValue).tag(order)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(width: 78)
+                .controlSize(.small)
+                .accessibilityLabel("Sort processes")
             }
         }
         .padding(12)
@@ -830,25 +858,30 @@ struct ContentView: View {
                 }
             }
 
-            // Kill button
-            Button(role: .destructive) {
-                handleKillRequest()
-            } label: {
-                HStack(spacing: 8) {
-                    if appState.isKilling {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    } else {
-                        Image(systemName: "xmark.circle.fill")
-                            .symbolRenderingMode(.hierarchical)
+            // Kill button. It only takes on the destructive prominent treatment once a
+            // selection exists — a permanently red full-width bar reads as a standing warning
+            // and stops meaning anything when it is the resting state.
+            Group {
+                if isKillDisabled {
+                    Button(role: .destructive) {
+                        handleKillRequest()
+                    } label: {
+                        killButtonLabel
                     }
-                    Text("Kill Selected")
-                        .fontWeight(.semibold)
+                    .buttonStyle(.bordered)
+                } else {
+                    Button(role: .destructive) {
+                        handleKillRequest()
+                    } label: {
+                        killButtonLabel
+                    }
+                    .buttonStyle(.borderedProminent)
+                    // The theme tint applied at the root would otherwise render a destructive
+                    // action in the same colour as every benign one.
+                    .tint(.red)
                 }
-                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .controlSize(.regular)
             .disabled(isKillDisabled)
             .help("Kill selected processes (⌘K)")
             .accessibilityLabel("Kill selected processes")
