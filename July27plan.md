@@ -508,6 +508,7 @@ No phase may be declared complete solely because code was written. Each phase en
    - [x] **Shared lifecycle primitive completed 2026-07-26:** `MiloDomain` now defines all 13 operation kinds, stable typed failure categories, operation identity/deadline context, explicit success/partial/failure/cancellation terminal states, and a lifecycle that rejects stale or post-terminal results. Individual runtime surfaces still need migration before item 1 can close.
 2. [ ] Mark UI models `@MainActor`; replace shared mutable singletons with injected actors/services.
 3. [ ] Add cancellation, generation, deadlines, and resource caps to every asynchronous/subprocess operation.
+   - [x] **Process scan generation control completed 2026-07-26:** starting a scan cancels the prior worker, assigns a new typed lifecycle context, and accepts completion only for the current context. Scan command failure is typed and user-visible instead of becoming an empty “clean” result. Subprocess termination deadlines/output caps and other async surfaces remain open.
 4. [ ] Introduce capability enforcement at use-case boundaries.
 5. [ ] Implement structured redacted logging and support diagnostics.
 

@@ -589,7 +589,26 @@ struct ContentView: View {
 
     @ViewBuilder
     private var processCards: some View {
-        if appState.visibleBloat.isEmpty && appState.visibleIntelligence.isEmpty {
+        if let scanFailure = appState.scanFailureMessage {
+            GlassCard {
+                VStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.orange)
+                    Text("Scan unavailable")
+                        .font(.headline)
+                    Text(scanFailure)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Try Again") {
+                        appState.scanProcesses()
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+        } else if appState.scanResultIsClean {
             GlassCard {
                 VStack(spacing: 12) {
                     Image(systemName: "checkmark.seal.fill")

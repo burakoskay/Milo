@@ -124,6 +124,31 @@ final class TargetBoundaryTests: XCTestCase {
         XCTAssertFalse(generatedProject.contains("milo_black.png"))
     }
 
+    func testProcessScanCannotPublishFailureAsCleanOrOverwriteNewerResults() throws {
+        let appState = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/AppState.swift")
+        )
+        let processManager = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/ProcessManager.swift")
+        )
+        let contentView = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/ContentView.swift")
+        )
+        let dedicatedView = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/DedicatedWindowView.swift")
+        )
+
+        XCTAssertTrue(appState.contains("MiloOperationLifecycle<ProcessScanSnapshot>"))
+        XCTAssertTrue(appState.contains("scanWorker?.cancel()"))
+        XCTAssertTrue(appState.contains("scanLifecycle.succeed(snapshot, for: context)"))
+        XCTAssertTrue(appState.contains("scanLifecycle.fail(failure, for: context)"))
+        XCTAssertTrue(processManager.contains("scanForRunningTargetsWithResources() throws"))
+        XCTAssertTrue(contentView.contains("appState.scanFailureMessage"))
+        XCTAssertTrue(contentView.contains("appState.scanResultIsClean"))
+        XCTAssertTrue(dedicatedView.contains("appState.scanFailureMessage"))
+        XCTAssertTrue(dedicatedView.contains("appState.scanResultIsClean"))
+    }
+
     private func readText(at url: URL) throws -> String {
         try String(contentsOf: url, encoding: .utf8)
     }

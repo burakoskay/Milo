@@ -31,6 +31,7 @@ version 1.x predates this regime.
 
 ### Fixed
 
+- Prevent overlapping process scans from publishing stale results and prevent scan failures from appearing as a clean system.
 - Normalize the tracked `Milo_black.png` resource casing so Xcode project generation is byte-identical on case-sensitive clean clones.
 
 ### Security

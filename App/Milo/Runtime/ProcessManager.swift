@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import MiloDomain
 import Security
 import Darwin
 
@@ -394,11 +395,16 @@ final class ProcessManager: Sendable {
 
     // MARK: - Scanning
 
-    func scanForRunningTargetsWithResources() -> (bloat: [ProcessItem], intelligence: [ProcessItem]) {
+    func scanForRunningTargetsWithResources() throws -> (bloat: [ProcessItem], intelligence: [ProcessItem]) {
         let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,%cpu,rss,comm,command"])
         guard result.succeeded else {
-            MiloLog.error("Failed to scan processes with resources: \(result.stderr)", category: .process)
-            return ([], [])
+            MiloLog.error("Process scan command failed with status \(result.status)", category: .process)
+            throw MiloOperationFailure(
+                operation: .scan,
+                code: .system,
+                message: "Milo could not inspect running processes.",
+                recovery: "Try scanning again. If the problem continues, restart Milo."
+            )
         }
 
         let lines = result.stdout.components(separatedBy: .newlines)

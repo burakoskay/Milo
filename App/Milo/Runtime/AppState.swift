@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import MiloDomain
 import UserNotifications
 
 // MARK: - Sort Options
@@ -43,6 +44,13 @@ struct KillResult: Identifiable, Sendable {
     }
 }
 
+struct ProcessScanSnapshot: Equatable, Sendable {
+    let bloat: [ProcessItem]
+    let intelligence: [ProcessItem]
+    let launchItems: [LaunchItem]
+    let completedAt: Date
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var isSIPEnabled: Bool = true
@@ -56,7 +64,7 @@ final class AppState: ObservableObject {
     @Published var showingResults: Bool = false
 
     // Scanning state
-    @Published var isScanning: Bool = false
+    @Published private(set) var scanState = MiloOperationState<ProcessScanSnapshot>.idle
     @Published var lastScanDate: Date?
 
     // Sort order
@@ -86,6 +94,27 @@ final class AppState: ObservableObject {
     // Auto-scan timer
     private var autoScanTimer: Timer?
     private var pendingKillItems: [ProcessItem] = []
+    private var scanLifecycle = MiloOperationLifecycle<ProcessScanSnapshot>()
+    private var scanWorker: Task<ProcessScanSnapshot, Error>?
+    private var scanCompletionTask: Task<Void, Never>?
+
+    var isScanning: Bool {
+        scanState.isRunning
+    }
+
+    var scanFailureMessage: String? {
+        guard case .failed(_, let failure) = scanState else {
+            return nil
+        }
+        return failure.message
+    }
+
+    var scanResultIsClean: Bool {
+        guard case .succeeded(_, let snapshot) = scanState else {
+            return false
+        }
+        return snapshot.bloat.isEmpty && snapshot.intelligence.isEmpty
+    }
 
     var whitelistedProcesses: [String] {
         WhitelistManager.shared.getWhitelistedProcesses()
@@ -199,7 +228,6 @@ final class AppState: ObservableObject {
 
     init() {
         self.isSIPEnabled = SIPChecker.isSIPEnabled()
-        self.refreshLaunchItems()
         self.scanProcesses()
         self.refreshMemoryStats()
 
@@ -261,29 +289,74 @@ final class AppState: ObservableObject {
     }
 
     func scanProcesses() {
-        isScanning = true
+        scanWorker?.cancel()
+        scanCompletionTask?.cancel()
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let (bloat, intel) = ProcessManager.shared.scanForRunningTargetsWithResources()
-            guard let appState = self else { return }
+        let startedAt = Date()
+        let context = scanLifecycle.begin(
+            operation: .scan,
+            startedAt: startedAt,
+            deadline: startedAt.addingTimeInterval(15)
+        )
+        scanState = scanLifecycle.state
 
-            Self.runOnMain {
-                let previousCount = appState.totalBloatCount
+        let processManager = ProcessManager.shared
+        let worker = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let result = try processManager.scanForRunningTargetsWithResources()
+            let launchItems = processManager.scanForLaunchItems()
+            try Task.checkCancellation()
+            return ProcessScanSnapshot(
+                bloat: result.bloat,
+                intelligence: result.intelligence,
+                launchItems: launchItems,
+                completedAt: Date()
+            )
+        }
+        scanWorker = worker
+        scanCompletionTask = Task { [weak self] in
+            let result = await worker.result
+            guard let self else {
+                return
+            }
+            finishScan(result, context: context)
+        }
+    }
 
-                appState.activeBloat = bloat
-                appState.activeIntelligence = intel
-                appState.refreshLaunchItems()
-                appState.isScanning = false
-                appState.lastScanDate = Date()
+    private func finishScan(
+        _ result: Result<ProcessScanSnapshot, Error>,
+        context: MiloOperationContext
+    ) {
+        switch result {
+        case .success(let snapshot):
+            guard scanLifecycle.succeed(snapshot, for: context) else {
+                return
+            }
+            let previousCount = totalBloatCount
+            activeBloat = snapshot.bloat
+            activeIntelligence = snapshot.intelligence
+            detectedLaunchItems = snapshot.launchItems
+            lastScanDate = snapshot.completedAt
+            scanState = scanLifecycle.state
 
-                let newCount = appState.totalBloatCount
-                appState.postCurrentBloatCount()
-
-                // Send notification if new bloat appeared
-                if SettingsManager.shared.notifyOnDetection && newCount > previousCount {
-                    appState.sendBloatNotification(count: newCount)
-                }
-
+            let newCount = totalBloatCount
+            postCurrentBloatCount()
+            if SettingsManager.shared.notifyOnDetection && newCount > previousCount {
+                sendBloatNotification(count: newCount)
+            }
+        case .failure(let error) where error is CancellationError:
+            if scanLifecycle.cancel(context) {
+                scanState = scanLifecycle.state
+            }
+        case .failure(let error):
+            let failure = error as? MiloOperationFailure ?? MiloOperationFailure(
+                operation: .scan,
+                code: .unknown,
+                message: "Milo could not complete the process scan.",
+                recovery: "Try scanning again. If the problem continues, restart Milo."
+            )
+            if scanLifecycle.fail(failure, for: context) {
+                scanState = scanLifecycle.state
             }
         }
     }

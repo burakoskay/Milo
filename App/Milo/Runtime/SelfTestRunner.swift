@@ -101,8 +101,18 @@ enum SelfTestRunner {
 
         results.append(testSearchBoxRemoval())
 
-        let initialScan = ProcessManager.shared.scanForRunningTargetsWithResources()
-        results.append(contentsOf: testScannerCoverage(with: initialScan))
+        do {
+            let initialScan = try ProcessManager.shared.scanForRunningTargetsWithResources()
+            results.append(contentsOf: testScannerCoverage(with: initialScan))
+        } catch {
+            results.append(
+                SelfTestResult(
+                    name: "Process scanner",
+                    status: .fail,
+                    detail: "The initial process scan failed with \(error.localizedDescription)"
+                )
+            )
+        }
         results.append(testProtectedToolsExcludedFromDefaultTargets())
         results.append(testDirectCommandArgumentsDoNotInvokeShell())
 

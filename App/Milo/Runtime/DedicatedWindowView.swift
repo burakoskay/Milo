@@ -450,8 +450,24 @@ struct DedicatedWindowView: View {
                 }
             }
 
-            // Empty state
-            if appState.visibleBloat.isEmpty && appState.visibleIntelligence.isEmpty && !appState.isScanning {
+            if let scanFailure = appState.scanFailureMessage {
+                VStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.orange)
+                    Text("Scan unavailable")
+                        .font(.title3.weight(.semibold))
+                    Text(scanFailure)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Try Again") {
+                        appState.scanProcesses()
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 30)
+            } else if appState.scanResultIsClean {
                 VStack(spacing: 12) {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 40))
