@@ -8,6 +8,13 @@ version 1.x predates this regime.
 
 ### Added
 
+- Instantaneous CPU measurement that differentiates cumulative task CPU time across two observations per scan, replacing the lifetime average reported by `ps -o %cpu`.
+- Dynamic launchd detection via a read-only `launchctl list`, so processes managed by launchd are identified even when absent from the static rule catalogue.
+- A distinct `wasRespawned` outcome separating "launchd restarted this agent" from "termination failed".
+- An Actions menu owning every process shortcut, plus a keyboard shortcut reference in Settings.
+- A preference controlling whether the dedicated window's close button hides Milo or quits it.
+- Statistics, hidden processes, persistent launch items, and Quit in the dedicated window, which previously offered none of them.
+- Screenshots and a public-facing README covering install, permission model, and limitations.
 - A separately identified, locally unlocked Development Preview configuration and reproducible verified DMG build path.
 - A signed `SMAppService` privileged helper with authenticated XPC, a fixed command policy, bounded execution, and process-identity metadata.
 - Presentation-ready product documentation and a timeless roadmap separating preview capability from commercial release work.
@@ -18,6 +25,11 @@ version 1.x predates this regime.
 
 ### Changed
 
+- Restricts SwiftUI hosting to the active presentation surface, so the menu bar panel and the dedicated window can no longer both present the same confirmation.
+- Derives view-mode transitions from an actual preference change rather than from every write in the application's `UserDefaults` domain.
+- Returns the quit decision synchronously from `applicationShouldTerminate`, so choosing Quit terminates the application.
+- Closes the dedicated window to the menu bar by default instead of running a termination flow that could not report a decision.
+- Centralises menu bar panel geometry, which at its previous width clipped the header and footer at both edges.
 - Routes privileged actions through a one-time macOS background-helper approval flow with explicit status and recovery UI.
 - Labels the former Debloat surface as System Tuning while preserving the existing reversible tuning stack.
 - Injects the cloud-rule service into process scanning instead of resolving mutable global state inside scan logic.

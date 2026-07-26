@@ -26,7 +26,7 @@ Non-negotiable engineering rules from the project agent directives still apply:
 | Repository | `/Volumes/Internal HD/Developer/Pkill` |
 | Branch | `fable/milo-test` |
 | Upstream | `origin/fable/milo-test` |
-| Verified implementation baseline | `0dd51f1 docs: mark preview delivery published` |
+| Verified implementation baseline | `2cc15c7 fix: correct surface lifecycle, CPU measurement, and kill reporting` |
 | Main implementation commit | `d822311 feat: ship local development preview` |
 | Handoff commit | The commit containing this document; confirm current HEAD with `git log -1 --oneline` |
 | Pull request | `#9 feat: ship Milo Development Preview` |
@@ -35,6 +35,7 @@ Non-negotiable engineering rules from the project agent directives still apply:
 | PR state | Draft, merge state clean |
 | Remote checks | `unit-tests`, `conventional-commits`, and `changelog-check` all passing |
 | Expected working tree after handoff publication | Clean |
+| Repository visibility | Public |
 
 Do not create a replacement PR or a parallel branch without user direction. Continue PR #9 if the next work belongs to this preview slice.
 
@@ -128,7 +129,7 @@ The locally packaged artifact is:
 SHA-256:
 
 ```text
-0ecd912f92496bf3d9388599d5430ea9b133d5bd68da1428826ddda249a6174c
+dcfc7f30fed731bec8e68d3fc70ac6f24eac3599d02c11997f2f132f866e7adf
 ```
 
 `build/` and `dist/` are local artifact directories and are intentionally not committed. Rebuild the artifact rather than assuming it still corresponds to HEAD after any source change.
@@ -238,9 +239,13 @@ Apple owns the final Background Items approval. Milo must not simulate, bypass, 
 | `Packages/MiloKit/Sources/MiloHardening/Integrity.c` | Runtime code-signature validation |
 | `Tests/integration/TargetBoundaryTests.swift` | Helper/preview/no-prompt regression assertions |
 | `Tools/build-development-preview.sh` | Canonical Preview build, signing, smoke, and DMG pipeline |
-| `README.md` | Product, setup, build, demo, and limitation guide |
+| `App/Milo/Runtime/SharedUI.swift` | Panel geometry constants and sheet window rounding |
+| `README.md` | Public product, install, architecture, and limitation guide |
 | `ROADMAP.md` | Timeless deferred-product roadmap |
-| `July27plan.md` | Exhaustive commercial release audit and tracked execution plan |
+| `Screenshots/` | README imagery |
+
+`July27plan.md`, `build_app.sh`, `rebrand.py`, and `lldb_script.txt` are kept locally but are
+no longer tracked; the repository is public.
 
 `project.yml` is canonical for the Xcode project. After changing it, run:
 

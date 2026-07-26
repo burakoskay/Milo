@@ -1,6 +1,19 @@
 # Milo roadmap
 
-This roadmap describes product direction without promising delivery dates. Items move to complete only after their documented acceptance gates pass.
+This roadmap describes product direction without promising delivery dates. Items move to complete
+only after their documented acceptance gates pass.
+
+Unchecked items below are **not implemented**. They are listed so the boundary between what the
+Development Preview actually does today and what the commercial product will do is explicit,
+rather than being implied by UI that quietly fails.
+
+## Nearest priorities
+
+- Notarized Developer ID distribution, so first launch does not require a Gatekeeper override.
+- Disabling a launchd job directly from the process row that reported the restart, as a
+  labelled and confirmed action rather than a side effect of terminating the process.
+- Clean-VM validation of the System Tuning matrix on every supported macOS release.
+- End-to-end exercise of the privileged helper XPC path against a disposable root-owned fixture.
 
 ## Development Preview
 
@@ -12,6 +25,11 @@ This roadmap describes product direction without promising delivery dates. Items
 - [x] PID-reuse protection before every process signal.
 - [x] Reproducible signed preview build and DMG verification script.
 - [x] Presentation README and demo flow.
+- [x] Single-surface invariant: only the active presentation surface owns a SwiftUI host.
+- [x] Instantaneous CPU measurement by differentiating cumulative task CPU time.
+- [x] Dynamic launchd detection, so a restarted agent is reported as restarted, not failed.
+- [x] Discoverable keyboard shortcuts owned by a real Actions menu.
+- [x] Public repository with downloadable Development Preview release.
 
 ## Process-control reliability
 
