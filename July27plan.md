@@ -122,7 +122,7 @@ This bounded track produces the local, interview-ready preview without falsely c
 6. [x] Replace the engineering-only README with preview setup, permission behavior, build, verification, architecture, demo flow, limitations, and project-status documentation.
 7. [x] Add a timeless `ROADMAP.md` for deferred commercial, distribution, Lite, tuning, reliability, and experience work.
 8. [x] Complete the clean Preview build, regression suites, lint and forbidden-pattern scans, bundle/signature/requirement checks, deterministic preview smoke suite, DMG verification, launch smoke test, and visual inspection.
-9. [ ] Publish the reviewed preview changes and attach final verification evidence to the existing pull request.
+9. [x] Publish the reviewed preview changes and attach final verification evidence to the existing pull request.
 
 Verification evidence for step 8: clean Xcode 27 beta Preview build with warnings fatal; strict SwiftLint success; 18 root red-team tests, 29 MiloKit tests, and the MiloPro Xcode unit/integration/red-team scheme all passing; six deterministic packaged-app smoke checks passing; app/helper designated requirements and the mounted DMG payload verified; final UI launch inspected with no false integrity-compromise state.
 
