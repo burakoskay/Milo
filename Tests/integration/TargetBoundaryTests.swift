@@ -153,13 +153,28 @@ final class TargetBoundaryTests: XCTestCase {
         let commandRunner = try readText(
             at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/CommandRunner.swift")
         )
+        let subprocessRunner = try readText(
+            at: repositoryRoot.appendingPathComponent(
+                "Packages/MiloKit/Sources/MiloDomain/SubprocessRunner.swift"
+            )
+        )
 
         XCTAssertTrue(commandRunner.contains("MiloBoundedCommandOutput"))
         XCTAssertTrue(commandRunner.contains("maximumOutputBytes: Int = defaultMaximumOutputBytes"))
         XCTAssertTrue(commandRunner.contains("maximumOutputBytes <= defaultMaximumOutputBytes"))
+        XCTAssertTrue(commandRunner.contains("MiloSubprocessRunner.run"))
+        XCTAssertTrue(commandRunner.contains("deadline: Duration = defaultDeadline"))
+        XCTAssertTrue(commandRunner.contains("Task<Never, Never>.isCancelled"))
         XCTAssertTrue(commandRunner.contains("case outputLimitExceeded"))
         XCTAssertTrue(commandRunner.contains("output.wasTruncated ? 74 : status"))
+        XCTAssertFalse(commandRunner.contains("waitUntilExit()"))
+        XCTAssertFalse(commandRunner.contains("let task = Process()"))
         XCTAssertFalse(commandRunner.contains("private var storage = Data()"))
+        XCTAssertTrue(subprocessRunner.contains("POSIX_SPAWN_SETPGROUP"))
+        XCTAssertTrue(subprocessRunner.contains("POSIX_SPAWN_CLOEXEC_DEFAULT"))
+        XCTAssertTrue(subprocessRunner.contains("terminateProcessGroup"))
+        XCTAssertTrue(subprocessRunner.contains("case timedOut"))
+        XCTAssertTrue(subprocessRunner.contains("case cancelled"))
     }
 
     private func readText(at url: URL) throws -> String {

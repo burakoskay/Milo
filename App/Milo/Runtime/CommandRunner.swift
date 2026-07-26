@@ -4,8 +4,12 @@ import MiloDomain
 
 enum CommandTermination: Equatable, Sendable {
     case exited
+    case signaled(Int32)
+    case timedOut
+    case cancelled
     case policyRejected
-    case launchFailed
+    case launchFailed(Int32)
+    case inputOutputFailed(Int32)
     case outputLimitExceeded
     case invalidOutputEncoding
 }
@@ -33,6 +37,8 @@ struct CommandResult: Sendable {
 
 enum CommandRunner {
     private static let defaultMaximumOutputBytes = 1_048_576
+    private static let defaultDeadline: Duration = .seconds(15)
+    private static let maximumDeadline: Duration = .seconds(60)
     private static let allowedExecutables: Set<String> = [
         "/bin/echo",
         "/bin/kill",
@@ -78,10 +84,13 @@ enum CommandRunner {
     static func run(
         _ executable: String,
         arguments: [String] = [],
-        maximumOutputBytes: Int = defaultMaximumOutputBytes
+        maximumOutputBytes: Int = defaultMaximumOutputBytes,
+        deadline: Duration = defaultDeadline
     ) -> CommandResult {
         guard maximumOutputBytes > 0,
-              maximumOutputBytes <= defaultMaximumOutputBytes else {
+              maximumOutputBytes <= defaultMaximumOutputBytes,
+              deadline > .zero,
+              deadline <= maximumDeadline else {
             return CommandResult(
                 status: 126,
                 stdout: "",
@@ -101,80 +110,68 @@ enum CommandRunner {
             )
         }
 
-        let output: LockedOutput
-        do {
-            output = try LockedOutput(maximumBytes: maximumOutputBytes)
-        } catch {
+        let execution = MiloSubprocessRunner.run(
+            executable: executable,
+            arguments: arguments,
+            maximumOutputBytes: maximumOutputBytes,
+            deadline: deadline,
+            cancellationRequested: { Task<Never, Never>.isCancelled }
+        )
+        return commandResult(execution: execution)
+    }
+
+    private static func commandResult(execution: MiloSubprocessResult) -> CommandResult {
+        let termination: CommandTermination
+        let diagnostic: String?
+        switch execution.termination {
+        case .exited:
+            termination = .exited
+            diagnostic = nil
+        case let .signaled(signal):
+            termination = .signaled(signal)
+            diagnostic = "Command terminated by signal \(signal)"
+        case .timedOut:
+            termination = .timedOut
+            diagnostic = "Command exceeded its execution deadline"
+        case .cancelled:
+            termination = .cancelled
+            diagnostic = "Command was cancelled"
+        case .outputLimitExceeded:
+            termination = .outputLimitExceeded
+            diagnostic = "Command exceeded its output limit"
+        case let .launchFailed(errorCode):
+            termination = .launchFailed(errorCode)
+            diagnostic = "Command launch failed with errno \(errorCode)"
+        case let .inputOutputFailed(errorCode):
+            termination = .inputOutputFailed(errorCode)
+            diagnostic = "Command I/O failed with errno \(errorCode)"
+        }
+
+        guard let stdout = String(bytes: execution.standardOutput, encoding: .utf8),
+              let stderr = String(bytes: execution.standardError, encoding: .utf8) else {
             return CommandResult(
-                status: 126,
+                status: 74,
                 stdout: "",
-                stderr: "Invalid command output limit",
-                termination: .policyRejected
+                stderr: "Command output was not valid UTF-8",
+                termination: .invalidOutputEncoding
             )
         }
-
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: executable)
-        task.arguments = arguments
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        task.standardOutput = stdoutPipe
-        task.standardError = stderrPipe
-        attachDrainHandler(to: stdoutPipe, output: output, stream: .standardOutput)
-        attachDrainHandler(to: stderrPipe, output: output, stream: .standardError)
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-            stdoutPipe.fileHandleForReading.readabilityHandler = nil
-            stderrPipe.fileHandleForReading.readabilityHandler = nil
-            try drainRemaining(
-                from: stdoutPipe.fileHandleForReading,
-                output: output,
-                stream: .standardOutput
-            )
-            try drainRemaining(
-                from: stderrPipe.fileHandleForReading,
-                output: output,
-                stream: .standardError
-            )
-            return commandResult(status: task.terminationStatus, output: output.snapshot())
-        } catch {
-            stdoutPipe.fileHandleForReading.readabilityHandler = nil
-            stderrPipe.fileHandleForReading.readabilityHandler = nil
-            return boundedResult(
-                status: 1,
-                stdout: "",
-                stderr: error.localizedDescription,
-                termination: .launchFailed
-            )
-        }
+        return CommandResult(
+            status: execution.status,
+            stdout: stdout,
+            stderr: appendedDiagnostic(diagnostic, to: stderr),
+            termination: termination
+        )
     }
 
-    private static func attachDrainHandler(
-        to pipe: Pipe,
-        output: LockedOutput,
-        stream: MiloCommandOutputStream
-    ) {
-        pipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else {
-                handle.readabilityHandler = nil
-                return
-            }
-            output.append(data, to: stream)
+    private static func appendedDiagnostic(_ diagnostic: String?, to standardError: String) -> String {
+        guard let diagnostic else {
+            return standardError
         }
-    }
-
-    private static func drainRemaining(
-        from handle: FileHandle,
-        output: LockedOutput,
-        stream: MiloCommandOutputStream
-    ) throws {
-        while let data = try handle.read(upToCount: 65_536), !data.isEmpty {
-            output.append(data, to: stream)
+        guard !standardError.isEmpty else {
+            return diagnostic
         }
+        return standardError + "\n" + diagnostic
     }
 
     private static func commandResult(status: Int32, output: MiloBoundedCommandOutput) -> CommandResult {
