@@ -4,7 +4,7 @@ class SIPChecker {
     static func isSIPEnabled() -> Bool {
         let result = CommandRunner.run("/usr/bin/csrutil", arguments: ["status"])
         guard result.succeeded else {
-            MiloLog.error("Failed to check SIP status: \(result.stderr)", category: .security)
+            MiloLog.error(.sipStatusReadFailed, category: .security, detail: result.stderr)
             return true
         }
 

@@ -512,6 +512,7 @@ No phase may be declared complete solely because code was written. Each phase en
    - [x] **Subprocess output bound completed 2026-07-26:** direct and administrator-mediated command results share an exact 1 MiB combined stdout/stderr budget; excess output is truncated in bounded storage and returned as an explicit failed `outputLimitExceeded` termination. Process-group-safe deadlines and cancellation remain open.
 4. [ ] Introduce capability enforcement at use-case boundaries.
 5. [ ] Implement structured redacted logging and support diagnostics.
+   - [x] **Typed logging boundary completed 2026-07-26:** every runtime log uses a stable typed event code as its only public field; paths, labels, commands, stderr, errors, and all other caller-supplied details are always private. The caller-controlled public bypass is removed, event codes are unique, and red-team tests reject free-form or public-detail logging. A bounded redacted support export with OSStatus/errno/request-ID context remains open.
 
 **Exit gate:** complete concurrency and TSan stress suite pass; every async operation reaches a documented terminal state; no unreviewed `@unchecked Sendable`.
 

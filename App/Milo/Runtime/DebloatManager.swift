@@ -284,7 +284,7 @@ final class DebloatManager: ObservableObject {
     @discardableResult
     nonisolated static func runValidatedCommand(_ command: String, privileged: Bool) -> Bool {
         guard let debloatCommand = DebloatCommand.parse(command) else {
-            MiloLog.error("Rejected unsupported debloat command: \(command)", category: .security)
+            MiloLog.error(.unsupportedTuningCommand, category: .security, detail: command)
             return false
         }
         return debloatCommand.run(privileged: privileged)

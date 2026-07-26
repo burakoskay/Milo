@@ -59,7 +59,11 @@ enum DebloatCommand {
                 try FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
                 return true
             } catch {
-                MiloLog.error("Failed touch-equivalent file operation at \(path): \(error.localizedDescription)", category: .persistence)
+                MiloLog.error(
+                    .fileTouchFailed,
+                    category: .persistence,
+                    detail: "path=\(path) error=\(error.localizedDescription)"
+                )
                 return ignoreFailure
             }
         case .removeFile(let path, let ignoreFailure):
@@ -69,7 +73,11 @@ enum DebloatCommand {
                 }
                 return true
             } catch {
-                MiloLog.error("Failed rm-equivalent file operation at \(path): \(error.localizedDescription)", category: .persistence)
+                MiloLog.error(
+                    .fileRemoveFailed,
+                    category: .persistence,
+                    detail: "path=\(path) error=\(error.localizedDescription)"
+                )
                 return ignoreFailure
             }
         case .killWidgetExtensions:

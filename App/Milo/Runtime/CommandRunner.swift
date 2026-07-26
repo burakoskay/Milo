@@ -92,7 +92,7 @@ enum CommandRunner {
         guard isAllowedExecutable(executable),
               arguments.allSatisfy(isSafeArgument(_:)),
               isAllowedInvocation(executable: executable, arguments: arguments) else {
-            MiloLog.error("Rejected command outside allowlist: \(executable)", category: .security)
+            MiloLog.error(.commandPolicyRejected, category: .security, detail: executable)
             return CommandResult(
                 status: 126,
                 stdout: "",
@@ -236,7 +236,7 @@ enum CommandRunner {
               isAllowedExecutable(executable),
               arguments.allSatisfy(isSafeArgument(_:)),
               isAllowedInvocation(executable: executable, arguments: arguments) else {
-            MiloLog.error("Rejected privileged command outside allowlist: \(executable)", category: .security)
+            MiloLog.error(.privilegedCommandPolicyRejected, category: .security, detail: executable)
             return CommandResult(
                 status: 126,
                 stdout: "",
@@ -263,7 +263,7 @@ enum CommandRunner {
                   isAllowedExecutable(cmd.executable),
                   cmd.arguments.allSatisfy(isSafeArgument(_:)),
                   isAllowedInvocation(executable: cmd.executable, arguments: cmd.arguments) else {
-                MiloLog.error("Rejected privileged command outside allowlist: \(cmd.executable)", category: .security)
+                MiloLog.error(.privilegedCommandPolicyRejected, category: .security, detail: cmd.executable)
                 return CommandResult(
                     status: 126,
                     stdout: "",

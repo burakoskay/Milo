@@ -32,7 +32,7 @@ final class ProcessManager: Sendable {
         guard !label.isEmpty, label.count <= 256 else { return nil }
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-_"))
         guard label.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
-            MiloLog.warning("Rejected unsafe launchd label: \(label)", category: .process)
+            MiloLog.warning(.unsafeLaunchdLabel, category: .process, detail: label)
             return nil
         }
         return label
@@ -43,7 +43,7 @@ final class ProcessManager: Sendable {
         let standardized = URL(fileURLWithPath: expanded).standardizedFileURL.path
         guard standardized.hasSuffix(".plist") else { return nil }
         guard !standardized.unicodeScalars.contains(where: { CharacterSet.newlines.contains($0) || CharacterSet.controlCharacters.contains($0) }) else {
-            MiloLog.warning("Rejected unsafe plist path: \(path)", category: .process)
+            MiloLog.warning(.unsafePlistPath, category: .process, detail: path)
             return nil
         }
         let userLaunchAgents = FileManager.default.homeDirectoryForCurrentUser
@@ -57,7 +57,7 @@ final class ProcessManager: Sendable {
             userLaunchAgents
         ]
         guard allowedRoots.contains(where: { standardized == $0 || standardized.hasPrefix($0 + "/") }) else {
-            MiloLog.warning("Rejected plist outside LaunchAgents/LaunchDaemons: \(path)", category: .process)
+            MiloLog.warning(.plistOutsideAllowedRoots, category: .process, detail: path)
             return nil
         }
         return standardized
@@ -398,7 +398,7 @@ final class ProcessManager: Sendable {
     func scanForRunningTargetsWithResources() throws -> (bloat: [ProcessItem], intelligence: [ProcessItem]) {
         let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,%cpu,rss,comm,command"])
         guard result.succeeded else {
-            MiloLog.error("Process scan command failed with status \(result.status)", category: .process)
+            MiloLog.error(.processScanFailed, category: .process, detail: "status=\(result.status)")
             throw MiloOperationFailure(
                 operation: .scan,
                 code: .system,
@@ -494,7 +494,7 @@ final class ProcessManager: Sendable {
     func scanForRunningTargets() -> (bloat: [String], intelligence: [String]) {
         let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,comm,command"])
         guard result.succeeded else {
-            MiloLog.error("Failed to scan processes: \(result.stderr)", category: .process)
+            MiloLog.error(.processEnumerationFailed, category: .process, detail: result.stderr)
             return ([], [])
         }
 
@@ -671,7 +671,11 @@ final class ProcessManager: Sendable {
     private func exactPIDs(matchingStaticTargetName targetName: String) -> Set<Int32> {
         let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,comm,command"])
         guard result.succeeded else {
-            MiloLog.error("Failed to enumerate exact process identifiers for \(targetName): \(result.stderr)", category: .process)
+            MiloLog.error(
+                .processIdentityEnumerationFailed,
+                category: .process,
+                detail: "target=\(targetName) error=\(result.stderr)"
+            )
             return []
         }
 
@@ -906,7 +910,7 @@ final class ProcessManager: Sendable {
         }
 
         guard let finalLabel = label, !finalLabel.isEmpty else {
-            MiloLog.warning("Failed to determine label for plist at: \(path)", category: .process)
+            MiloLog.warning(.launchdLabelResolutionFailed, category: .process, detail: path)
             return
         }
 
@@ -916,11 +920,11 @@ final class ProcessManager: Sendable {
         let domain = isDaemon ? "system" : "gui/\(uid)"
 
         guard let safeLabel = Self.validateLaunchdLabel(finalLabel) else {
-            MiloLog.warning("Rejected toggle for unsafe label: \(finalLabel)", category: .process)
+            MiloLog.warning(.launchdToggleRejected, category: .process, detail: "label=\(finalLabel)")
             return
         }
         guard let safePath = Self.validatePlistPath(path) else {
-            MiloLog.warning("Rejected toggle for unsafe path: \(path)", category: .process)
+            MiloLog.warning(.launchdToggleRejected, category: .process, detail: "path=\(path)")
             return
         }
         let requiresAdmin = Self.requiresAdministrator(forPlistPath: safePath)
@@ -968,7 +972,11 @@ final class ProcessManager: Sendable {
                 return plist["Label"] as? String
             }
         } catch {
-            MiloLog.error("Error reading or parsing plist at \(path): \(error.localizedDescription)", category: .process)
+            MiloLog.error(
+                .plistReadFailed,
+                category: .process,
+                detail: "path=\(path) error=\(error.localizedDescription)"
+            )
         }
         return nil
     }

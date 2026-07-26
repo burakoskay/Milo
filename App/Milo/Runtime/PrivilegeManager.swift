@@ -122,7 +122,11 @@ final class PrivilegeManager: @unchecked Sendable {
             let tempURL = try createSecureTemporarySudoersFile(contents: sudoersContent)
             tempFile = tempURL.path
         } catch {
-            MiloLog.error("Failed to write temporary sudoers file: \(error.localizedDescription)", category: .privileges)
+            MiloLog.error(
+                .privilegeTemporaryFileWriteFailed,
+                category: .privileges,
+                detail: error.localizedDescription
+            )
             completion(false)
             return
         }
@@ -150,14 +154,18 @@ final class PrivilegeManager: @unchecked Sendable {
                             try FileManager.default.removeItem(atPath: tempFile)
                         }
                     } catch {
-                        MiloLog.warning("Failed to clean up temporary sudoers file: \(error.localizedDescription)", category: .privileges)
+                        MiloLog.warning(
+                            .privilegeTemporaryFileCleanupFailed,
+                            category: .privileges,
+                            detail: error.localizedDescription
+                        )
                     }
 
                     if succeeded {
                         self?.setCachedVerification(nil)
                         completion(true)
                     } else {
-                        MiloLog.error("Failed to configure privileges via administrator prompt", category: .privileges)
+                        MiloLog.error(.privilegeConfigurationFailed, category: .privileges)
                         completion(false)
                     }
                 }

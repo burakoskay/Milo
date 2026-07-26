@@ -112,13 +112,17 @@ final class SettingsManager {
                 }
             } catch {
                 let action = enable ? "register" : "unregister"
-                MiloLog.error("Failed to \(action) login item: \(error.localizedDescription)", category: .settings)
+                MiloLog.error(
+                    .loginItemUpdateFailed,
+                    category: .settings,
+                    detail: "action=\(action) error=\(error.localizedDescription)"
+                )
             }
         } else {
             // Fallback: shared file list (deprecated but functional on 12)
             let success = SMLoginItemSetEnabled("com.monomacaw.milo" as CFString, enable)
             if !success {
-                MiloLog.error("SMLoginItemSetEnabled failed for enable=\(enable)", category: .settings)
+                MiloLog.error(.loginItemUpdateFailed, category: .settings, detail: "enable=\(enable)")
             }
         }
     }

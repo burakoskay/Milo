@@ -136,7 +136,7 @@ final class MemoryManager: Sendable {
     func getMemoryStats() -> MemoryStats? {
         let result = CommandRunner.run("/usr/bin/vm_stat")
         guard result.succeeded else {
-            MiloLog.error("Failed to read memory statistics: \(result.stderr)", category: .memory)
+            MiloLog.error(.memoryStatisticsReadFailed, category: .memory, detail: result.stderr)
             return nil
         }
 
@@ -184,7 +184,7 @@ final class MemoryManager: Sendable {
         var length = MemoryLayout<UInt64>.size
         let sysctlStatus = sysctlbyname("hw.memsize", &size, &length, nil, 0)
         guard sysctlStatus == 0, size > 0 else {
-            MiloLog.error("Failed to read total physical memory via sysctl", category: .memory)
+            MiloLog.error(.physicalMemoryReadFailed, category: .memory)
             return nil
         }
         let totalGB = Double(size) / 1_073_741_824.0

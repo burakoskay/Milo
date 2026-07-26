@@ -58,6 +58,7 @@
 		C12F8A91E96D1885BEFC8BE0 /* BuildConfigurationRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78C0BA198C3D430DA0B373E /* BuildConfigurationRegressionTests.swift */; };
 		C65B151A1580F8F990675CCF /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D609CA1F11AF52D1BD7367A5 /* main.swift */; };
 		C72076D31C12BCD6E6B651FD /* DebloatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A80F4A7B5A94ADAF57DB2F1 /* DebloatManager.swift */; };
+		D3BE2D85ACFEA1DBC46CF8E7 /* LoggingPrivacyRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4585186309DEBF93461D50FB /* LoggingPrivacyRegressionTests.swift */; };
 		D48B33B4F8DBCED154E772C9 /* MenuBarAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A07FB9C7D380E9934A7E7D9 /* MenuBarAppDelegate.swift */; };
 		D7AB690D3CDF25305EC7DFD1 /* com.monomacaw.milo.helper.plist in CopyFiles */ = {isa = PBXBuildFile; fileRef = F7DB5C51451F853E05CB1F5B /* com.monomacaw.milo.helper.plist */; };
 		E2FD74BFE06D6573F84D402C /* MenuBarIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 23F8C46FDFBB45EC4DEF1E80 /* MenuBarIcon.png */; };
@@ -130,6 +131,7 @@
 		3C9D7A2F011737C6BBB94A7E /* Milo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Milo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		447310230900239EFAB48C54 /* ProcessData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessData.swift; sourceTree = "<group>"; };
 		45137EDCC84489E603D13994 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
+		4585186309DEBF93461D50FB /* LoggingPrivacyRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingPrivacyRegressionTests.swift; sourceTree = "<group>"; };
 		4DA017ACB4B4814FE0CE3F3B /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		5D89311D4561854013F3946A /* MiloLite.Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = MiloLite.Debug.xcconfig; sourceTree = "<group>"; };
 		5DE23F497A9E88E5901C4ED0 /* MiloRedTeamTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MiloRedTeamTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -220,6 +222,7 @@
 				C67C9DFA7CDD06636DE4E32A /* ConcurrencySafetyRegressionTests.swift */,
 				36E9B3C1CFD0CAAF1A64B1FA /* Exit173RegressionTest.swift */,
 				610EA18BD33FC14436005470 /* LegacyDesktopAuthRegressionTests.swift */,
+				4585186309DEBF93461D50FB /* LoggingPrivacyRegressionTests.swift */,
 			);
 			path = redteam;
 			sourceTree = "<group>";
@@ -641,6 +644,7 @@
 				B91B9274807CFA3E0F5B2DFC /* ConcurrencySafetyRegressionTests.swift in Sources */,
 				48B3522D1209E1AC392CFF3F /* Exit173RegressionTest.swift in Sources */,
 				4A3413D316451560A521B150 /* LegacyDesktopAuthRegressionTests.swift in Sources */,
+				D3BE2D85ACFEA1DBC46CF8E7 /* LoggingPrivacyRegressionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -36,6 +36,7 @@ version 1.x predates this regime.
 
 ### Security
 
+- Restricts runtime logs to stable public event codes while keeping all caller-supplied diagnostic details private, with regression tests that reject free-form or caller-public logging.
 - Bound combined subprocess stdout and stderr to a fixed byte budget and expose truncation as an explicit failed termination state.
 - Separates Debug from production service configuration, validates all public verification-key inputs without logging values, keeps private credentials out of the client build, and rejects incomplete production packages.
 - Enables current Xcode hardening defaults, requires documented synchronization proofs for every `@unchecked Sendable` boundary, and rejects unsafe concurrency escape hatches in regression tests.

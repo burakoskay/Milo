@@ -83,7 +83,7 @@ private struct SyntheticProcessHandle {
 enum SelfTestRunner {
     private static func emit(_ message: String = "") {
         guard let data = (message + "\n").data(using: .utf8) else {
-            MiloLog.error("Self-test failed to encode output line", category: .selfTest)
+            MiloLog.error(.selfTestEncodingFailed, category: .selfTest)
             return
         }
         FileHandle.standardOutput.write(data)
@@ -819,7 +819,11 @@ enum SelfTestRunner {
             do {
                 try data.write(to: url)
             } catch {
-                MiloLog.error("Self-test restore failed for \(url.path): \(error.localizedDescription)", category: .selfTest)
+                MiloLog.error(
+                    .selfTestRestoreFailed,
+                    category: .selfTest,
+                    detail: "path=\(url.path) error=\(error.localizedDescription)"
+                )
             }
         } else if !existed {
             removeIfExists(at: url)
@@ -972,7 +976,11 @@ enum SelfTestRunner {
         do {
             return try Data(contentsOf: url)
         } catch {
-            MiloLog.error("Self-test failed to read \(url.path): \(error.localizedDescription)", category: .selfTest)
+            MiloLog.error(
+                .selfTestReadFailed,
+                category: .selfTest,
+                detail: "path=\(url.path) error=\(error.localizedDescription)"
+            )
             return nil
         }
     }
@@ -991,7 +999,11 @@ enum SelfTestRunner {
         do {
             try FileManager.default.removeItem(at: url)
         } catch {
-            MiloLog.error("Self-test cleanup failed for \(url.path): \(error.localizedDescription)", category: .selfTest)
+            MiloLog.error(
+                .selfTestCleanupFailed,
+                category: .selfTest,
+                detail: "path=\(url.path) error=\(error.localizedDescription)"
+            )
         }
     }
 }

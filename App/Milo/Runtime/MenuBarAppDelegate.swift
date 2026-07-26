@@ -9,7 +9,7 @@ private enum RuntimeIntegrityState {
 
     static func markCompromised(reason: String) {
         UserDefaults.standard.set(true, forKey: compromisedKey)
-        MiloLog.warning("Runtime integrity check failed: \(reason)", category: .security)
+        MiloLog.warning(.runtimeIntegrityFailed, category: .security, detail: reason)
     }
 }
 

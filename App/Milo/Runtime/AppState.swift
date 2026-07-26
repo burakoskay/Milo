@@ -152,7 +152,7 @@ final class AppState: ObservableObject {
                 } catch is CancellationError {
                     return
                 } catch {
-                    MiloLog.error("Main-actor delay failed: \(error.localizedDescription)", category: .general)
+                    MiloLog.error(.mainActorDelayFailed, detail: error.localizedDescription)
                     return
                 }
             }
