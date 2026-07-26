@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import MiloDomain
 import SwiftUI
 
 private enum SelfTestStatus: String {
@@ -75,7 +76,8 @@ private struct SettingsSnapshot {
 private struct SyntheticProcessHandle {
     let name: String
     let vendor: String
-    let process: Process
+    let task: Task<Void, Never>
+    let completion: DispatchSemaphore
     let directory: URL
 }
 
@@ -405,7 +407,9 @@ enum SelfTestRunner {
             return SelfTestResult(name: "Scan is read-only", status: .fail, detail: "Synthetic '\(handle.name)' process did not appear in the scan")
         }
 
-        let stillRunning = handle.process.isRunning
+        let stillRunning = syntheticProcessIsRunning(
+            at: handle.directory.appendingPathComponent(handle.name)
+        )
         let noKillTriggered = appState.lastKillResults.isEmpty
 
         if stillRunning && noKillTriggered {
@@ -944,14 +948,31 @@ enum SelfTestRunner {
             try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/sleep"), to: executable)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
 
-            let process = Process()
-            process.executableURL = executable
-            process.arguments = ["600"]
-            process.standardOutput = Pipe()
-            process.standardError = Pipe()
-            try process.run()
-
-            return SyntheticProcessHandle(name: name, vendor: vendor, process: process, directory: directory)
+            let completion = DispatchSemaphore(value: 0)
+            let task = Task.detached(priority: .utility) {
+                _ = MiloSubprocessRunner.run(
+                    executable: executable.path,
+                    arguments: ["600"],
+                    maximumOutputBytes: 1_024,
+                    deadline: .seconds(60),
+                    cancellationRequested: { Task<Never, Never>.isCancelled }
+                )
+                completion.signal()
+            }
+            let handle = SyntheticProcessHandle(
+                name: name,
+                vendor: vendor,
+                task: task,
+                completion: completion,
+                directory: directory
+            )
+            guard waitUntil(timeout: 1.5, interval: 0.05, condition: {
+                syntheticProcessIsRunning(at: executable)
+            }) else {
+                cleanupSyntheticProcesses([handle])
+                return nil
+            }
+            return handle
         } catch {
             removeIfExists(at: directory)
             return nil
@@ -960,15 +981,21 @@ enum SelfTestRunner {
 
     private static func cleanupSyntheticProcesses(_ handles: [SyntheticProcessHandle]) {
         for handle in handles {
-            if handle.process.isRunning {
-                handle.process.terminate()
-                _ = waitUntil(timeout: 1.5) { !handle.process.isRunning }
-                if handle.process.isRunning {
-                    _ = CommandRunner.run("/bin/kill", arguments: ["-9", String(handle.process.processIdentifier)])
-                }
+            handle.task.cancel()
+            if handle.completion.wait(timeout: .now() + 2) == .timedOut {
+                MiloLog.error(
+                    .selfTestCleanupFailed,
+                    category: .selfTest,
+                    detail: "Synthetic process cleanup timed out for \(handle.name)"
+                )
             }
             removeIfExists(at: handle.directory)
         }
+    }
+
+    private static func syntheticProcessIsRunning(at executable: URL) -> Bool {
+        let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid=,command="])
+        return result.succeeded && result.stdout.contains(executable.path)
     }
 
     fileprivate static func readDataIfPresent(at url: URL) -> Data? {

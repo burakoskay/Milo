@@ -36,7 +36,7 @@ version 1.x predates this regime.
 
 ### Security
 
-- Runs allowlisted commands in private POSIX process groups with strict deadlines, task-cancellation propagation, bounded cleanup, and group-wide termination on timeout, cancellation, or output overflow.
+- Runs allowlisted commands and synthetic self-test children in private POSIX process groups with strict deadlines, task-cancellation propagation, bounded cleanup, and group-wide termination on timeout, cancellation, or output overflow.
 - Restricts runtime logs to stable public event codes while keeping all caller-supplied diagnostic details private, with regression tests that reject free-form or caller-public logging.
 - Bound combined subprocess stdout and stderr to a fixed byte budget and expose truncation as an explicit failed termination state.
 - Separates Debug from production service configuration, validates all public verification-key inputs without logging values, keeps private credentials out of the client build, and rejects incomplete production packages.

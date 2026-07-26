@@ -158,6 +158,9 @@ final class TargetBoundaryTests: XCTestCase {
                 "Packages/MiloKit/Sources/MiloDomain/SubprocessRunner.swift"
             )
         )
+        let selfTestRunner = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/SelfTestRunner.swift")
+        )
 
         XCTAssertTrue(commandRunner.contains("MiloBoundedCommandOutput"))
         XCTAssertTrue(commandRunner.contains("maximumOutputBytes: Int = defaultMaximumOutputBytes"))
@@ -175,6 +178,9 @@ final class TargetBoundaryTests: XCTestCase {
         XCTAssertTrue(subprocessRunner.contains("terminateProcessGroup"))
         XCTAssertTrue(subprocessRunner.contains("case timedOut"))
         XCTAssertTrue(subprocessRunner.contains("case cancelled"))
+        XCTAssertTrue(selfTestRunner.contains("MiloSubprocessRunner.run"))
+        XCTAssertTrue(selfTestRunner.contains("handle.task.cancel()"))
+        XCTAssertFalse(selfTestRunner.contains("Process()"))
     }
 
     private func readText(at url: URL) throws -> String {
