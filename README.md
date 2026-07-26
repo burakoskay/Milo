@@ -123,6 +123,7 @@ For a predictable interview, use disposable test processes and avoid changing sy
 | `Packages/MiloKit` | Domain, hardening, licensing, update policy, and Sparkle integration |
 | `Tests` | Red-team, unit, integration, and UI regression tests |
 | `Tools` | Deterministic generation, verification, signing, and packaging tools |
+| `HANDOFF.md` | Current checkout, artifact, security-boundary, verification, and next-action handoff |
 | `July27plan.md` | Full production finalization audit and tracked execution plan |
 
 ## Scope and limitations
