@@ -1,6 +1,7 @@
 import Foundation
 
-final class WhitelistManager: @unchecked Sendable {
+@MainActor
+final class WhitelistManager {
     static let shared = WhitelistManager()
 
     private let whitelistFileURL: URL? = {

@@ -57,14 +57,14 @@ final class LicenseManager: ObservableObject {
         }
 
         do {
-            pairingChallenge = try client.pendingEnrollment()
+            pairingChallenge = try await client.pendingEnrollment()
         } catch {
             pairingChallenge = nil
             licenseError = Self.userMessage(for: error)
         }
 
         do {
-            apply(try client.cachedLicense())
+            apply(try await client.cachedLicense())
         } catch MLPLicenseError.enrollmentMissing {
             snapshot = .locked
         } catch {
@@ -153,11 +153,11 @@ final class LicenseManager: ObservableObject {
     }
 
     /// Removes all device enrollment and cached license material from this Mac.
-    func clearLocalLicenseState() {
-        guard !isVerifying else {
-            licenseError = "Wait for the current license operation to finish, then try again."
+    func clearLocalLicenseState() async {
+        guard beginOperation() else {
             return
         }
+        defer { finishOperation() }
         guard let client = configuredClient() else {
             return
         }
@@ -165,7 +165,7 @@ final class LicenseManager: ObservableObject {
         snapshot = .locked
         pairingChallenge = nil
         do {
-            try client.clearLocalState()
+            try await client.clearLocalState()
             licenseError = nil
         } catch {
             licenseError = "Milo locked Pro features, but some local pairing data could not be removed. \(Self.userMessage(for: error))"

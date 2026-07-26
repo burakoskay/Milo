@@ -286,7 +286,7 @@ public struct MiloLicenseService: Sendable {
 }
 
 /// Owns Milo's non-exportable device key and MLP-v1 enrollment lifecycle.
-public final class MLPDeviceLicenseClient: @unchecked Sendable {
+public actor MLPDeviceLicenseClient {
     private let configuration: MLPClientConfiguration
     private let keyStore: MLPDeviceKeyStore
     private let session: URLSession
@@ -732,7 +732,7 @@ private enum MLPBase64URL {
     }
 }
 
-private final class MLPDeviceKeyStore: @unchecked Sendable {
+private final class MLPDeviceKeyStore {
     private let tag = Data("com.monomacaw.milo.mlp-v1.device-key".utf8)
     private let publicKeySPKIPrefix = Data([
         0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D,
@@ -852,7 +852,7 @@ private final class MLPDeviceKeyStore: @unchecked Sendable {
     }
 }
 
-private struct MLPKeychainStore<Value: Codable>: @unchecked Sendable {
+private struct MLPKeychainStore<Value: Codable> {
     let service: String
     let account: String
 

@@ -64,7 +64,7 @@ let package = Package(
             ],
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug)),
-                .unsafeFlags(["-strict-concurrency=targeted"])
+                .unsafeFlags(["-strict-concurrency=complete"])
             ],
             linkerSettings: [
                 .linkedFramework("AppKit"),

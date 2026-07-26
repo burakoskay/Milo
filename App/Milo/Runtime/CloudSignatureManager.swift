@@ -1,30 +1,30 @@
 import Foundation
 
-enum TelemetryCategory: String, Codable, Hashable {
+enum TelemetryCategory: String, Codable, Hashable, Sendable {
     case bloat
     case intelligence
 }
 
-enum TelemetryTerminationStrategy: String, Codable, Hashable {
+enum TelemetryTerminationStrategy: String, Codable, Hashable, Sendable {
     case signal
     case launchctlBootout = "launchctl_bootout"
     case launchctlDisable = "launchctl_disable"
     case none
 }
 
-enum TelemetryLaunchdDomain: String, Codable, Hashable {
+enum TelemetryLaunchdDomain: String, Codable, Hashable, Sendable {
     case gui
     case system
     case both
 }
 
-struct TelemetryCodeSignature: Hashable {
+struct TelemetryCodeSignature: Hashable, Sendable {
     let teamID: String?
     let signingIdentifier: String?
     let bundleID: String?
 }
 
-struct TelemetryProcessObservation {
+struct TelemetryProcessObservation: Sendable {
     let pid: Int32
     let executablePath: String
     let executableName: String
@@ -32,7 +32,7 @@ struct TelemetryProcessObservation {
     let codeSignature: TelemetryCodeSignature?
 }
 
-struct TelemetrySignature: Codable, Hashable, Identifiable {
+struct TelemetrySignature: Codable, Hashable, Identifiable, Sendable {
     var id: String { ruleID }
 
     let ruleID: String
@@ -54,7 +54,7 @@ struct TelemetrySignature: Codable, Hashable, Identifiable {
     let severity: Int
 }
 
-struct TelemetryMatch: Hashable {
+struct TelemetryMatch: Hashable, Sendable {
     let signature: TelemetrySignature
     let matchedPID: Int32
 }
@@ -62,6 +62,8 @@ struct TelemetryMatch: Hashable {
 /// Zero-Debt Cloud Signature Manager
 /// Holds signed telemetry rules and enforces multi-factor match semantics before
 /// the process manager is allowed to display or terminate a cloud target.
+/// SAFETY: `cloudRules` is the only mutable field and every read/write is
+/// serialized by `lock`; the remaining stored state is immutable.
 final class CloudSignatureManager: @unchecked Sendable {
     static let shared = CloudSignatureManager()
 

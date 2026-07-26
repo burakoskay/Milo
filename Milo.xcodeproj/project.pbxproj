@@ -52,6 +52,7 @@
 		ADE8640A6899E483590FCD81 /* MiloLiteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC6BB69824A8F657BA27776 /* MiloLiteApp.swift */; };
 		B1AA94FE9EABE56F1BDF949F /* MiloDomain in Frameworks */ = {isa = PBXBuildFile; productRef = 6BB1EB4839AC61B2A0FC952D /* MiloDomain */; };
 		B22585DC1E05132CB47100A1 /* MemoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 731F9AD6F5FF57D42A450F0E /* MemoryManager.swift */; };
+		B91B9274807CFA3E0F5B2DFC /* ConcurrencySafetyRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C67C9DFA7CDD06636DE4E32A /* ConcurrencySafetyRegressionTests.swift */; };
 		BDA1FCC94D0CC3076136F2CD /* MiloDomain in Frameworks */ = {isa = PBXBuildFile; productRef = B0079582738AD6D8E83D6F4C /* MiloDomain */; };
 		BE0E3069C96845341A9A4A6B /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 24B36AA49C51B70DCDD4481E /* SwiftUI.framework */; };
 		C65B151A1580F8F990675CCF /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D609CA1F11AF52D1BD7367A5 /* main.swift */; };
@@ -151,6 +152,7 @@
 		AB9FF24FD37D04267E168624 /* MiloUpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloUpdateManager.swift; sourceTree = "<group>"; };
 		BDF03A696C418F6D71850967 /* SelfTestRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelfTestRunner.swift; sourceTree = "<group>"; };
 		C652DF2F309F4EE2503A4CFC /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		C67C9DFA7CDD06636DE4E32A /* ConcurrencySafetyRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrencySafetyRegressionTests.swift; sourceTree = "<group>"; };
 		CA564785E4966D506C8F91F6 /* milo_black.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = milo_black.png; sourceTree = "<group>"; };
 		CEB4676F09D3B8D85C7518B2 /* MiloKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MiloKit; path = Packages/MiloKit; sourceTree = SOURCE_ROOT; };
 		D609CA1F11AF52D1BD7367A5 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -206,6 +208,7 @@
 			isa = PBXGroup;
 			children = (
 				EFC309890AEE59174B5D1234 /* AuthenticatedUpdateRegressionTests.swift */,
+				C67C9DFA7CDD06636DE4E32A /* ConcurrencySafetyRegressionTests.swift */,
 				36E9B3C1CFD0CAAF1A64B1FA /* Exit173RegressionTest.swift */,
 				610EA18BD33FC14436005470 /* LegacyDesktopAuthRegressionTests.swift */,
 			);
@@ -621,6 +624,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				937A9950089E6E12208D391C /* AuthenticatedUpdateRegressionTests.swift in Sources */,
+				B91B9274807CFA3E0F5B2DFC /* ConcurrencySafetyRegressionTests.swift in Sources */,
 				48B3522D1209E1AC392CFF3F /* Exit173RegressionTest.swift in Sources */,
 				4A3413D316451560A521B150 /* LegacyDesktopAuthRegressionTests.swift in Sources */,
 			);
@@ -760,6 +764,7 @@
 				DEVELOPMENT_TEAM = 8N738727QB;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -952,6 +957,7 @@
 				DEVELOPMENT_TEAM = 8N738727QB;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_TREAT_WARNINGS_AS_ERRORS = YES;

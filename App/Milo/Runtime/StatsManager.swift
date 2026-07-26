@@ -1,6 +1,6 @@
 import Foundation
 
-struct KillStats: Codable {
+struct KillStats: Codable, Sendable {
     let timestamp: Date
     let processName: String
     let cpuUsage: Double
@@ -8,7 +8,7 @@ struct KillStats: Codable {
     let vendor: String
 }
 
-struct AggregatedStats: Codable {
+struct AggregatedStats: Codable, Sendable {
     var totalProcessesKilled: Int = 0
     var totalCPUSaved: Double = 0.0  // Total CPU percentage saved
     var totalRAMSavedMB: Double = 0.0
@@ -57,7 +57,8 @@ struct AggregatedStats: Codable {
     }
 }
 
-final class StatsManager: @unchecked Sendable {
+@MainActor
+final class StatsManager {
     static let shared = StatsManager()
 
     private let statsFileURL: URL? = {

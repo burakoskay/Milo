@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-struct MemoryStats {
+struct MemoryStats: Sendable {
     let totalGB: Double
     let wiredGB: Double
     let activeGB: Double
@@ -12,7 +12,7 @@ struct MemoryStats {
     let cachedFilesGB: Double
     let memoryPressure: MemoryPressure
 
-    enum MemoryPressure {
+    enum MemoryPressure: Sendable {
         case normal, warning, critical
 
         var color: Color {
@@ -37,7 +37,7 @@ struct MemoryStats {
     }
 }
 
-final class MemoryManager: @unchecked Sendable {
+final class MemoryManager: Sendable {
     static let shared = MemoryManager()
 
     @discardableResult

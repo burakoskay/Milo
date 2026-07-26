@@ -14,6 +14,7 @@ private struct SelfTestResult {
     let detail: String
 }
 
+@MainActor
 private struct SettingsSnapshot {
     let launchAtLogin: Bool
     let autoScanOnOpen: Bool
@@ -78,6 +79,7 @@ private struct SyntheticProcessHandle {
     let directory: URL
 }
 
+@MainActor
 enum SelfTestRunner {
     private static func emit(_ message: String = "") {
         guard let data = (message + "\n").data(using: .utf8) else {
@@ -860,6 +862,7 @@ enum SelfTestRunner {
         DebloatManager.runValidatedCommand(command, privileged: true)
     }
 
+    /// SAFETY: `value` is accessed only while `lock` is held.
     private final class SelfTestResultBox: @unchecked Sendable {
         private let lock = NSLock()
         private var value: SelfTestResult

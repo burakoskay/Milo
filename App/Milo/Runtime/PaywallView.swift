@@ -150,7 +150,9 @@ struct PaywallView: View {
             }
 
             Button("Disconnect This Mac", role: .destructive) {
-                licenseManager.clearLocalLicenseState()
+                Task {
+                    await licenseManager.clearLocalLicenseState()
+                }
             }
             .buttonStyle(.borderless)
             .font(.caption)

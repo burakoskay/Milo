@@ -4,6 +4,8 @@ import Security
 
 /// Manages the optional passwordless mode.
 /// This is intentionally opt-in because sudoers rules apply to the whole user session.
+/// SAFETY: `_sudoVerified` is the only mutable stored state and is accessed
+/// exclusively through `verificationLock`; all other stored state is immutable.
 final class PrivilegeManager: @unchecked Sendable {
     static let shared = PrivilegeManager()
 
@@ -11,6 +13,7 @@ final class PrivilegeManager: @unchecked Sendable {
 
     /// Cached result of sudo verification (reset on configure/remove)
     private var _sudoVerified: Bool?
+    private let verificationLock = NSLock()
 
     private enum SudoersTempFileError: LocalizedError {
         case randomGenerationFailed(OSStatus)
@@ -39,17 +42,17 @@ final class PrivilegeManager: @unchecked Sendable {
     var isConfigured: Bool {
         // First check if the sudoers file exists
         guard FileManager.default.fileExists(atPath: sudoersFilePath) else {
-            _sudoVerified = nil
+            setCachedVerification(nil)
             return false
         }
         guard !containsLegacyBroadRules() else {
-            _sudoVerified = nil
+            setCachedVerification(nil)
             return false
         }
         // Use cached result if available
-        if let cached = _sudoVerified { return cached }
+        if let cached = cachedVerification() { return cached }
         let result = verifySudoWorks()
-        _sudoVerified = result
+        setCachedVerification(result)
         return result
     }
 
@@ -76,7 +79,19 @@ final class PrivilegeManager: @unchecked Sendable {
 
     /// Reset the cached verification result
     func resetVerification() {
-        _sudoVerified = nil
+        setCachedVerification(nil)
+    }
+
+    private func cachedVerification() -> Bool? {
+        verificationLock.lock()
+        defer { verificationLock.unlock() }
+        return _sudoVerified
+    }
+
+    private func setCachedVerification(_ value: Bool?) {
+        verificationLock.lock()
+        _sudoVerified = value
+        verificationLock.unlock()
     }
 
     /// Configure passwordless access (requires one-time password)
@@ -127,6 +142,7 @@ final class PrivilegeManager: @unchecked Sendable {
             var error: NSDictionary?
             if let appleScript = NSAppleScript(source: script) {
                 _ = appleScript.executeAndReturnError(&error)
+                let succeeded = error == nil
                 DispatchQueue.main.async { [weak self, tempFile, completion] in
                     // Clean up temp file if still exists
                     do {
@@ -137,8 +153,8 @@ final class PrivilegeManager: @unchecked Sendable {
                         MiloLog.warning("Failed to clean up temporary sudoers file: \(error.localizedDescription)", category: .privileges)
                     }
 
-                    if error == nil {
-                        self?._sudoVerified = nil // Reset cache so next check re-verifies
+                    if succeeded {
+                        self?.setCachedVerification(nil)
                         completion(true)
                     } else {
                         MiloLog.error("Failed to configure privileges via administrator prompt", category: .privileges)
@@ -229,9 +245,10 @@ final class PrivilegeManager: @unchecked Sendable {
             var error: NSDictionary?
             if let appleScript = NSAppleScript(source: script) {
                 appleScript.executeAndReturnError(&error)
+                let succeeded = error == nil
                 DispatchQueue.main.async {
-                    self?._sudoVerified = nil
-                    completion(error == nil)
+                    self?.setCachedVerification(nil)
+                    completion(succeeded)
                 }
             } else {
                 DispatchQueue.main.async {

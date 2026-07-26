@@ -22,6 +22,8 @@ public struct MiloLoopbackAppcastEndpoint: Sendable, Equatable {
 
 /// Serves hash-verified appcast bytes over a short-lived, tokenized, IPv4-loopback-only endpoint.
 /// All mutable state and Network.framework callbacks are confined to `queue`.
+/// SAFETY: every mutable field is read or written only on `queue`, enforced by
+/// dispatch preconditions at callback boundaries; public methods enqueue work.
 public final class MiloLoopbackAppcastServer: @unchecked Sendable {
     private static let maximumRequestByteCount = 16_384
     private static let maximumConcurrentConnections = 8

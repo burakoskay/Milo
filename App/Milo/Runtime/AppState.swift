@@ -5,13 +5,13 @@ import UserNotifications
 
 // MARK: - Sort Options
 
-enum ProcessSortOrder: String, CaseIterable {
+enum ProcessSortOrder: String, CaseIterable, Sendable {
     case name = "Name"
     case cpuDesc = "CPU"
     case memoryDesc = "Memory"
 }
 
-struct ProcessItem: Identifiable, Hashable {
+struct ProcessItem: Identifiable, Hashable, Sendable {
     let id = UUID()
     let name: String
     let description: String?
@@ -28,7 +28,7 @@ struct ProcessItem: Identifiable, Hashable {
     var isSelected: Bool = false
 }
 
-struct KillResult: Identifiable {
+struct KillResult: Identifiable, Sendable {
     let id = UUID()
     let name: String
     let success: Bool
@@ -43,7 +43,8 @@ struct KillResult: Identifiable {
     }
 }
 
-final class AppState: ObservableObject, @unchecked Sendable {
+@MainActor
+final class AppState: ObservableObject {
     @Published var isSIPEnabled: Bool = true
     @Published var detectedLaunchItems: [LaunchItem] = []
 
@@ -109,15 +110,25 @@ final class AppState: ObservableObject, @unchecked Sendable {
         (visibleBloat + visibleIntelligence).reduce(0) { $0 + $1.memoryMB }
     }
 
-    private static func runOnMain(after delay: TimeInterval = 0, _ work: @escaping @Sendable () -> Void) {
-        guard delay > 0 else {
-            OperationQueue.main.addOperation(work)
-            return
-        }
-        let timer = Timer(timeInterval: delay, repeats: false) { _ in
+    nonisolated private static func runOnMain(
+        after delay: TimeInterval = 0,
+        _ work: @escaping @MainActor @Sendable () -> Void
+    ) {
+        Task { @MainActor in
+            if delay > 0 {
+                let boundedDelay = min(delay, 60)
+                let nanoseconds = UInt64(boundedDelay * 1_000_000_000)
+                do {
+                    try await Task.sleep(nanoseconds: nanoseconds)
+                } catch is CancellationError {
+                    return
+                } catch {
+                    MiloLog.error("Main-actor delay failed: \(error.localizedDescription)", category: .general)
+                    return
+                }
+            }
             work()
         }
-        RunLoop.main.add(timer, forMode: .common)
     }
 
     // Selected process summary
@@ -298,8 +309,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
         autoScanTimer = nil
         guard interval > 0 else { return }
         autoScanTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(interval), repeats: true) { [weak self] _ in
-            self?.scanProcesses()
-            self?.refreshMemoryStats()
+            Self.runOnMain {
+                self?.scanProcesses()
+                self?.refreshMemoryStats()
+            }
         }
     }
 
@@ -334,26 +347,25 @@ final class AppState: ObservableObject, @unchecked Sendable {
         isKilling = true
 
         ProcessManager.shared.killProcessesGracefully(items: toKill) { [weak self] results in
-            guard let self = self else { return }
-            self.pendingKillItems = []
+            Self.runOnMain {
+                guard let appState = self else { return }
+                appState.pendingKillItems = []
 
-            // Record stats for successful kills
-            let successfulKills = results.filter { $0.success }.map { $0.name }
-            let killedProcesses = toKill.filter { successfulKills.contains($0.name) }
-            StatsManager.shared.recordKills(killedProcesses)
+                let successfulKills = results.filter { $0.success }.map(\.name)
+                let killedProcesses = toKill.filter { successfulKills.contains($0.name) }
+                StatsManager.shared.recordKills(killedProcesses)
 
-            self.lastKillResults = results
-            self.showingResults = true
-            self.isKilling = false
-            self.stats = StatsManager.shared.getStats()
+                appState.lastKillResults = results
+                appState.showingResults = true
+                appState.isKilling = false
+                appState.stats = StatsManager.shared.getStats()
 
-            // Re-scan after a short delay to update UI
-            Self.runOnMain(after: 1.5) {
-                self.scanProcesses()
-                self.refreshMemoryStats()
-                // Auto-hide results after showing
-                Self.runOnMain(after: 3.0) {
-                    self.showingResults = false
+                Self.runOnMain(after: 1.5) {
+                    appState.scanProcesses()
+                    appState.refreshMemoryStats()
+                    Self.runOnMain(after: 3.0) {
+                        appState.showingResults = false
+                    }
                 }
             }
         }
@@ -412,19 +424,21 @@ final class AppState: ObservableObject, @unchecked Sendable {
     func purgeMemory() {
         isPurgingMemory = true
         MemoryManager.shared.purgeMemory { [weak self] success, message in
-            guard let appState = self else { return }
-            appState.isPurgingMemory = false
-            appState.memoryMessage = message
-            appState.showingMemoryMessage = true
+            Self.runOnMain {
+                guard let appState = self else { return }
+                appState.isPurgingMemory = false
+                appState.memoryMessage = message
+                appState.showingMemoryMessage = true
 
-            if success {
-                Self.runOnMain(after: 1.0) {
-                    appState.refreshMemoryStats()
+                if success {
+                    Self.runOnMain(after: 1.0) {
+                        appState.refreshMemoryStats()
+                    }
                 }
-            }
 
-            Self.runOnMain(after: 3.0) {
-                appState.showingMemoryMessage = false
+                Self.runOnMain(after: 3.0) {
+                    appState.showingMemoryMessage = false
+                }
             }
         }
     }
@@ -437,13 +451,15 @@ final class AppState: ObservableObject, @unchecked Sendable {
         showingCacheConfirmation = false
         isClearingCaches = true
         MemoryManager.shared.clearUserCaches { [weak self] _, message in
-            guard let appState = self else { return }
-            appState.isClearingCaches = false
-            appState.memoryMessage = message
-            appState.showingMemoryMessage = true
+            Self.runOnMain {
+                guard let appState = self else { return }
+                appState.isClearingCaches = false
+                appState.memoryMessage = message
+                appState.showingMemoryMessage = true
 
-            Self.runOnMain(after: 3.0) {
-                appState.showingMemoryMessage = false
+                Self.runOnMain(after: 3.0) {
+                    appState.showingMemoryMessage = false
+                }
             }
         }
     }
@@ -451,13 +467,15 @@ final class AppState: ObservableObject, @unchecked Sendable {
     func flushDNS() {
         isFlushingDNS = true
         MemoryManager.shared.clearDNSCache { [weak self] _, message in
-            guard let appState = self else { return }
-            appState.isFlushingDNS = false
-            appState.memoryMessage = message
-            appState.showingMemoryMessage = true
+            Self.runOnMain {
+                guard let appState = self else { return }
+                appState.isFlushingDNS = false
+                appState.memoryMessage = message
+                appState.showingMemoryMessage = true
 
-            Self.runOnMain(after: 3.0) {
-                appState.showingMemoryMessage = false
+                Self.runOnMain(after: 3.0) {
+                    appState.showingMemoryMessage = false
+                }
             }
         }
     }

@@ -268,6 +268,7 @@ enum MiloAppcastHTTPResponseValidator {
 }
 
 /// Immutable and stateless; redirect callbacks never access shared mutable state.
+/// SAFETY: this delegate has no stored mutable state and always returns `nil`.
 private final class MiloRedirectRejectingDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     func urlSession(
         _ session: URLSession,

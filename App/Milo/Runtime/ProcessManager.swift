@@ -3,7 +3,7 @@ import AppKit
 import Security
 import Darwin
 
-struct LaunchItem: Identifiable, Hashable {
+struct LaunchItem: Identifiable, Hashable, Sendable {
     let id = UUID()
     let path: String
     let label: String
@@ -12,7 +12,7 @@ struct LaunchItem: Identifiable, Hashable {
 }
 
 // Represents a launchd-managed process that will respawn
-struct LaunchdProcess {
+struct LaunchdProcess: Sendable {
     let label: String           // Main launchd label
     let plistPath: String       // Path to the plist file
     let processName: String
@@ -20,7 +20,7 @@ struct LaunchdProcess {
     let relatedLabels: [String] // Related services that also need disabling
 }
 
-final class ProcessManager: ObservableObject, @unchecked Sendable {
+final class ProcessManager: Sendable {
     static let shared = ProcessManager()
 
     private typealias PrivilegedCommand = (executable: String, arguments: [String])

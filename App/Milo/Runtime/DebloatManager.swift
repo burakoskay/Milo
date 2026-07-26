@@ -3,14 +3,14 @@ import AppKit
 
 // MARK: - Data Model
 
-enum TweakRisk: String {
+enum TweakRisk: String, Sendable {
     case safe = "Safe"          // Pure defaults write, easily reversible
     case moderate = "Moderate"  // Disables services, may affect features
     case aggressive = "Risky"   // SIP-off only, may break things
 }
 
 /// A single debloat tweak with on/off state detection
-struct DebloatTweak: Identifiable, @unchecked Sendable {
+struct DebloatTweak: Identifiable, Sendable {
     let id: String
     let name: String
     let description: String
@@ -28,7 +28,7 @@ struct DebloatTweak: Identifiable, @unchecked Sendable {
     let revertPrivileged: [String]
 
     /// Closure that returns `true` when the tweak is currently active
-    let detect: () -> Bool
+    let detect: @Sendable () -> Bool
 }
 
 struct DebloatCategory: Identifiable, Sendable {
@@ -42,7 +42,8 @@ struct DebloatCategory: Identifiable, Sendable {
 
 // MARK: - Manager
 
-final class DebloatManager: ObservableObject, @unchecked Sendable {
+@MainActor
+final class DebloatManager: ObservableObject {
     static let shared = DebloatManager()
 
     /// All categories (static structure)
@@ -76,29 +77,27 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
 
         busyTweaks.insert(tweak.id)
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let manager = self else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
             let success: Bool
             if applyNow {
-                success = manager.execute(tweak.applyCommands, privileged: tweak.applyPrivileged)
+                success = Self.execute(tweak.applyCommands, privileged: tweak.applyPrivileged)
             } else {
-                success = manager.execute(tweak.revertCommands, privileged: tweak.revertPrivileged)
+                success = Self.execute(tweak.revertCommands, privileged: tweak.revertPrivileged)
             }
 
-            // Re-detect actual state
             let newState = tweak.detect()
 
-            DispatchQueue.main.async {
-                manager.tweakStates[tweak.id] = newState
-                manager.busyTweaks.remove(tweak.id)
+            Task { @MainActor in
+                self.tweakStates[tweak.id] = newState
+                self.busyTweaks.remove(tweak.id)
 
                 if success && newState == applyNow {
-                    manager.toast("\(tweak.name) \(applyNow ? "applied" : "reverted")")
+                    self.toast("\(tweak.name) \(applyNow ? "applied" : "reverted")")
                 } else if !success {
-                    manager.toast("Failed to \(applyNow ? "apply" : "revert") \(tweak.name)")
+                    self.toast("Failed to \(applyNow ? "apply" : "revert") \(tweak.name)")
                 } else {
                     // Command ran but state didn't change as expected
-                    manager.toast("\(tweak.name) — verify manually")
+                    self.toast("\(tweak.name) — verify manually")
                 }
             }
         }
@@ -116,21 +115,22 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
             busyTweaks.insert(tweak.id)
         }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let manager = self else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
             var applied = 0
+            var detectedStates: [String: Bool] = [:]
             for tweak in unapplied {
-                let ok = manager.execute(tweak.applyCommands, privileged: tweak.applyPrivileged)
+                let ok = Self.execute(tweak.applyCommands, privileged: tweak.applyPrivileged)
                 let newState = tweak.detect()
-                OperationQueue.main.addOperation {
-                    manager.tweakStates[tweak.id] = newState
-                    manager.busyTweaks.remove(tweak.id)
-                }
+                detectedStates[tweak.id] = newState
                 if ok && newState { applied += 1 }
             }
             let appliedCount = applied
-            OperationQueue.main.addOperation {
-                manager.toast("Applied \(appliedCount)/\(unapplied.count) \(category.name) tweaks")
+            Task { @MainActor in
+                for (id, state) in detectedStates {
+                    self.tweakStates[id] = state
+                    self.busyTweaks.remove(id)
+                }
+                self.toast("Applied \(appliedCount)/\(unapplied.count) \(category.name) tweaks")
             }
         }
     }
@@ -147,21 +147,22 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
             busyTweaks.insert(tweak.id)
         }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let manager = self else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
             var reverted = 0
+            var detectedStates: [String: Bool] = [:]
             for tweak in applied {
-                let ok = manager.execute(tweak.revertCommands, privileged: tweak.revertPrivileged)
+                let ok = Self.execute(tweak.revertCommands, privileged: tweak.revertPrivileged)
                 let newState = tweak.detect()
-                OperationQueue.main.addOperation {
-                    manager.tweakStates[tweak.id] = newState
-                    manager.busyTweaks.remove(tweak.id)
-                }
+                detectedStates[tweak.id] = newState
                 if ok && !newState { reverted += 1 }
             }
             let revertedCount = reverted
-            OperationQueue.main.addOperation {
-                manager.toast("Reverted \(revertedCount)/\(applied.count) \(category.name) tweaks")
+            Task { @MainActor in
+                for (id, state) in detectedStates {
+                    self.tweakStates[id] = state
+                    self.busyTweaks.remove(id)
+                }
+                self.toast("Reverted \(revertedCount)/\(applied.count) \(category.name) tweaks")
             }
         }
     }
@@ -185,36 +186,37 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
             busyTweaks.insert(tweak.id)
         }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let manager = self else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
             var reverted = 0
+            var detectedStates: [String: Bool] = [:]
             for tweak in appliedArray {
-                let ok = manager.execute(tweak.revertCommands, privileged: tweak.revertPrivileged)
+                let ok = Self.execute(tweak.revertCommands, privileged: tweak.revertPrivileged)
                 let newState = tweak.detect()
-                OperationQueue.main.addOperation {
-                    manager.tweakStates[tweak.id] = newState
-                    manager.busyTweaks.remove(tweak.id)
-                }
+                detectedStates[tweak.id] = newState
                 if ok && !newState { reverted += 1 }
             }
             let revertedCount = reverted
-            OperationQueue.main.addOperation {
-                manager.toast("Reverted \(revertedCount)/\(appliedArray.count) total tweaks")
+            Task { @MainActor in
+                for (id, state) in detectedStates {
+                    self.tweakStates[id] = state
+                    self.busyTweaks.remove(id)
+                }
+                self.toast("Reverted \(revertedCount)/\(appliedArray.count) total tweaks")
             }
         }
     }
 
     /// Refresh detected states for all tweaks
     func refreshAll() {
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            guard let self else { return }
+        let categorySnapshot = categories
+        DispatchQueue.global(qos: .utility).async {
             var states: [String: Bool] = [:]
-            for cat in self.categories {
+            for cat in categorySnapshot {
                 for tweak in cat.tweaks {
                     states[tweak.id] = tweak.detect()
                 }
             }
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.tweakStates = states
                 self.toast("Refreshed all tweak states")
             }
@@ -249,7 +251,7 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func execute(_ userCmds: [String], privileged: [String]) -> Bool {
+    nonisolated private static func execute(_ userCmds: [String], privileged: [String]) -> Bool {
         var ok = true
         var hasDefaultsCmd = false
 
@@ -275,12 +277,12 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
     }
 
     @discardableResult
-    private func runValidatedCommand(_ command: String, privileged: Bool) -> Bool {
+    nonisolated private func runValidatedCommand(_ command: String, privileged: Bool) -> Bool {
         Self.runValidatedCommand(command, privileged: privileged)
     }
 
     @discardableResult
-    static func runValidatedCommand(_ command: String, privileged: Bool) -> Bool {
+    nonisolated static func runValidatedCommand(_ command: String, privileged: Bool) -> Bool {
         guard let debloatCommand = DebloatCommand.parse(command) else {
             MiloLog.error("Rejected unsupported debloat command: \(command)", category: .security)
             return false
@@ -288,28 +290,28 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
         return debloatCommand.run(privileged: privileged)
     }
 
-    static func canParseValidatedCommand(_ command: String) -> Bool {
+    nonisolated static func canParseValidatedCommand(_ command: String) -> Bool {
         DebloatCommand.parse(command) != nil
     }
 
     // MARK: - Detection Helpers
 
     /// Read a defaults key. Returns the trimmed stdout or nil.
-    private static func readDefault(_ domain: String, _ key: String) -> String? {
+    nonisolated private static func readDefault(_ domain: String, _ key: String) -> String? {
         let result = CommandRunner.run("/usr/bin/defaults", arguments: ["read", domain, key])
         guard result.succeeded else { return nil }
         return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Read a defaults key using -currentHost (for ByHost plists)
-    private static func readDefaultCurrentHost(_ domain: String, _ key: String) -> String? {
+    nonisolated private static func readDefaultCurrentHost(_ domain: String, _ key: String) -> String? {
         let result = CommandRunner.run("/usr/bin/defaults", arguments: ["-currentHost", "read", domain, key])
         guard result.succeeded else { return nil }
         return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Check if a defaults bool key is set to the expected value
-    static func defaultsIs(_ domain: String, _ key: String, expected: Bool) -> Bool {
+    nonisolated static func defaultsIs(_ domain: String, _ key: String, expected: Bool) -> Bool {
         guard let val = readDefault(domain, key) else { return false }
         if expected {
             return val == "1" || val.lowercased() == "true"
@@ -319,7 +321,7 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
     }
 
     /// Check if a ByHost defaults bool key is set to the expected value
-    static func defaultsCurrentHostIs(_ domain: String, _ key: String, expected: Bool) -> Bool {
+    nonisolated static func defaultsCurrentHostIs(_ domain: String, _ key: String, expected: Bool) -> Bool {
         guard let val = readDefaultCurrentHost(domain, key) else { return false }
         if expected {
             return val == "1" || val.lowercased() == "true"
@@ -329,24 +331,24 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
     }
 
     /// Check if a defaults key equals a specific string
-    static func defaultsEquals(_ domain: String, _ key: String, value: String) -> Bool {
+    nonisolated static func defaultsEquals(_ domain: String, _ key: String, value: String) -> Bool {
         guard let val = readDefault(domain, key) else { return false }
         return val == value
     }
 
     /// Check if a defaults int key equals a specific value
-    static func defaultsIntEquals(_ domain: String, _ key: String, value: Int) -> Bool {
+    nonisolated static func defaultsIntEquals(_ domain: String, _ key: String, value: Int) -> Bool {
         guard let val = readDefault(domain, key) else { return false }
         return val == "\(value)"
     }
 
     /// Check if a defaults float key approximately equals a value
-    static func defaultsFloatClose(_ domain: String, _ key: String, value: Double, tolerance: Double = 0.01) -> Bool {
+    nonisolated static func defaultsFloatClose(_ domain: String, _ key: String, value: Double, tolerance: Double = 0.01) -> Bool {
         guard let val = readDefault(domain, key), let d = Double(val) else { return false }
         return abs(d - value) < tolerance
     }
 
-    static let widgetMarkerPath: String = {
+    nonisolated static let widgetMarkerPath: String = {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return FileManager.default.temporaryDirectory.appendingPathComponent("milo-widgets-disabled.marker").path
         }
@@ -359,11 +361,11 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
         return dir.appendingPathComponent("widgets-disabled.marker").path
     }()
 
-    static func widgetMarkerExists() -> Bool {
+    nonisolated static func widgetMarkerExists() -> Bool {
         FileManager.default.fileExists(atPath: widgetMarkerPath)
     }
 
-    private static func pluginElectionStates() -> [String: Character] {
+    nonisolated private static func pluginElectionStates() -> [String: Character] {
         let result = CommandRunner.run("/usr/bin/pluginkit", arguments: ["-mAvv"])
         guard result.succeeded else {
             return [:]
@@ -384,24 +386,24 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
         return states
     }
 
-    static func ignoredWidgetBundleIDs() -> [String] {
+    nonisolated static func ignoredWidgetBundleIDs() -> [String] {
         let elections = pluginElectionStates()
         return ProcessData.widgetBundleIDs.filter { elections[$0] == "-" }
     }
 
-    static func presentWidgetBundleIDs() -> [String] {
+    nonisolated static func presentWidgetBundleIDs() -> [String] {
         let elections = pluginElectionStates()
         return ProcessData.widgetBundleIDs.filter { elections[$0] != nil }
     }
 
-    static func areWidgetExtensionsIgnored() -> Bool {
+    nonisolated static func areWidgetExtensionsIgnored() -> Bool {
         let present = presentWidgetBundleIDs()
         guard !present.isEmpty else { return false }
         let ignored = Set(ignoredWidgetBundleIDs())
         return present.allSatisfy { ignored.contains($0) }
     }
 
-    static func anyWidgetProcessesRunning() -> Bool {
+    nonisolated static func anyWidgetProcessesRunning() -> Bool {
         let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "command"])
         guard result.succeeded else {
             return false
@@ -415,7 +417,7 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
     }
 
     /// Check if a launchctl service is disabled for the current user (gui/ domain)
-    static func isLaunchctlDisabled(label: String) -> Bool {
+    nonisolated static func isLaunchctlDisabled(label: String) -> Bool {
         let uid = getuid()
         let result = CommandRunner.run("/bin/launchctl", arguments: ["print-disabled", "gui/\(uid)"])
         guard result.succeeded else { return false }
@@ -430,7 +432,7 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
     }
 
     /// Check if a system-level launchctl service is disabled (requires sudo -n)
-    static func isSystemLaunchctlDisabled(label: String) -> Bool {
+    nonisolated static func isSystemLaunchctlDisabled(label: String) -> Bool {
         let result = CommandRunner.run("/usr/bin/sudo", arguments: ["-n", "/bin/launchctl", "print-disabled", "system"])
         guard result.succeeded else { return false }
         let pattern = "\"\(label)\""
@@ -443,14 +445,14 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
         return false
     }
 
-    private static let appStoreBetaLoopLaunchdLabels = [
+    nonisolated private static let appStoreBetaLoopLaunchdLabels = [
         "com.apple.appstoreagent",
         "com.apple.appstorecomponentsd",
         "com.apple.appstorecomponentsd.xpc",
         "com.apple.private.appintents.delegate.com.apple.appstorecomponentsd"
     ]
 
-    private static func appStoreBetaLoopDisabled() -> Bool {
+    nonisolated private static func appStoreBetaLoopDisabled() -> Bool {
         let autoUpdateDisabled = defaultsIs("com.apple.commerce", "AutoUpdate", expected: false)
             && defaultsIs("com.apple.commerce", "AutoUpdateCheckEnabled", expected: false)
         let labelsDisabled = appStoreBetaLoopLaunchdLabels.allSatisfy { label in
@@ -461,7 +463,7 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
 
     // MARK: - Category Definitions
 
-    static func buildCategories() -> [DebloatCategory] {
+    nonisolated static func buildCategories() -> [DebloatCategory] {
         let uid = getuid()
 
         return [
@@ -1981,7 +1983,7 @@ final class DebloatManager: ObservableObject, @unchecked Sendable {
 
     // MARK: - Stock App Tweaks
 
-    private static func stockAppTweaks() -> [DebloatTweak] {
+    nonisolated private static func stockAppTweaks() -> [DebloatTweak] {
         let apps: [(id: String, name: String)] = [
             ("chess", "Chess"),
             ("facetime", "FaceTime"),

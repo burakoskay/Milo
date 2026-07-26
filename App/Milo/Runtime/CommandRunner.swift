@@ -28,6 +28,7 @@ enum CommandRunner {
         "/usr/sbin/purge"
     ]
 
+    /// SAFETY: `storage` is accessed only while `lock` is held.
     private final class LockedData: @unchecked Sendable {
         private let lock = NSLock()
         private var storage = Data()

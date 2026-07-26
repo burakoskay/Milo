@@ -2,7 +2,8 @@ import Foundation
 import ServiceManagement
 
 /// Manages persistent user preferences for Milo
-final class SettingsManager: @unchecked Sendable {
+@MainActor
+final class SettingsManager {
     static let shared = SettingsManager()
 
     private let defaults = UserDefaults.standard
