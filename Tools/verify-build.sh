@@ -44,8 +44,30 @@ if [[ "$TEAM_ID" != "$EXPECTED_TEAM_ID" ]]; then
   exit 1
 fi
 
+CONFIGURATION_ENVIRONMENT=$(/usr/bin/plutil -extract MiloConfigurationEnvironment raw "$APP_PATH/Contents/Info.plist")
+if [[ "$CONFIGURATION_ENVIRONMENT" != "production" ]]; then
+  echo "distribution app is not configured for the production environment" >&2
+  exit 1
+fi
+
+SERVICE_BASE_URL=$(/usr/bin/plutil -extract MiloServiceBaseURL raw "$APP_PATH/Contents/Info.plist")
+if [[ "$SERVICE_BASE_URL" != "https://monomacaw.com" ]]; then
+  echo "distribution app service origin is not the canonical production origin" >&2
+  exit 1
+fi
+
+LICENSE_PUBLIC_KEY=$(/usr/bin/plutil -extract MiloLicensePublicKey raw "$APP_PATH/Contents/Info.plist")
+if [[ ! "$LICENSE_PUBLIC_KEY" =~ ^[A-Za-z0-9_-]{43}$ ]]; then
+  echo "MLP public key is missing or malformed" >&2
+  exit 1
+fi
+if [[ -n "${MILO_LICENSE_PUBLIC_KEY:-}" && "$LICENSE_PUBLIC_KEY" != "$MILO_LICENSE_PUBLIC_KEY" ]]; then
+  echo "MLP public key does not match the release input" >&2
+  exit 1
+fi
+
 SPARKLE_KEY=$(/usr/bin/plutil -extract SUPublicEDKey raw "$APP_PATH/Contents/Info.plist")
-if [[ -z "$SPARKLE_KEY" || "$SPARKLE_KEY" == *'$('* || "$SPARKLE_KEY" == *"REPLACE"* ]]; then
+if [[ ! "$SPARKLE_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
   echo "Sparkle public key is missing or still a placeholder" >&2
   exit 1
 fi

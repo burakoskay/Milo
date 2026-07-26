@@ -51,7 +51,6 @@ settings:
     CLANG_WARN__DUPLICATE_METHOD_MATCH: YES
     COPY_PHASE_STRIP: NO
     DEAD_CODE_STRIPPING: YES
-    DEVELOPMENT_TEAM: 8N738727QB
     ENABLE_STRICT_OBJC_MSGSEND: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     GCC_C_LANGUAGE_STANDARD: gnu17
@@ -92,6 +91,9 @@ targets:
     platform: macOS
     productName: Milo
     deploymentTarget: "13.0"
+    configFiles:
+      Debug: Configurations/MiloPro.Debug.xcconfig
+      Release: Configurations/MiloPro.Release.xcconfig
     sources:
       - path: App/Milo
         excludes:
@@ -138,7 +140,7 @@ targets:
         LD_RUNPATH_SEARCH_PATHS:
           - $(inherited)
           - "@executable_path/../Frameworks"
-        PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo
+        PRODUCT_BUNDLE_IDENTIFIER: $(MILO_BUNDLE_ID)
         PRODUCT_MODULE_NAME: Milo
         PRODUCT_NAME: Milo
         SKIP_INSTALL: NO
@@ -148,6 +150,9 @@ targets:
     platform: macOS
     productName: Milo Lite
     deploymentTarget: "13.0"
+    configFiles:
+      Debug: Configurations/MiloLite.Debug.xcconfig
+      Release: Configurations/MiloLite.Release.xcconfig
     sources:
       - path: App/MiloLite
         excludes:
@@ -167,7 +172,7 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: App/MiloLite/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo.lite
+        PRODUCT_BUNDLE_IDENTIFIER: $(MILO_BUNDLE_ID)
         PRODUCT_MODULE_NAME: MiloLite
         PRODUCT_NAME: Milo Lite
         SKIP_INSTALL: NO
@@ -177,6 +182,9 @@ targets:
     platform: macOS
     productName: MiloPrivilegedHelper
     deploymentTarget: "13.0"
+    configFiles:
+      Debug: Configurations/MiloPrivilegedHelper.Debug.xcconfig
+      Release: Configurations/MiloPrivilegedHelper.Release.xcconfig
     sources:
       - path: Helper/MiloPrivilegedHelper
         excludes:
@@ -185,7 +193,7 @@ targets:
       base:
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo.helper
+        PRODUCT_BUNDLE_IDENTIFIER: $(MILO_BUNDLE_ID)
         PRODUCT_NAME: MiloPrivilegedHelper
         SKIP_INSTALL: YES
 

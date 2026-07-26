@@ -14,6 +14,7 @@ version 1.x predates this regime.
 
 ### Changed
 
+- Moves Pro, Lite, and helper identity/environment values into explicit per-target Xcode configuration files and makes the canonical Xcode product the only input to app/DMG packaging.
 - Migrates every shipping target to Swift 6 complete concurrency checking, main-actor-isolates UI and persistence state, and makes the MLP device-license client an actor.
 - Makes the browser-approved MLP-v1 device-key client the sole Pro licensing path and presents explicit pairing, refresh, account-management, and disconnect states in the paywall.
 - Restricts the Pro bundle to a validated Monomacaw service URL plus the public MLP verification key.
@@ -31,6 +32,7 @@ version 1.x predates this regime.
 
 ### Security
 
+- Separates Debug from production service configuration, validates all public verification-key inputs without logging values, keeps private credentials out of the client build, and rejects incomplete production packages.
 - Enables current Xcode hardening defaults, requires documented synchronization proofs for every `@unchecked Sendable` boundary, and rejects unsafe concurrency escape hatches in regression tests.
 - Disables Xcode base-entitlement injection for Release builds so distribution artifacts cannot inherit `com.apple.security.get-task-allow`.
 - Adds source and release-binary regression gates that reject legacy desktop authentication/licensing markers and AuthenticationServices/WebKit linkage.

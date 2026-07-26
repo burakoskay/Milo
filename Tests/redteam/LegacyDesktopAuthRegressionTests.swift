@@ -55,8 +55,9 @@ final class LegacyDesktopAuthRegressionTests: XCTestCase {
         let info = try propertyList(
             at: repositoryRoot.appendingPathComponent("App/Milo/Info.plist")
         )
-        XCTAssertEqual(info["MiloServiceBaseURL"] as? String, "https://monomacaw.com")
-        XCTAssertNotNil(info["MiloLicensePublicKey"])
+        XCTAssertEqual(info["MiloConfigurationEnvironment"] as? String, "$(MILO_CONFIGURATION_ENVIRONMENT)")
+        XCTAssertEqual(info["MiloServiceBaseURL"] as? String, "$(MILO_SERVICE_BASE_URL)")
+        XCTAssertEqual(info["MiloLicensePublicKey"] as? String, "$(MILO_LICENSE_PUBLIC_KEY)")
         XCTAssertNil(info["CFBundleURLTypes"])
 
         let forbiddenKeys = [

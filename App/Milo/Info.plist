@@ -33,7 +33,7 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>MiloServiceBaseURL</key>
-    <string>https://monomacaw.com</string>
+    <string>$(MILO_SERVICE_BASE_URL)</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>
@@ -58,6 +58,8 @@
     <key>SUShowReleaseNotes</key>
     <false/>
     <key>MiloLicensePublicKey</key>
-    <string></string>
+    <string>$(MILO_LICENSE_PUBLIC_KEY)</string>
+    <key>MiloConfigurationEnvironment</key>
+    <string>$(MILO_CONFIGURATION_ENVIRONMENT)</string>
 </dict>
 </plist>

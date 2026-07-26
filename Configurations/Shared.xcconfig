@@ -1,0 +1,3 @@
+// Non-secret identity shared by Milo's shipping targets.
+MILO_TEAM_ID = 8N738727QB
+DEVELOPMENT_TEAM = $(MILO_TEAM_ID)

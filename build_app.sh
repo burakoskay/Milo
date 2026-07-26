@@ -18,6 +18,22 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
+if [[ -z "${DEVELOPER_DIR:-}" ]]; then
+    if [[ -d "/Applications/Xcode-beta.app/Contents/Developer" ]]; then
+        export DEVELOPER_DIR="/Applications/Xcode-beta.app/Contents/Developer"
+    elif [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+        export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+    else
+        echo "✘  A complete Xcode installation is required; Command Line Tools are insufficient."
+        exit 69
+    fi
+fi
+
+if [[ ! -x "$DEVELOPER_DIR/usr/bin/xcodebuild" ]]; then
+    echo "✘  DEVELOPER_DIR does not identify a complete Xcode installation."
+    exit 69
+fi
+
 APP_NAME="Milo"
 OUTPUT_ROOT="${MILO_BUILD_OUTPUT_DIR:-.}"
 mkdir -p "$OUTPUT_ROOT"
@@ -27,13 +43,42 @@ if [[ "$OUTPUT_ROOT" == "/" || "$OUTPUT_ROOT" == "$HOME" ]]; then
     exit 64
 fi
 APP_DIR="$OUTPUT_ROOT/$APP_NAME.app"
-TEAM_ID="8N738727QB"
-BUNDLE_ID="com.monomacaw.milo"
 BUILD_MODE="${1:-dev}"     # dev | release
 SIGN_MODE="${2:-}"         # sign | notarize | (empty)
-VERSION=$(grep -A1 CFBundleShortVersionString App/Milo/Info.plist | tail -1 | sed -E 's/.*<string>(.*)<\/string>/\1/')
+VERSION=$(/usr/bin/plutil -extract CFBundleShortVersionString raw App/Milo/Info.plist)
 ICON_WORK_DIR="$OUTPUT_ROOT/.build_icons"
+DERIVED_DATA_DIR="$OUTPUT_ROOT/.milo-derived-data"
 NOTARY_KEYCHAIN_PROFILE="${NOTARY_KEYCHAIN_PROFILE:-milo-notary}"
+
+read_xcconfig_value() {
+    local key="$1"
+    local file="$2"
+    /usr/bin/awk -v expected_key="$key" '
+        {
+            separator = index($0, "=")
+            if (separator == 0) {
+                next
+            }
+            candidate = substr($0, 1, separator - 1)
+            sub(/^[[:space:]]+/, "", candidate)
+            sub(/[[:space:]]+$/, "", candidate)
+        }
+        candidate == expected_key {
+            value = substr($0, separator + 1)
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            print value
+            exit
+        }
+    ' "$file"
+}
+
+TEAM_ID=$(read_xcconfig_value MILO_TEAM_ID Configurations/Shared.xcconfig)
+BUNDLE_ID=$(read_xcconfig_value MILO_BUNDLE_ID Configurations/MiloPro.Release.xcconfig)
+if [[ ! "$TEAM_ID" =~ ^[A-Z0-9]{10}$ || "$BUNDLE_ID" != "com.monomacaw.milo" ]]; then
+    echo "✘  Tracked Milo identity configuration is invalid."
+    exit 78
+fi
 
 if [[ "$BUILD_MODE" != "dev" && "$BUILD_MODE" != "release" ]]; then
     echo "✘  Invalid build mode: $BUILD_MODE"
@@ -70,6 +115,37 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
     fi
 fi
 
+CONFIGURATION_TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/milo-build-configuration.XXXXXX")
+GENERATED_XCCONFIG="$CONFIGURATION_TEMP_DIR/Milo.generated.xcconfig"
+cleanup_configuration() {
+    rm -rf "$CONFIGURATION_TEMP_DIR"
+}
+trap cleanup_configuration EXIT
+
+if [[ "$BUILD_MODE" == "release" ]]; then
+    export MILO_CONFIGURATION_ENVIRONMENT="production"
+    export MILO_SERVICE_BASE_URL="${MILO_SERVICE_BASE_URL:-https://monomacaw.com}"
+    export MILO_LICENSE_PUBLIC_KEY="${MILO_LICENSE_PUBLIC_KEY:-}"
+else
+    export MILO_CONFIGURATION_ENVIRONMENT="development"
+    export MILO_SERVICE_BASE_URL="${MILO_SERVICE_BASE_URL:-https://milo-development.invalid}"
+    export MILO_LICENSE_PUBLIC_KEY="${MILO_LICENSE_PUBLIC_KEY:-}"
+fi
+export SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
+Tools/generate-build-configuration.sh "$GENERATED_XCCONFIG"
+
+MILO_CONFIGURATION_ENVIRONMENT=$(read_xcconfig_value MILO_CONFIGURATION_ENVIRONMENT "$GENERATED_XCCONFIG")
+GENERATED_SERVICE_BASE_URL=$(read_xcconfig_value MILO_SERVICE_BASE_URL "$GENERATED_XCCONFIG")
+XCCONFIG_EMPTY_REFERENCE='$()'
+MILO_SERVICE_BASE_URL="${GENERATED_SERVICE_BASE_URL//$XCCONFIG_EMPTY_REFERENCE/}"
+MILO_LICENSE_PUBLIC_KEY=$(read_xcconfig_value MILO_LICENSE_PUBLIC_KEY "$GENERATED_XCCONFIG")
+SPARKLE_PUBLIC_ED_KEY=$(read_xcconfig_value SPARKLE_PUBLIC_ED_KEY "$GENERATED_XCCONFIG")
+export \
+    MILO_CONFIGURATION_ENVIRONMENT \
+    MILO_SERVICE_BASE_URL \
+    MILO_LICENSE_PUBLIC_KEY \
+    SPARKLE_PUBLIC_ED_KEY
+
 echo "╔══════════════════════════════════════════╗"
 echo "║  Milo Build Script  v${VERSION:-1.0}               ║"
 echo "╚══════════════════════════════════════════╝"
@@ -77,53 +153,42 @@ echo ""
 
 # ── Step 1: Clean ────────────────────────────────────────────────────────────
 echo "→ Cleaning previous build..."
-rm -rf "$APP_DIR" "$ICON_WORK_DIR" "$OUTPUT_ROOT/${APP_NAME}-${VERSION:-1.0}.dmg"
+rm -rf \
+    "$APP_DIR" \
+    "$ICON_WORK_DIR" \
+    "$DERIVED_DATA_DIR" \
+    "$OUTPUT_ROOT/${APP_NAME}-${VERSION:-1.0}.dmg"
 
-# ── Step 2: Create bundle structure ──────────────────────────────────────────
-echo "→ Creating app bundle structure..."
-mkdir -p "$APP_DIR/Contents/MacOS"
-mkdir -p "$APP_DIR/Contents/Frameworks"
-mkdir -p "$APP_DIR/Contents/Resources"
-
-# ── Step 3: Compile ─────────────────────────────────────────────────────────
-SWIFTPM_CONFIGURATION="debug"
-SWIFT_BUILD_FLAGS=(--product "$APP_NAME" -c "$SWIFTPM_CONFIGURATION")
-
+# ── Step 2: Build the canonical Xcode product ───────────────────────────────
+XCODE_CONFIGURATION="Debug"
+XCODE_DESTINATION=( -destination "platform=macOS,arch=$(uname -m)" )
 if [[ "$BUILD_MODE" == "release" ]]; then
-    echo "→ Building SwiftPM product (release, optimised)..."
-    SWIFTPM_CONFIGURATION="release"
-    SWIFT_BUILD_FLAGS=(--product "$APP_NAME" -c "$SWIFTPM_CONFIGURATION")
+    XCODE_CONFIGURATION="Release"
+    XCODE_DESTINATION=( -destination "generic/platform=macOS" )
+    echo "→ Building canonical Xcode product (Release, Universal)..."
 else
-    echo "→ Building SwiftPM product (dev)..."
+    echo "→ Building canonical Xcode product (Debug)..."
 fi
 
-if [[ "$SIGN_MODE" != "sign" && "$SIGN_MODE" != "notarize" ]]; then
-    SWIFT_BUILD_FLAGS+=(-Xswiftc -DAD_HOC -Xcc -DAD_HOC)
-fi
+xcodebuild \
+    -workspace Milo.xcworkspace \
+    -scheme MiloPro \
+    -configuration "$XCODE_CONFIGURATION" \
+    "${XCODE_DESTINATION[@]}" \
+    -derivedDataPath "$DERIVED_DATA_DIR" \
+    CODE_SIGNING_ALLOWED=NO \
+    MILO_CONFIGURATION_ENVIRONMENT="$MILO_CONFIGURATION_ENVIRONMENT" \
+    MILO_SERVICE_BASE_URL="$MILO_SERVICE_BASE_URL" \
+    MILO_LICENSE_PUBLIC_KEY="$MILO_LICENSE_PUBLIC_KEY" \
+    SPARKLE_PUBLIC_ED_KEY="$SPARKLE_PUBLIC_ED_KEY" \
+    build
 
-swift build "${SWIFT_BUILD_FLAGS[@]}"
-BIN_PATH=$(swift build -c "$SWIFTPM_CONFIGURATION" --show-bin-path)
-cp "$BIN_PATH/$APP_NAME" "$APP_DIR/Contents/MacOS/$APP_NAME"
-
-SPARKLE_FRAMEWORK_SOURCE="$BIN_PATH/Sparkle.framework"
-if [[ ! -d "$SPARKLE_FRAMEWORK_SOURCE" ]]; then
-    echo "✘  SwiftPM did not produce the pinned Sparkle framework."
+BUILT_APP="$DERIVED_DATA_DIR/Build/Products/$XCODE_CONFIGURATION/Milo.app"
+if [[ ! -d "$BUILT_APP" ]]; then
+    echo "✘  Xcode did not produce Milo.app at the expected path."
     exit 1
 fi
-/usr/bin/ditto "$SPARKLE_FRAMEWORK_SOURCE" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
-
-# ── Step 4: Copy Info.plist ──────────────────────────────────────────────────
-echo "→ Copying Info.plist..."
-cp App/Milo/Info.plist "$APP_DIR/Contents/Info.plist"
-if [[ -n "${MILO_SERVICE_BASE_URL:-}" ]]; then
-    /usr/bin/plutil -replace MiloServiceBaseURL -string "$MILO_SERVICE_BASE_URL" "$APP_DIR/Contents/Info.plist"
-fi
-if [[ -n "${MILO_LICENSE_PUBLIC_KEY:-}" ]]; then
-    /usr/bin/plutil -replace MiloLicensePublicKey -string "$MILO_LICENSE_PUBLIC_KEY" "$APP_DIR/Contents/Info.plist"
-fi
-if [[ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ]]; then
-    /usr/bin/plutil -replace SUPublicEDKey -string "$SPARKLE_PUBLIC_ED_KEY" "$APP_DIR/Contents/Info.plist"
-fi
+/usr/bin/ditto "$BUILT_APP" "$APP_DIR"
 
 if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
     COPIED_BUNDLE_ID=$(/usr/bin/plutil -extract CFBundleIdentifier raw "$APP_DIR/Contents/Info.plist")
@@ -210,9 +275,8 @@ if [[ "$SIGN_MODE" == "sign" || "$SIGN_MODE" == "notarize" ]]; then
     codesign --force \
         --sign "$DEVELOPER_ID" \
         --options runtime \
-        --entitlements "$ENTITLEMENTS_PATH" \
         --timestamp \
-        "$APP_DIR/Contents/MacOS/$APP_NAME"
+        "$APP_DIR/Contents/Resources/MiloPrivilegedHelper"
     codesign --force \
         --sign "$DEVELOPER_ID" \
         --options runtime \
@@ -242,8 +306,7 @@ else
     codesign --force \
         --sign - \
         --options runtime \
-        --entitlements "$ENTITLEMENTS_PATH" \
-        "$APP_DIR/Contents/MacOS/$APP_NAME"
+        "$APP_DIR/Contents/Resources/MiloPrivilegedHelper"
     codesign --force \
         --sign - \
         --options runtime \

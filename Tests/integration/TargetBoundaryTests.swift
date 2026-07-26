@@ -18,7 +18,11 @@ final class TargetBoundaryTests: XCTestCase {
         )
 
         XCTAssertTrue(liteSection.contains("ENABLE_APP_SANDBOX: YES"))
-        XCTAssertTrue(liteSection.contains("PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo.lite"))
+        XCTAssertTrue(liteSection.contains("PRODUCT_BUNDLE_IDENTIFIER: $(MILO_BUNDLE_ID)"))
+        let liteConfiguration = try readText(
+            at: repositoryRoot.appendingPathComponent("Configurations/MiloLite.Release.xcconfig")
+        )
+        XCTAssertTrue(liteConfiguration.contains("MILO_BUNDLE_ID = com.monomacaw.milo.lite"))
         XCTAssertFalse(liteSection.contains("MiloLicense"))
         XCTAssertFalse(liteSection.contains("MiloSparkle"))
         XCTAssertFalse(liteSection.contains("MiloPrivilegedHelper"))

@@ -1,7 +1,16 @@
 import Foundation
 
-/// Reads the two public MLP-v1 client values from the signed application bundle.
+enum MiloConfigurationEnvironment: String, Sendable {
+    case development
+    case production
+}
+
+/// Reads public, target-specific MLP-v1 values from the signed application bundle.
 enum MiloClientConfiguration {
+    static var environmentString: String {
+        bundleString(for: "MiloConfigurationEnvironment")
+    }
+
     static var serviceBaseURLString: String {
         bundleString(for: "MiloServiceBaseURL")
     }
