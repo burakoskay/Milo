@@ -10,7 +10,6 @@
 		016887DD9741395B0A4ABCD8 /* BackendConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB069A06FE539CBE383C44CE /* BackendConfiguration.swift */; };
 		04D5A8012599D1B6B468EBFC /* SelfTestRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF03A696C418F6D71850967 /* SelfTestRunner.swift */; };
 		0E6F8904BBEF2CE311F98C63 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BD1DC81B2661CBAB57F3E18 /* ContentView.swift */; };
-		0F71841BAF96C5BE2A8891D4 /* milo_black.png in Resources */ = {isa = PBXBuildFile; fileRef = CA564785E4966D506C8F91F6 /* milo_black.png */; };
 		1028F7CD1BBF1294EB338B0D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C652DF2F309F4EE2503A4CFC /* SettingsView.swift */; };
 		161393A8A53235438A19036D /* milo_color.png in Resources */ = {isa = PBXBuildFile; fileRef = 88FBA6F19CCF346C5830848A /* milo_color.png */; };
 		196E4BAA9903EAC045EFBA9A /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45137EDCC84489E603D13994 /* StatsView.swift */; };
@@ -31,6 +30,7 @@
 		55B4043C67A1E2448A5599FC /* IconManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 990BDEBBB734F36E772AB8BC /* IconManager.swift */; };
 		60E587F42A6243022CBE76B8 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8A43163CB7BD3FB2D2F0E3DC /* AppKit.framework */; };
 		6466232190F766F954D4EE10 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FE820EC792E62DC3AB78557 /* AppState.swift */; };
+		6519C81DC00A73F4720EFECE /* Milo_black.png in Resources */ = {isa = PBXBuildFile; fileRef = FB6F1DA02B918F3CCC8A6049 /* Milo_black.png */; };
 		660C4E985CEB16EA8821DC41 /* PrivilegeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7B9DED93ED882D43993CE6 /* PrivilegeManager.swift */; };
 		714E9624EC886EB0172DEC92 /* MiloUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9FF24FD37D04267E168624 /* MiloUpdateManager.swift */; };
 		760FAAC65E26489B2EC1C035 /* ProcessData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447310230900239EFAB48C54 /* ProcessData.swift */; };
@@ -159,7 +159,6 @@
 		C2DD7CDBAE4633C17C3273A8 /* MiloPrivilegedHelper.Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = MiloPrivilegedHelper.Release.xcconfig; sourceTree = "<group>"; };
 		C652DF2F309F4EE2503A4CFC /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C67C9DFA7CDD06636DE4E32A /* ConcurrencySafetyRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcurrencySafetyRegressionTests.swift; sourceTree = "<group>"; };
-		CA564785E4966D506C8F91F6 /* milo_black.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = milo_black.png; sourceTree = "<group>"; };
 		CAB577FD3F7E3C5C9B5749E7 /* MiloPrivilegedHelper.Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = MiloPrivilegedHelper.Debug.xcconfig; sourceTree = "<group>"; };
 		CEB4676F09D3B8D85C7518B2 /* MiloKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MiloKit; path = Packages/MiloKit; sourceTree = SOURCE_ROOT; };
 		D609CA1F11AF52D1BD7367A5 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -174,6 +173,7 @@
 		F76DD69DDD9B08A1DA8B275C /* MiloClientConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloClientConfiguration.swift; sourceTree = "<group>"; };
 		F7DB5C51451F853E05CB1F5B /* com.monomacaw.milo.helper.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = com.monomacaw.milo.helper.plist; sourceTree = "<group>"; };
 		FA5A52A5354F42BFA597FB1A /* MiloApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloApp.swift; sourceTree = "<group>"; };
+		FB6F1DA02B918F3CCC8A6049 /* Milo_black.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Milo_black.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -318,7 +318,7 @@
 			isa = PBXGroup;
 			children = (
 				23F8C46FDFBB45EC4DEF1E80 /* MenuBarIcon.png */,
-				CA564785E4966D506C8F91F6 /* milo_black.png */,
+				FB6F1DA02B918F3CCC8A6049 /* Milo_black.png */,
 				88FBA6F19CCF346C5830848A /* milo_color.png */,
 				AB3FB3677B226DA246E131EA /* milo_white.png */,
 			);
@@ -623,7 +623,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E2FD74BFE06D6573F84D402C /* MenuBarIcon.png in Resources */,
-				0F71841BAF96C5BE2A8891D4 /* milo_black.png in Resources */,
+				6519C81DC00A73F4720EFECE /* Milo_black.png in Resources */,
 				161393A8A53235438A19036D /* milo_color.png in Resources */,
 				E76F16913145067348586806 /* milo_white.png in Resources */,
 			);

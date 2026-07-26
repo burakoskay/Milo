@@ -111,6 +111,19 @@ final class TargetBoundaryTests: XCTestCase {
         XCTAssertTrue((manifest["NSPrivacyAccessedAPITypes"] as? [Any])?.isEmpty == true)
     }
 
+    func testGeneratedProjectPreservesCanonicalResourceFilenameCase() throws {
+        let resourcesDirectory = repositoryRoot.appendingPathComponent("Milo/Resources")
+        let resourceNames = try FileManager.default.contentsOfDirectory(atPath: resourcesDirectory.path)
+        XCTAssertTrue(resourceNames.contains("Milo_black.png"))
+        XCTAssertFalse(resourceNames.contains("milo_black.png"))
+
+        let generatedProject = try readText(
+            at: repositoryRoot.appendingPathComponent("Milo.xcodeproj/project.pbxproj")
+        )
+        XCTAssertTrue(generatedProject.contains("Milo_black.png"))
+        XCTAssertFalse(generatedProject.contains("milo_black.png"))
+    }
+
     private func readText(at url: URL) throws -> String {
         try String(contentsOf: url, encoding: .utf8)
     }

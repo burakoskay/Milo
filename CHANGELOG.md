@@ -30,6 +30,8 @@ version 1.x predates this regime.
 
 ### Fixed
 
+- Normalize the tracked `Milo_black.png` resource casing so Xcode project generation is byte-identical on case-sensitive clean clones.
+
 ### Security
 
 - Separates Debug from production service configuration, validates all public verification-key inputs without logging values, keeps private credentials out of the client build, and rejects incomplete production packages.
