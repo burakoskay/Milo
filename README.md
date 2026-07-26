@@ -194,4 +194,9 @@ Security policy and reporting: **[SECURITY.md](SECURITY.md)**.
 
 ## License
 
-Copyright © monomacaw. All rights reserved.
+Copyright © 2026 Burak Oskay. All rights reserved.
+
+**This is proprietary software. No licence is granted.** It is published here for
+demonstration and evaluation only. You may read the code and run a released build on your own
+machine. You may not use, copy, modify, redistribute, or build derivative works from it without
+written permission. See [LICENSE](LICENSE).
