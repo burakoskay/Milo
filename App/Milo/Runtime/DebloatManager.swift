@@ -3,7 +3,7 @@ import AppKit
 
 // MARK: - Data Model
 
-enum TweakRisk: String, Sendable {
+enum TweakRisk: String, Equatable, Sendable {
     case safe = "Safe"          // Pure defaults write, easily reversible
     case moderate = "Moderate"  // Disables services, may affect features
     case aggressive = "Risky"   // SIP-off only, may break things
@@ -431,9 +431,10 @@ final class DebloatManager: ObservableObject {
         return false
     }
 
-    /// Check if a system-level launchctl service is disabled (requires sudo -n)
+    /// Check if a system-level launchctl service is disabled through Milo's
+    /// authenticated, narrowly allowlisted helper.
     nonisolated static func isSystemLaunchctlDisabled(label: String) -> Bool {
-        let result = CommandRunner.run("/usr/bin/sudo", arguments: ["-n", "/bin/launchctl", "print-disabled", "system"])
+        let result = CommandRunner.runPrivileged("/bin/launchctl", arguments: ["print-disabled", "system"])
         guard result.succeeded else { return false }
         let pattern = "\"\(label)\""
         for line in result.stdout.components(separatedBy: .newlines) {

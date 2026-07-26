@@ -7,6 +7,8 @@ struct DebloatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var expandedCategory: String?
     @State private var searchText: String = ""
+    @State private var pendingTweak: DebloatTweak?
+    @State private var pendingCategory: DebloatCategory?
 
     private let sipEnabled = SIPChecker.isSIPEnabled()
 
@@ -41,6 +43,36 @@ struct DebloatView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: manager.showingToast)
+        .alert("Apply this tuning change?", isPresented: Binding(
+            get: { pendingTweak != nil },
+            set: { if !$0 { pendingTweak = nil } }
+        )) {
+            Button("Cancel", role: .cancel) { pendingTweak = nil }
+            Button("Apply", role: .destructive) {
+                guard let tweak = pendingTweak else { return }
+                pendingTweak = nil
+                manager.toggle(tweak)
+            }
+        } message: {
+            Text(pendingTweak.map {
+                "\($0.name) is marked \($0.risk.rawValue). Its effect can be reverted from this screen."
+            } ?? "Review this change before applying it.")
+        }
+        .alert("Apply all changes in this category?", isPresented: Binding(
+            get: { pendingCategory != nil },
+            set: { if !$0 { pendingCategory = nil } }
+        )) {
+            Button("Cancel", role: .cancel) { pendingCategory = nil }
+            Button("Apply All", role: .destructive) {
+                guard let category = pendingCategory else { return }
+                pendingCategory = nil
+                manager.applyAll(in: category)
+            }
+        } message: {
+            Text(pendingCategory.map {
+                "This applies every available change in \($0.name). Review each risk label first; all changes have a revert action."
+            } ?? "Review these changes before applying them.")
+        }
         .onChange(of: searchText) { newValue in
             // Auto-expand first matching category when searching
             if !newValue.isEmpty {
@@ -66,7 +98,7 @@ struct DebloatView: View {
 
                 Spacer()
 
-                Text("Debloat macOS")
+                Text("System Tuning")
                     .font(.system(size: 14, weight: .bold))
 
                 Spacer()
@@ -360,7 +392,11 @@ struct DebloatView: View {
         return HStack(spacing: 6) {
             if applied < total {
                 Button {
-                    manager.applyAll(in: category)
+                    if category.tweaks.contains(where: { $0.risk != .safe }) {
+                        pendingCategory = category
+                    } else {
+                        manager.applyAll(in: category)
+                    }
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "checkmark.circle")
@@ -446,7 +482,13 @@ struct DebloatView: View {
             } else {
                 Toggle("", isOn: Binding(
                     get: { isOn },
-                    set: { _ in manager.toggle(tweak) }
+                    set: { _ in
+                        if !isOn, tweak.risk != .safe {
+                            pendingTweak = tweak
+                        } else {
+                            manager.toggle(tweak)
+                        }
+                    }
                 ))
                 .toggleStyle(.switch)
                 .controlSize(.mini)

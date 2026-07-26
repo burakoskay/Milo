@@ -25,6 +25,13 @@ final class ProcessManager: Sendable {
     static let shared = ProcessManager()
 
     private typealias PrivilegedCommand = (executable: String, arguments: [String])
+    private struct MatchStats {
+        var cpu: Double = 0
+        var mem: Double = 0
+        var pids: Set<Int32> = []
+        var identities: Set<ProcessIdentity> = []
+        var telemetryMatch: TelemetryMatch?
+    }
     private let cloudSignatureManager: CloudSignatureManager
 
     init(cloudSignatureManager: CloudSignatureManager = .shared) {
@@ -90,27 +97,6 @@ final class ProcessManager: Sendable {
         return CommandRunner.runPrivilegedBatch(commands).succeeded
     }
 
-    private func appendTermKillCommands(for pids: Set<Int32>, to commands: inout [PrivilegedCommand]) {
-        let sortedPIDs = pids.sorted()
-        guard !sortedPIDs.isEmpty else { return }
-
-        for pid in sortedPIDs where pid > 0 {
-            commands.append((executable: "/bin/kill", arguments: ["-TERM", String(pid)]))
-        }
-        commands.append((executable: "/bin/sleep", arguments: ["1"]))
-        for pid in sortedPIDs where pid > 0 {
-            commands.append((executable: "/bin/kill", arguments: ["-KILL", String(pid)]))
-        }
-    }
-
-    private func runKill(signal: String, pid: Int32, privileged: Bool = false) -> Bool {
-        guard pid > 0 else { return false }
-        let result = privileged
-            ? CommandRunner.runPrivileged("/bin/kill", arguments: [signal, String(pid)])
-            : CommandRunner.run("/bin/kill", arguments: [signal, String(pid)])
-        return result.succeeded || result.status == 1
-    }
-
     private func resolvedExecutablePath(pid: Int32, fallback: String) -> String {
         guard pid > 0 else { return fallback }
 
@@ -124,6 +110,41 @@ final class ProcessManager: Sendable {
         let byteCount = Int(result)
         let bytes = buffer.prefix(byteCount).map { UInt8(bitPattern: $0) }
         return String(bytes: bytes, encoding: .utf8) ?? fallback
+    }
+
+    private func processIdentity(pid: Int32, fallbackPath: String) -> ProcessIdentity? {
+        guard pid > 1 else { return nil }
+        var information = proc_bsdinfo()
+        let informationSize = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &information, informationSize) == informationSize else {
+            return nil
+        }
+        let executablePath = resolvedExecutablePath(pid: pid, fallback: fallbackPath)
+        guard executablePath.hasPrefix("/") else { return nil }
+        return ProcessIdentity(
+            pid: pid,
+            executablePath: executablePath,
+            startSeconds: information.pbi_start_tvsec,
+            startMicroseconds: information.pbi_start_tvusec
+        )
+    }
+
+    private enum ProcessIdentityStatus {
+        case same
+        case gone
+        case changed
+    }
+
+    private func processIdentityStatus(_ expected: ProcessIdentity) -> ProcessIdentityStatus {
+        var information = proc_bsdinfo()
+        let informationSize = Int32(MemoryLayout<proc_bsdinfo>.size)
+        errno = 0
+        let result = proc_pidinfo(expected.pid, PROC_PIDTBSDINFO, 0, &information, informationSize)
+        guard result == informationSize else {
+            return errno == ESRCH ? .gone : .changed
+        }
+        let actual = processIdentity(pid: expected.pid, fallbackPath: "")
+        return actual == expected ? .same : .changed
     }
 
     private func executableName(from path: String) -> String {
@@ -222,6 +243,24 @@ final class ProcessManager: Sendable {
 
     func getLaunchdInfo(_ processName: String) -> LaunchdProcess? {
         return ProcessData.launchdManagedProcesses[processName.lowercased()]
+    }
+
+    func requiresPrivilegedHelper(for item: ProcessItem) -> Bool {
+        if item.isSystemProcess || item.launchdDomain == .system || item.launchdDomain == .both {
+            return true
+        }
+        guard let launchdInfo = getLaunchdInfo(item.name),
+              let path = Self.validatePlistPath(launchdInfo.plistPath) else {
+            return false
+        }
+        return Self.requiresAdministrator(forPlistPath: path)
+    }
+
+    func requiresPrivilegedHelper(forLaunchItem item: LaunchItem) -> Bool {
+        guard let path = Self.validatePlistPath(item.path) else {
+            return false
+        }
+        return Self.requiresAdministrator(forPlistPath: path)
     }
 
     func vendorFor(processName: String) -> String {
@@ -414,8 +453,8 @@ final class ProcessManager: Sendable {
 
         let lines = result.stdout.components(separatedBy: .newlines)
 
-        var bloatMatches: [String: (cpu: Double, mem: Double, pids: Set<Int32>, telemetryMatch: TelemetryMatch?)] = [:]
-        var intelMatches: [String: (cpu: Double, mem: Double, pids: Set<Int32>, telemetryMatch: TelemetryMatch?)] = [:]
+        var bloatMatches: [String: MatchStats] = [:]
+        var intelMatches: [String: MatchStats] = [:]
 
         for line in lines.dropFirst() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -432,21 +471,26 @@ final class ProcessManager: Sendable {
             let command = String(parts[4])
 
             if let detection = detectTarget(pid: pid, executablePath: executable, command: command) {
+                guard let identity = processIdentity(pid: pid, fallbackPath: executable) else { continue }
                 switch detection.kind {
                 case .bloat:
-                    var existing = bloatMatches[detection.name] ?? (0, 0, Set<Int32>(), detection.telemetryMatch)
+                    var existing = bloatMatches[detection.name]
+                        ?? MatchStats(telemetryMatch: detection.telemetryMatch)
                     existing.cpu += cpu
                     existing.mem += memMB
                     existing.pids.insert(pid)
+                    existing.identities.insert(identity)
                     if existing.telemetryMatch == nil {
                         existing.telemetryMatch = detection.telemetryMatch
                     }
                     bloatMatches[detection.name] = existing
                 case .intelligence:
-                    var existing = intelMatches[detection.name] ?? (0, 0, Set<Int32>(), detection.telemetryMatch)
+                    var existing = intelMatches[detection.name]
+                        ?? MatchStats(telemetryMatch: detection.telemetryMatch)
                     existing.cpu += cpu
                     existing.mem += memMB
                     existing.pids.insert(pid)
+                    existing.identities.insert(identity)
                     if existing.telemetryMatch == nil {
                         existing.telemetryMatch = detection.telemetryMatch
                     }
@@ -467,6 +511,7 @@ final class ProcessManager: Sendable {
                 isLaunchdManaged: launchdInfo != nil || telemetrySignature?.launchdLabel != nil,
                 isSystemProcess: launchdInfo?.isSystem ?? telemetryRequiresSystemPrivilege(telemetrySignature),
                 matchedPIDs: stats.pids,
+                matchedIdentities: stats.identities,
                 telemetryRuleID: telemetrySignature?.ruleID,
                 terminationStrategy: telemetrySignature?.terminationStrategy,
                 launchdLabel: telemetrySignature?.launchdLabel,
@@ -486,6 +531,7 @@ final class ProcessManager: Sendable {
                 isLaunchdManaged: launchdInfo != nil || telemetrySignature?.launchdLabel != nil,
                 isSystemProcess: launchdInfo?.isSystem ?? telemetryRequiresSystemPrivilege(telemetrySignature),
                 matchedPIDs: stats.pids,
+                matchedIdentities: stats.identities,
                 telemetryRuleID: telemetrySignature?.ruleID,
                 terminationStrategy: telemetrySignature?.terminationStrategy,
                 launchdLabel: telemetrySignature?.launchdLabel,
@@ -578,8 +624,8 @@ final class ProcessManager: Sendable {
             }
 
             let regularPIDResults = regularProcesses.map { item in
-                let pids = exactPIDs(forStaticTarget: item)
-                let success = terminatePIDs(pids, privileged: false)
+                let identities = exactIdentities(forStaticTarget: item)
+                let success = terminateProcesses(identities, privileged: false)
                 return (item: item, success: success)
             }
 
@@ -631,49 +677,62 @@ final class ProcessManager: Sendable {
         case .none:
             return false
         case .signal:
-            return terminatePIDs(item.matchedPIDs, privileged: false)
+            return terminateProcesses(item.matchedIdentities, privileged: false)
         case .launchctlBootout:
             let launchctlSucceeded = runTelemetryLaunchctl(label: item.launchdLabel, domain: item.launchdDomain, disableFirst: false)
-            let signalSucceeded = terminatePIDs(item.matchedPIDs, privileged: item.isSystemProcess)
+            let signalSucceeded = terminateProcesses(item.matchedIdentities, privileged: item.isSystemProcess)
             return launchctlSucceeded || signalSucceeded
         case .launchctlDisable:
             let launchctlSucceeded = runTelemetryLaunchctl(label: item.launchdLabel, domain: item.launchdDomain, disableFirst: true)
-            let signalSucceeded = terminatePIDs(item.matchedPIDs, privileged: item.isSystemProcess)
+            let signalSucceeded = terminateProcesses(item.matchedIdentities, privileged: item.isSystemProcess)
             return launchctlSucceeded || signalSucceeded
         }
     }
 
-    private func terminatePIDs(_ pids: Set<Int32>, privileged: Bool) -> Bool {
-        guard !pids.isEmpty else { return false }
-
+    private func terminateProcesses(_ identities: Set<ProcessIdentity>, privileged: Bool) -> Bool {
+        guard !identities.isEmpty else { return false }
         if privileged {
-            var commands: [PrivilegedCommand] = []
-            appendTermKillCommands(for: pids, to: &commands)
-            return runPrivilegedCommands(commands)
+            return MiloPrivilegedHelperClient.shared.terminate(identities: identities).succeeded
         }
 
         var accepted = true
-        for pid in pids.sorted() where !runKill(signal: "-TERM", pid: pid, privileged: privileged) {
-            accepted = false
+        let sortedIdentities = identities.sorted { $0.pid < $1.pid }
+        for identity in sortedIdentities {
+            switch processIdentityStatus(identity) {
+            case .same:
+                if Darwin.kill(identity.pid, SIGTERM) != 0, errno != ESRCH {
+                    accepted = false
+                }
+            case .gone:
+                continue
+            case .changed:
+                accepted = false
+            }
         }
-
         Thread.sleep(forTimeInterval: 1.0)
-
-        for pid in pids.sorted() where !runKill(signal: "-KILL", pid: pid, privileged: privileged) {
-            accepted = false
+        for identity in sortedIdentities {
+            switch processIdentityStatus(identity) {
+            case .same:
+                if Darwin.kill(identity.pid, SIGKILL) != 0, errno != ESRCH {
+                    accepted = false
+                }
+            case .gone:
+                continue
+            case .changed:
+                accepted = false
+            }
         }
-
         return accepted
     }
 
-    private func exactPIDs(forStaticTarget item: ProcessItem) -> Set<Int32> {
-        if !item.matchedPIDs.isEmpty {
-            return item.matchedPIDs
+    private func exactIdentities(forStaticTarget item: ProcessItem) -> Set<ProcessIdentity> {
+        if !item.matchedIdentities.isEmpty {
+            return item.matchedIdentities
         }
-        return exactPIDs(matchingStaticTargetName: item.name)
+        return exactIdentities(matchingStaticTargetName: item.name)
     }
 
-    private func exactPIDs(matchingStaticTargetName targetName: String) -> Set<Int32> {
+    private func exactIdentities(matchingStaticTargetName targetName: String) -> Set<ProcessIdentity> {
         let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,comm,command"])
         guard result.succeeded else {
             MiloLog.error(
@@ -684,7 +743,7 @@ final class ProcessManager: Sendable {
             return []
         }
 
-        return Set(result.stdout.components(separatedBy: .newlines).compactMap { line -> Int32? in
+        return Set(result.stdout.components(separatedBy: .newlines).compactMap { line -> ProcessIdentity? in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { return nil }
 
@@ -702,7 +761,7 @@ final class ProcessManager: Sendable {
                 executableName: executableName,
                 command: command,
                 targets: [targetName]
-            ) == nil ? nil : pid
+            ) == nil ? nil : processIdentity(pid: pid, fallbackPath: executable)
         })
     }
 
@@ -808,14 +867,11 @@ final class ProcessManager: Sendable {
             _ = runLaunchctl(["bootout", "gui/\(uid)/\(safeRelated)"])
         }
 
-        let pids = exactPIDs(matchingStaticTargetName: info.processName)
-        if admin {
-            appendTermKillCommands(for: pids, to: &privilegedCommands)
-        } else {
-            _ = terminatePIDs(pids, privileged: false)
-        }
-
         if !runPrivilegedCommands(privilegedCommands) {
+            accepted = false
+        }
+        let identities = exactIdentities(matchingStaticTargetName: info.processName)
+        if !identities.isEmpty, !terminateProcesses(identities, privileged: admin) {
             accepted = false
         }
 
@@ -956,16 +1012,18 @@ final class ProcessManager: Sendable {
             ]
             if requiresAdmin {
                 privilegedCommands.append(contentsOf: commands.map(launchctlCommand(_:)))
-                appendTermKillCommands(for: exactPIDs(matchingStaticTargetName: safeLabel), to: &privilegedCommands)
             } else {
                 for command in commands {
                     _ = runLaunchctl(command)
                 }
-                _ = terminatePIDs(exactPIDs(matchingStaticTargetName: safeLabel), privileged: false)
             }
         }
 
         _ = runPrivilegedCommands(privilegedCommands)
+        if !enable {
+            let identities = exactIdentities(matchingStaticTargetName: safeLabel)
+            _ = terminateProcesses(identities, privileged: requiresAdmin)
+        }
     }
 
     // MARK: - Helpers

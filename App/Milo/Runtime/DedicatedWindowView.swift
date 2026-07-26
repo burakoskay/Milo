@@ -4,7 +4,7 @@ import SwiftUI
 
 enum WindowTab: String, CaseIterable, Identifiable {
     case home = "Home"
-    case debloat = "Debloat"
+    case debloat = "System Tuning"
     case settings = "Settings"
 
     var id: String { rawValue }
@@ -31,6 +31,10 @@ struct DedicatedWindowView: View {
 
     @AppStorage("Milo.appThemeColor") var appThemeColor: String = "System"
 
+    private var hasProAccess: Bool {
+        MiloBuildMode.isDevelopmentPreview || licenseManager.isSubscribed
+    }
+
     private var tintColorOverride: Color? {
         switch appThemeColor {
         case "Blue": return .blue
@@ -51,6 +55,16 @@ struct DedicatedWindowView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 8)
+
+            if MiloBuildMode.isDevelopmentPreview, !appState.helperStatus.isEnabled {
+                BackgroundHelperBanner(
+                    status: appState.helperStatus,
+                    enable: appState.setupPrivileges,
+                    openSettings: appState.openHelperApprovalSettings
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+            }
 
             // Content area — fills remaining space
             Group {
@@ -89,6 +103,24 @@ struct DedicatedWindowView: View {
         } message: {
             Text("This removes cached files from your user Library Caches folder. Apps may rebuild caches the next time they open.")
         }
+        .alert("Enable Milo Background Helper?", isPresented: $appState.showingFirstLaunchPrivilegePrompt) {
+            Button("Later", role: .cancel) {
+                appState.deferFirstLaunchPrivilegePrompt()
+            }
+            Button("Enable") {
+                appState.setupPrivileges()
+            }
+        } message: {
+            Text("Milo uses one narrowly scoped background helper for system-level actions. macOS may ask you to approve Milo once in Login Items.")
+        }
+        .alert("Background Helper Required", isPresented: $appState.showingHelperRequiredAlert) {
+            Button("Not Now", role: .cancel) {}
+            Button("Enable Helper") {
+                appState.setupPrivileges()
+            }
+        } message: {
+            Text("This action needs Milo's approved background helper. Enabling it is a one-time macOS permission step.")
+        }
         .tint(tintColorOverride)
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MiloPopoverWillOpen"))) { _ in
             appState.handlePopoverOpened()
@@ -123,6 +155,15 @@ struct DedicatedWindowView: View {
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .frame(width: 24, height: 24)
+            }
+
+            if MiloBuildMode.isDevelopmentPreview {
+                Text("Development Preview")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(Color.orange.opacity(0.12)))
             }
 
             Spacer()
@@ -329,22 +370,24 @@ struct DedicatedWindowView: View {
                 .controlSize(.small)
                 .disabled(appState.isPurgingMemory)
 
-                Button {
-                    appState.requestClearUserCaches()
-                } label: {
-                    HStack(spacing: 4) {
-                        if appState.isClearingCaches {
-                            ProgressView().scaleEffect(0.5)
-                        } else {
-                            Image(systemName: "trash")
+                if !MiloBuildMode.isDevelopmentPreview {
+                    Button {
+                        appState.requestClearUserCaches()
+                    } label: {
+                        HStack(spacing: 4) {
+                            if appState.isClearingCaches {
+                                ProgressView().scaleEffect(0.5)
+                            } else {
+                                Image(systemName: "trash")
+                            }
+                            Text("Caches")
                         }
-                        Text("Caches")
+                        .font(.caption.weight(.medium))
                     }
-                    .font(.caption.weight(.medium))
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(appState.isClearingCaches)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(appState.isClearingCaches)
 
                 Button {
                     appState.flushDNS()
@@ -402,7 +445,7 @@ struct DedicatedWindowView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                             Button("Kill All") {
-                                if licenseManager.isSubscribed {
+                                if hasProAccess {
                                     appState.killVendor(vendor)
                                 } else {
                                     showPaywall = true
@@ -556,7 +599,7 @@ struct DedicatedWindowView: View {
     // MARK: - Helpers
 
     private func handleKillRequest() {
-        if licenseManager.isSubscribed {
+        if hasProAccess {
             appState.requestKill()
         } else {
             showPaywall = true

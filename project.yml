@@ -12,6 +12,7 @@ options:
 
 configs:
   Debug: debug
+  Preview: release
   Release: release
 
 packages:
@@ -84,6 +85,15 @@ settings:
       SWIFT_COMPILATION_MODE: wholemodule
       SWIFT_OPTIMIZATION_LEVEL: -O
       VALIDATE_PRODUCT: YES
+    Preview:
+      CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      ENABLE_NS_ASSERTIONS: NO
+      ONLY_ACTIVE_ARCH: YES
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: MILO_DEVELOPMENT_PREVIEW
+      SWIFT_COMPILATION_MODE: wholemodule
+      SWIFT_OPTIMIZATION_LEVEL: -O
+      VALIDATE_PRODUCT: YES
 
 targets:
   MiloPro:
@@ -93,6 +103,7 @@ targets:
     deploymentTarget: "13.0"
     configFiles:
       Debug: Configurations/MiloPro.Debug.xcconfig
+      Preview: Configurations/MiloPro.Preview.xcconfig
       Release: Configurations/MiloPro.Release.xcconfig
     sources:
       - path: App/Milo
@@ -144,6 +155,9 @@ targets:
         PRODUCT_MODULE_NAME: Milo
         PRODUCT_NAME: Milo
         SKIP_INSTALL: NO
+      configs:
+        Preview:
+          CODE_SIGN_ENTITLEMENTS: App/Milo/MiloPreview.entitlements
 
   MiloLite:
     type: application
@@ -184,15 +198,21 @@ targets:
     deploymentTarget: "13.0"
     configFiles:
       Debug: Configurations/MiloPrivilegedHelper.Debug.xcconfig
+      Preview: Configurations/MiloPrivilegedHelper.Preview.xcconfig
       Release: Configurations/MiloPrivilegedHelper.Release.xcconfig
     sources:
       - path: Helper/MiloPrivilegedHelper
         excludes:
           - com.monomacaw.milo.helper.plist
+    dependencies:
+      - package: MiloKit
+        product: MiloDomain
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
         ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: $(MILO_BUNDLE_ID)
         PRODUCT_NAME: MiloPrivilegedHelper
         SKIP_INSTALL: YES

@@ -8,6 +8,9 @@ version 1.x predates this regime.
 
 ### Added
 
+- A separately identified, locally unlocked Development Preview configuration and reproducible verified DMG build path.
+- A signed `SMAppService` privileged helper with authenticated XPC, a fixed command policy, bounded execution, and process-identity metadata.
+- Presentation-ready product documentation and a timeless roadmap separating preview capability from commercial release work.
 - Typed, generation-aware operation lifecycle primitives covering every planned application operation domain and terminal outcome.
 - Separately compiled `MiloLite` sandbox target with a networkless read-only application scanner, explicit capability limitations, and a no-collection privacy manifest.
 - Minimal `MiloPrivilegedHelper` launch-daemon target embedded in the Apple `SMAppService` bundle layout with a deny-all XPC connection boundary.
@@ -15,6 +18,8 @@ version 1.x predates this regime.
 
 ### Changed
 
+- Routes privileged actions through a one-time macOS background-helper approval flow with explicit status and recovery UI.
+- Labels the former Debloat surface as System Tuning while preserving the existing reversible tuning stack.
 - Injects the cloud-rule service into process scanning instead of resolving mutable global state inside scan logic.
 - Moves Pro, Lite, and helper identity/environment values into explicit per-target Xcode configuration files and makes the canonical Xcode product the only input to app/DMG packaging.
 - Migrates every shipping target to Swift 6 complete concurrency checking, main-actor-isolates UI and persistence state, and makes the MLP device-license client an actor.
@@ -27,6 +32,7 @@ version 1.x predates this regime.
 
 ### Removed
 
+- Removes sudoers installation, cached passwordless-sudo state, and AppleScript administrator-prompt fallback from runtime actions.
 - Removes desktop-held Supabase sessions, native Sign in with Apple, email magic-link handling, the custom auth callback, embedded Paddle/WebKit checkout, and the Debug/Ad Hoc Pro bypass.
 - Removes ten unused feature-shaped package placeholders, including the duplicate unsynchronized package `ProcessManager`.
 
@@ -37,6 +43,7 @@ version 1.x predates this regime.
 
 ### Security
 
+- Revalidates executable path and kernel process start time before every TERM or KILL signal in both the app and privileged helper, rejecting PID reuse.
 - Runs allowlisted commands and synthetic self-test children in private POSIX process groups with strict deadlines, task-cancellation propagation, bounded cleanup, and group-wide termination on timeout, cancellation, or output overflow.
 - Restricts runtime logs to stable public event codes while keeping all caller-supplied diagnostic details private, with regression tests that reject free-form or caller-public logging.
 - Bound combined subprocess stdout and stderr to a fixed byte budget and expose truncation as an explicit failed termination state.

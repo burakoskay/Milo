@@ -1,262 +1,142 @@
-# Milo Engineering Bootstrap
+# Milo
 
-Milo is a local-first macOS menu-bar process-management app. The canonical app build is the tracked `Milo.xcworkspace`; reusable domains remain in `Packages/MiloKit` as local Swift packages.
+Milo is a local-first macOS menu bar utility for finding and controlling unwanted background processes, launch items, Apple Intelligence services, and selected system tuning options. The current **Development Preview** is designed for a complete local demonstration: every Pro capability is unlocked, and scanning and local actions do not depend on an account, Paddle, Supabase, or an internet connection.
 
-## Current Build Paths
+> The Development Preview is a signed development build, not a paid production release. Commercial licensing, public updates, notarized distribution, and the Mac App Store Lite funnel remain under development and are documented in [ROADMAP.md](ROADMAP.md).
 
-### Xcode app workspace
+## What works in the Development Preview
 
-Generate the tracked project only with the repository-pinned XcodeGen version:
+- Live process scanning with CPU and memory measurements.
+- Static and locally available signed-rule process detection.
+- Exact-process termination with `SIGTERM` followed by bounded `SIGKILL` fallback.
+- PID-reuse protection using the executable path and kernel process start time before every signal.
+- Launch item inspection and enable/disable controls.
+- Memory purge and DNS flush actions.
+- Reversible system tuning controls with risk and SIP labels.
+- Process whitelist and local usage statistics.
+- Menu bar and dedicated-window presentation modes.
+- All Pro UI and actions without sign-in, payment, or network licensing.
+
+## Permission model
+
+Milo does **not** install a sudoers rule and does **not** use AppleScript password prompts.
+
+Normal user processes are controlled directly. Actions that genuinely require root use an embedded, separately signed helper registered through Apple's `SMAppService` API. The helper accepts only Milo's signed app, exposes a fixed command policy, rejects shell execution, bounds requests and output, and revalidates process identity itself.
+
+Setup is deliberately one-time and user controlled:
+
+1. Drag `Milo.app` to `/Applications` and open it.
+2. Click **Enable** in the background-helper banner.
+3. If macOS opens **System Settings → General → Login Items & Extensions**, approve Milo once.
+4. Return to Milo. Opening the popover or window refreshes helper status automatically.
+
+If approval is declined, scanning and nonprivileged features remain usable. Milo reports that a system action needs the helper; it never retries registration in a loop and never falls back to repeated password dialogs.
+
+## Build the preview
+
+Requirements:
+
+- macOS 27 Developer Beta 4 or a compatible macOS release.
+- Xcode 27 beta at `/Applications/Xcode-beta.app`.
+- An Apple Development signing identity for Team `8N738727QB` when testing the helper registration path.
+
+Run:
 
 ```bash
-brew install xcodegen
-Tools/generate-xcode-project.sh
+Tools/build-development-preview.sh
 ```
 
-`Tools/generate-xcode-project.sh` fails unless XcodeGen 2.46.0 is active. Open `Milo.xcworkspace`, not the nested project. The generated project contains these explicit boundaries:
+The script performs a clean `Preview` build, verifies the app and helper signatures and identifiers, runs a deterministic six-check preview smoke suite, and creates:
 
-| Target | Current responsibility |
+```text
+dist/Milo-Development-Preview.dmg
+```
+
+It does not install or launch Milo automatically and does not inspect other installed applications.
+
+To build without packaging:
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+xcodebuild \
+  -workspace Milo.xcworkspace \
+  -scheme MiloPro \
+  -configuration Preview \
+  -destination 'platform=macOS,arch=arm64' \
+  build
+```
+
+## Verification
+
+The fast local verification spine is:
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+swift test
+swift test --package-path Packages/MiloKit
+xcodebuild \
+  -workspace Milo.xcworkspace \
+  -scheme MiloPro \
+  -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGNING_ALLOWED=NO \
+  test
+```
+
+The project uses Swift 6 complete concurrency checking, treats compiler warnings as errors, and enforces source-level security regression tests. The generated Xcode project is committed; changes to `project.yml` must be followed by `Tools/generate-xcode-project.sh` and the generated project must be committed with it.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI["SwiftUI menu bar and window UI"] --> State["Typed AppState operations"]
+    State --> Scan["Local process and launchd scanner"]
+    State --> User["Direct user-level actions"]
+    State --> XPC["Authenticated NSXPCConnection"]
+    XPC --> Helper["SMAppService privileged helper"]
+    Helper --> Policy["Fixed command and argument policy"]
+    Policy --> Kernel["Identity-checked process and launchd actions"]
+```
+
+The reusable cryptography, domain, licensing, update-policy, and Sparkle boundaries live in `Packages/MiloKit`. Preview mode keeps the production architecture compiled and testable but makes no backend calls and disables software updates at runtime.
+
+## Interview demo flow
+
+1. Open Milo and point out the explicit **Development Preview** badge.
+2. Show that the home screen scans locally and reports failures separately from a clean result.
+3. Select a detected non-system target and review the confirmation before termination.
+4. Explain the PID/start-time identity check and graceful TERM/KILL sequence.
+5. Show the helper banner and Settings status; explain that root actions use one approved helper rather than recurring password prompts.
+6. Open **System Tuning** and show reversible controls, SIP locks, and risk levels.
+7. Switch between menu bar and dedicated-window modes.
+8. Use this README and [ROADMAP.md](ROADMAP.md) to distinguish the working preview from production operations still in progress.
+
+For a predictable interview, use disposable test processes and avoid changing system-level or SIP-gated settings on a presentation machine unless you have rehearsed the exact rollback.
+
+## Repository map
+
+| Path | Responsibility |
 |---|---|
-| `MiloPro` | Direct-distribution menu-bar app and the only app target that embeds `MiloPrivilegedHelper`. |
-| `MiloLite` | Standalone sandboxed, networkless, read-only AppKit scanner prototype with no MiloKit, licensing, update, or helper dependency. Sandbox usefulness remains a Phase 12 release gate. |
-| `MiloPrivilegedHelper` | Hardened command-line helper embedded at the `SMAppService` daemon layout. Its current XPC delegate denies every connection; authenticated operations are intentionally not implemented yet. |
-| `MiloRedTeamTests` | Hostless shipping-source security regression tests. |
-| `MiloUnitTests` | Hostless domain unit tests. |
-| `MiloIntegrationTests` | Generated-target, entitlement, helper-layout, and product-boundary contract tests. |
-| `MiloLiteUITests` | Milo Lite launch and truthful-capability UI smoke tests. |
+| `App/Milo/Runtime` | Pro and Development Preview UI and application coordination |
+| `Helper/MiloPrivilegedHelper` | Narrow privileged helper and XPC policy |
+| `App/MiloLite` | Sandboxed, read-only Mac App Store prototype |
+| `Packages/MiloKit` | Domain, hardening, licensing, update policy, and Sparkle integration |
+| `Tests` | Red-team, unit, integration, and UI regression tests |
+| `Tools` | Deterministic generation, verification, signing, and packaging tools |
+| `July27plan.md` | Full production finalization audit and tracked execution plan |
 
-Run the canonical Pro and Lite test schemes with:
+## Scope and limitations
 
-```bash
-export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
-xcodebuild \
-  -workspace Milo.xcworkspace \
-  -scheme MiloPro \
-  -configuration Debug \
-  -destination 'platform=macOS,arch=arm64' \
-  CODE_SIGNING_ALLOWED=NO \
-  clean test
+- Preview licensing is intentionally local and unconditional. It is not DRM and must never be represented as the commercial entitlement system.
+- Preview updates are disabled. The DMG must be rebuilt for a new preview.
+- The DMG is Apple Development signed for local testing; it is not a Developer ID notarized public release.
+- Apple and vendor launchd labels can change. A missing or protected service returns a failure instead of broadening the target match.
+- SIP-protected changes remain locked while SIP is enabled. Milo does not disable SIP.
+- Some system tuning changes affect Apple features. Review the risk label and use the provided revert action.
+- Helper approval is controlled by macOS and cannot be bypassed. Milo can open the correct Settings pane but cannot click approval for the user.
 
-xcodebuild \
-  -workspace Milo.xcworkspace \
-  -scheme MiloLite \
-  -configuration Debug \
-  -destination 'platform=macOS,arch=arm64' \
-  CODE_SIGNING_ALLOWED=NO \
-  clean test
-```
+## Product status
 
-The generated project is committed so clean CI does not depend on installing XcodeGen. Any change to `project.yml` must regenerate the project and commit both together.
+The Development Preview is the local, interview-ready product slice. The commercial release is still a separate release program with backend, payment, licensing, update, notarization, clean-machine, security-review, and operational gates. No unfinished commercial component is hidden behind a fake success state.
 
-Build the helper directly when validating it independently from the Pro embedding phase:
-
-```bash
-xcodebuild \
-  -project Milo.xcodeproj \
-  -target MiloPrivilegedHelper \
-  -configuration Release \
-  CODE_SIGNING_ALLOWED=NO \
-  ONLY_ACTIVE_ARCH=NO \
-  'ARCHS=arm64 x86_64' \
-  clean build
-```
-
-### MiloKit Package
-
-The v2 package lives under `Packages/MiloKit`:
-
-```bash
-cd Packages/MiloKit
-swift package resolve
-swift build
-```
-
-`MiloHardening` is split into a C target plus a Swift wrapper target because SwiftPM does not support mixed C and Swift source files in a single target. The public design boundary is unchanged: security-critical decisions live in C; Swift coordinates.
-
-MiloKit publishes only implemented boundaries: `MiloDomain`, `MiloHardening`,
-`MiloLicense`, `MiloUpdates`, and `MiloSparkle`. Feature-shaped placeholder
-products are deliberately absent; the active app implementation remains under
-`App/Milo` until a later phase extracts a complete, tested domain boundary.
-
-## Backend Contract
-
-The backend lives in `/Volumes/Internal HD/Developer/monomacaw/website`. Milo does not own Supabase migrations, Paddle webhooks, or license Edge Functions. The app consumes Monomacaw License Protocol v1 from the website repo.
-
-The Pro app has one licensing path: `LicenseManager` adapts the
-`MLPDeviceLicenseClient` device-key flow. It restores verified Keychain state,
-starts and completes browser-approved pairing, refreshes with signed device
-requests, and fails closed when client configuration is absent or invalid.
-Account authentication and Paddle checkout stay in the system browser. The
-desktop app contains no website session, Supabase user token, Paddle token,
-embedded checkout, or custom auth callback.
-
-Direct updates use the same enrolled device key. `MiloUpdates` validates the
-MLP-selected HTTPS appcast and exact SHA-256 before a tokenized, loopback-only
-bridge supplies those unchanged bytes to the Pro-only `MiloSparkle` adapter.
-Sparkle 2.9.4 is pinned exactly, signed feeds can never fail open, archives are
-verified before extraction, remote release-note downloads and automatic checks
-are disabled, and Lite contains no updater code. See
-`App/Milo/Sparkle/README.md` for the trust and release configuration.
-
-The MLP-v1 golden fixture is copied into
-`Packages/MiloKit/Tests/MiloLicenseTests/Fixtures/mlp-v1-golden.json` only so
-SwiftPM tests can run without reaching into a sibling checkout at runtime. The
-website repo remains canonical. Before changing license envelope shape, signing
-bytes, or protocol-version semantics, update the fixture in the website repo,
-run `npm run contract:fixture:sync` from the website checkout, then rerun:
-
-```bash
-Tools/verify-mlp-golden-fixture.sh
-swift test --package-path Packages/MiloKit
-```
-
-CI checks out the website fixture into `_contract/website` and fails if Milo's
-local fixture diverges. If the website repo is private, configure
-`MONOMACAW_CONTRACT_READ_TOKEN` with read-only access and set
-`MONOMACAW_WEBSITE_REPOSITORY` if the repository has moved.
-
-## Release Governance
-
-Milo follows SemVer 2.0.0 from `v2.0.0` onward. Commits on `main` use Conventional Commits 1.0.0, release tags are immutable annotated GPG-signed tags, and every product PR updates `CHANGELOG.md`.
-
-Required process files live under `.github/`:
-
-```text
-.github/pull_request_template.md
-.github/branch-protection.json
-.github/workflows/conventional-commits.yml
-.github/workflows/changelog-check.yml
-.github/workflows/mirror.yml
-.github/dependabot.yml
-```
-
-## Verification Spine
-
-Use this order for local release checks:
-
-```bash
-export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
-Tools/generate-xcode-project.sh
-xcodebuild \
-  -workspace Milo.xcworkspace \
-  -scheme MiloPro \
-  -configuration Release \
-  -destination 'platform=macOS,arch=arm64' \
-  CODE_SIGNING_ALLOWED=NO \
-  clean build
-
-swift test --package-path Packages/MiloKit
-swift build -c release
-./build_app.sh release
-Tools/verify-build.sh /path/to/Milo.app
-```
-
-`./build_app.sh release` is retained only for migration-era ad-hoc QA packaging. It is not the canonical Xcode build and does not produce a production release.
-
-## Release Machine Setup
-
-Production release signing happens only on the dedicated release machine with the Developer ID private key available locally, preferably through the YubiKey-backed keychain identity.
-
-Verify the signing identity:
-
-```bash
-security find-identity -v -p codesigning
-```
-
-The identity must be:
-
-```text
-Developer ID Application: <legal Apple developer name> (8N738727QB)
-```
-
-Store notarization credentials once on the release machine:
-
-```bash
-xcrun notarytool store-credentials milo-notary \
-  --apple-id "$APPLE_ID" \
-  --team-id 8N738727QB \
-  --password "$APP_PASSWORD"
-```
-
-Generate the Sparkle Ed25519 key pair on the offline/release machine. The private key never leaves encrypted offline storage. Only the public key is exported into the release shell:
-
-```bash
-swift Tools/sign-appcast.swift generate-key \
-  /Volumes/Offline/Milo/sparkle-ed25519-private.raw \
-  /Volumes/Offline/Milo/sparkle-ed25519-public.txt
-```
-
-```bash
-export SPARKLE_PUBLIC_ED_KEY="$(cat /Volumes/Offline/Milo/sparkle-ed25519-public.txt)"
-```
-
-Build, sign, notarize, staple, and verify:
-
-```bash
-export DEVELOPER_ID="Developer ID Application: <legal Apple developer name> (8N738727QB)"
-export NOTARY_KEYCHAIN_PROFILE="milo-notary"
-export SPARKLE_PUBLIC_ED_KEY="<Sparkle Ed25519 public key>"
-export MILO_SERVICE_BASE_URL="https://monomacaw.com"
-export MILO_LICENSE_PUBLIC_KEY="<MLP Ed25519 public verification key in unpadded base64url>"
-
-./build_app.sh release notarize
-Tools/verify-build.sh Milo.app
-spctl --assess --type open --context context:primary-signature -vv Milo-2.0.0.dmg
-```
-
-The signed release path fails if the Developer ID identity is missing, the Team
-ID does not match `8N738727QB`, or required public verification/configuration
-values are absent or still placeholders. These are public client inputs; all
-private signing, Paddle, Supabase service-role, and browser-session material
-remains outside the app and its build metadata.
-
-## Update Feed Release Rows
-
-`update-feed` is served by the website Supabase project and filters `app_releases` by the caller's license row:
-
-- `app_releases.app_id = licenses.app_id`
-- `app_releases.channel = 'production'`
-- `app_releases.is_active = true`
-- `app_releases.version <= licenses.max_app_version`
-- `app_releases.release_date <= licenses.update_entitled_until`
-
-Seed a signed Milo release only after the DMG is notarized and the Sparkle archive signature is produced offline:
-
-```bash
-swift Tools/sign-appcast.swift sign-release \
-  Milo-2.0.0.dmg \
-  /Volumes/Offline/Milo/sparkle-ed25519-private.raw \
-  Milo-2.0.0.dmg.ed25519
-```
-
-```sql
-INSERT INTO public.app_releases (
-  app_id,
-  channel,
-  version,
-  build_number,
-  release_date,
-  minimum_system_version,
-  download_url,
-  file_size,
-  ed_signature,
-  release_notes_url
-) VALUES (
-  'milo',
-  'production',
-  '2.0.0',
-  '200',
-  now(),
-  '13.0',
-  'https://monomacaw.com/products/milo/download/Milo-2.0.0.dmg',
-  <byte_size>,
-  '<contents of Milo-2.0.0.dmg.ed25519>',
-  'https://monomacaw.com/products/milo/changelog#200'
-);
-```
-
-Update checks use the device-key signing model documented in the website protocol registry. No app-shipped HMAC material is accepted.
-
-## Secret Rules
-
-The local compatibility file `App/Milo/Runtime/Secrets.swift` is ignored and must not be printed, committed, or pasted into logs. Tracked app code does not read it. Client-visible configuration is supplied through signed bundle metadata and validated without logging values; server secrets remain in server-side secret storage and are never shipped in the app.
+See [ROADMAP.md](ROADMAP.md) for the timeless product roadmap and [July27plan.md](July27plan.md) for the exhaustive technical plan.

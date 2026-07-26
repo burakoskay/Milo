@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import MiloDomain
+import MiloHardening
 import SwiftUI
 
 private enum SelfTestStatus: String {
@@ -154,6 +155,74 @@ enum SelfTestRunner {
         emit()
         emit("Summary: \(passes) passed, \(failures.count) failed, \(skips) skipped")
 
+        return failures.isEmpty ? 0 : 1
+    }
+
+    static func runPreviewSmoke() -> Int32 {
+        var results: [SelfTestResult] = []
+        results.append(testProtectedToolsExcludedFromDefaultTargets())
+        results.append(testDirectCommandArgumentsDoNotInvokeShell())
+        results.append(testDebloatCommandCatalog())
+
+        do {
+            let scan = try ProcessManager.shared.scanForRunningTargetsWithResources()
+            let items = scan.bloat + scan.intelligence
+            let identitiesAreComplete = items.allSatisfy { item in
+                item.matchedPIDs == Set(item.matchedIdentities.map(\.pid))
+                    && item.matchedIdentities.allSatisfy { identity in
+                        identity.pid > 1
+                            && identity.executablePath.hasPrefix("/")
+                            && identity.startSeconds > 0
+                    }
+            }
+            results.append(
+                SelfTestResult(
+                    name: "Process identity capture",
+                    status: identitiesAreComplete ? .pass : .fail,
+                    detail: identitiesAreComplete
+                        ? "Every detected target has a stable PID, path, and start-time identity"
+                        : "One or more detected targets lacked complete process identity metadata"
+                )
+            )
+        } catch {
+            results.append(
+                SelfTestResult(
+                    name: "Process identity capture",
+                    status: .fail,
+                    detail: "The read-only process scan failed: \(error.localizedDescription)"
+                )
+            )
+        }
+
+        let helperURL = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Resources/MiloPrivilegedHelper")
+        let helperIsEmbedded = FileManager.default.isExecutableFile(atPath: helperURL.path)
+        results.append(
+            SelfTestResult(
+                name: "Privileged helper embedding",
+                status: helperIsEmbedded ? .pass : .fail,
+                detail: helperIsEmbedded
+                    ? "The signed helper executable is embedded at the SMAppService bundle path"
+                    : "The helper executable is missing from the app bundle"
+            )
+        )
+        let signatureIsTrusted = MiloIntegrity.check(.launch)
+        results.append(
+            SelfTestResult(
+                name: "Runtime code signature",
+                status: signatureIsTrusted ? .pass : .fail,
+                detail: signatureIsTrusted
+                    ? "The running preview satisfies Milo's exact team and bundle requirement"
+                    : "The running preview failed Milo's code-signing requirement"
+            )
+        )
+
+        emit("Milo Development Preview smoke test")
+        for result in results {
+            emit("[\(result.status.rawValue)] \(result.name): \(result.detail)")
+        }
+        let failures = results.filter { $0.status == .fail }
+        emit("Summary: \(results.count - failures.count) passed, \(failures.count) failed")
         return failures.isEmpty ? 0 : 1
     }
 

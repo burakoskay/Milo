@@ -51,34 +51,10 @@ enum CommandRunner {
         "/usr/bin/killall",
         "/usr/bin/mdutil",
         "/usr/bin/pluginkit",
-        "/usr/bin/sudo",
         "/usr/bin/vm_stat",
         "/usr/bin/xattr",
         "/usr/sbin/purge"
     ]
-
-    /// SAFETY: `output` is accessed only while `lock` is held.
-    private final class LockedOutput: @unchecked Sendable {
-        private let lock = NSLock()
-        private var output: MiloBoundedCommandOutput
-
-        init(maximumBytes: Int) throws {
-            output = try MiloBoundedCommandOutput(maximumBytes: maximumBytes)
-        }
-
-        func append(_ data: Data, to stream: MiloCommandOutputStream) {
-            lock.lock()
-            output.append(data, to: stream)
-            lock.unlock()
-        }
-
-        func snapshot() -> MiloBoundedCommandOutput {
-            lock.lock()
-            let snapshot = output
-            lock.unlock()
-            return snapshot
-        }
-    }
 
     @discardableResult
     static func run(
@@ -192,41 +168,6 @@ enum CommandRunner {
         )
     }
 
-    private static func boundedResult(
-        status: Int32,
-        stdout: String,
-        stderr: String,
-        termination: CommandTermination = .exited
-    ) -> CommandResult {
-        let output: MiloBoundedCommandOutput
-        do {
-            var boundedOutput = try MiloBoundedCommandOutput(maximumBytes: defaultMaximumOutputBytes)
-            boundedOutput.append(Data(stdout.utf8), to: .standardOutput)
-            boundedOutput.append(Data(stderr.utf8), to: .standardError)
-            output = boundedOutput
-        } catch {
-            return CommandResult(
-                status: 126,
-                stdout: "",
-                stderr: "Invalid command output limit",
-                termination: .policyRejected
-            )
-        }
-        if output.wasTruncated {
-            return commandResult(status: status, output: output)
-        }
-        guard let decodedStdout = String(bytes: output.standardOutput, encoding: .utf8),
-              let decodedStderr = String(bytes: output.standardError, encoding: .utf8) else {
-            return CommandResult(
-                status: 74,
-                stdout: "",
-                stderr: "Command output was not valid UTF-8",
-                termination: .invalidOutputEncoding
-            )
-        }
-        return CommandResult(status: status, stdout: decodedStdout, stderr: decodedStderr, termination: termination)
-    }
-
     @discardableResult
     static func runPrivileged(_ executable: String, arguments: [String] = []) -> CommandResult {
         guard executable != "/usr/bin/sudo",
@@ -242,13 +183,7 @@ enum CommandRunner {
             )
         }
 
-        if PrivilegeManager.shared.isConfigured {
-            let sudoResult = run("/usr/bin/sudo", arguments: ["-n", executable] + arguments)
-            if sudoResult.succeeded { return sudoResult }
-            PrivilegeManager.shared.resetVerification()
-        }
-
-        return runWithAdministratorPrivileges(executable, arguments: arguments)
+        return MiloPrivilegedHelperClient.shared.run(commands: [(executable, arguments)])
     }
 
     @discardableResult
@@ -270,88 +205,7 @@ enum CommandRunner {
             }
         }
 
-        if PrivilegeManager.shared.isConfigured {
-            var finalStatus: Int32 = 0
-            let aggregateOutput: LockedOutput
-            do {
-                aggregateOutput = try LockedOutput(maximumBytes: defaultMaximumOutputBytes)
-            } catch {
-                return CommandResult(
-                    status: 126,
-                    stdout: "",
-                    stderr: "Invalid command output limit",
-                    termination: .policyRejected
-                )
-            }
-            for cmd in commands {
-                let res = run("/usr/bin/sudo", arguments: ["-n", cmd.executable] + cmd.arguments)
-                aggregateOutput.append(Data((res.stdout + "\n").utf8), to: .standardOutput)
-                aggregateOutput.append(Data((res.stderr + "\n").utf8), to: .standardError)
-                if !res.succeeded {
-                    finalStatus = res.status
-                }
-            }
-            let aggregateSnapshot = aggregateOutput.snapshot()
-            if aggregateSnapshot.wasTruncated {
-                return commandResult(status: finalStatus, output: aggregateSnapshot)
-            }
-            if finalStatus == 0 {
-                return commandResult(status: 0, output: aggregateSnapshot)
-            }
-            PrivilegeManager.shared.resetVerification()
-        }
-
-        let shellCommands = commands.map { shellEscapedCommand($0.executable, arguments: $0.arguments) }
-        let combinedShellCommand = shellCommands.joined(separator: " ; ")
-        let script = "do shell script \"\(appleScriptStringLiteral(combinedShellCommand))\" with administrator privileges"
-
-        var error: NSDictionary?
-        guard let appleScript = NSAppleScript(source: script) else {
-            return boundedResult(status: 1, stdout: "", stderr: "Failed to create administrator prompt")
-        }
-
-        let descriptor = appleScript.executeAndReturnError(&error)
-        if let error {
-            let message = error["NSAppleScriptErrorMessage"] as? String ?? "Administrator access denied"
-            return boundedResult(status: 1, stdout: "", stderr: message)
-        }
-
-        return boundedResult(status: 0, stdout: descriptor.stringValue ?? "", stderr: "")
-    }
-
-    static func shellEscapedCommand(_ executable: String, arguments: [String]) -> String {
-        ([executable] + arguments).map(shellQuote).joined(separator: " ")
-    }
-
-    private static func runWithAdministratorPrivileges(_ executable: String, arguments: [String]) -> CommandResult {
-        let shellCommand = shellEscapedCommand(executable, arguments: arguments)
-        let script = "do shell script \"\(appleScriptStringLiteral(shellCommand))\" with administrator privileges"
-
-        var error: NSDictionary?
-        guard let appleScript = NSAppleScript(source: script) else {
-            return boundedResult(status: 1, stdout: "", stderr: "Failed to create administrator prompt")
-        }
-
-        let descriptor = appleScript.executeAndReturnError(&error)
-        if let error {
-            let message = error["NSAppleScriptErrorMessage"] as? String ?? "Administrator access denied"
-            return boundedResult(status: 1, stdout: "", stderr: message)
-        }
-
-        return boundedResult(status: 0, stdout: descriptor.stringValue ?? "", stderr: "")
-    }
-
-    private static func shellQuote(_ value: String) -> String {
-        guard !value.isEmpty else { return "''" }
-        return "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
-
-    private static func appleScriptStringLiteral(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-            .replacingOccurrences(of: "\r", with: "\\r")
+        return MiloPrivilegedHelperClient.shared.run(commands: commands)
     }
 
     private static func isAllowedExecutable(_ executable: String) -> Bool {
@@ -362,12 +216,6 @@ enum CommandRunner {
 
     private static func isAllowedInvocation(executable: String, arguments: [String]) -> Bool {
         switch executable {
-        case "/usr/bin/sudo":
-            guard arguments.count >= 2,
-                  arguments[0] == "-n",
-                  arguments[1] != "/usr/bin/sudo",
-                  isAllowedExecutable(arguments[1]) else { return false }
-            return isAllowedInvocation(executable: arguments[1], arguments: Array(arguments.dropFirst(2)))
         case "/bin/echo":
             return true
         case "/bin/kill":

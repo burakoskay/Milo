@@ -34,7 +34,7 @@ final class TargetBoundaryTests: XCTestCase {
         XCTAssertEqual(entitlements["com.apple.security.app-sandbox"] as? Bool, true)
     }
 
-    func testHelperBundleLayoutAndDenyAllEntryPointAreFrozen() throws {
+    func testHelperBundleLayoutAndAuthenticatedPolicyAreFrozen() throws {
         let helperPlist = try readPropertyListDictionary(
             at: repositoryRoot.appendingPathComponent(
                 "Helper/MiloPrivilegedHelper/com.monomacaw.milo.helper.plist"
@@ -58,10 +58,62 @@ final class TargetBoundaryTests: XCTestCase {
         let helperSource = try readText(
             at: repositoryRoot.appendingPathComponent("Helper/MiloPrivilegedHelper/main.swift")
         )
-        XCTAssertTrue(helperSource.contains("DenyAllConnectionDelegate"))
+        XCTAssertTrue(helperSource.contains("setCodeSigningRequirement"))
+        XCTAssertTrue(helperSource.contains("certificate leaf[subject.OU]"))
+        XCTAssertTrue(helperSource.contains("HelperPolicy.decode"))
+        XCTAssertTrue(helperSource.contains("expectedProcessIdentity"))
+        XCTAssertTrue(helperSource.contains("processIdentityStatus"))
+        XCTAssertTrue(helperSource.contains("MiloSubprocessRunner.run"))
         XCTAssertFalse(helperSource.contains("Process("))
-        XCTAssertFalse(helperSource.contains("/bin/"))
-        XCTAssertFalse(helperSource.contains("/usr/bin/"))
+        XCTAssertFalse(helperSource.contains("/bin/sh"))
+        XCTAssertFalse(helperSource.contains("NSAppleScript"))
+
+        let privilegeManager = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/PrivilegeManager.swift")
+        )
+        XCTAssertTrue(privilegeManager.contains("SMAppService.daemon"))
+        XCTAssertFalse(privilegeManager.contains("administrator privileges"))
+    }
+
+    func testDevelopmentPreviewIsExplicitAndBackendIndependentAtRuntime() throws {
+        let projectSpec = try readText(at: repositoryRoot.appendingPathComponent("project.yml"))
+        let previewConfiguration = try readText(
+            at: repositoryRoot.appendingPathComponent("Configurations/MiloPro.Preview.xcconfig")
+        )
+        let previewEntitlements = try readPropertyListDictionary(
+            at: repositoryRoot.appendingPathComponent("App/Milo/MiloPreview.entitlements")
+        )
+        let licenseManager = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/LicenseManager.swift")
+        )
+
+        XCTAssertTrue(projectSpec.contains("Preview: release"))
+        XCTAssertTrue(projectSpec.contains("MILO_DEVELOPMENT_PREVIEW"))
+        XCTAssertTrue(previewConfiguration.contains("com.monomacaw.milo.preview"))
+        XCTAssertTrue(previewConfiguration.contains("MILO_CONFIGURATION_ENVIRONMENT = development-preview"))
+        XCTAssertTrue(previewEntitlements.isEmpty)
+        XCTAssertTrue(licenseManager.contains("MiloBuildMode.isDevelopmentPreview"))
+        XCTAssertTrue(licenseManager.contains("expiresAt: .distantFuture"))
+    }
+
+    func testPrivilegedExecutionHasNoPromptOrSudoFallback() throws {
+        let commandRunner = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/CommandRunner.swift")
+        )
+        let processManager = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/ProcessManager.swift")
+        )
+        let helperClient = try readText(
+            at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/PrivilegedHelperClient.swift")
+        )
+
+        XCTAssertTrue(commandRunner.contains("MiloPrivilegedHelperClient.shared"))
+        XCTAssertFalse(commandRunner.contains("NSAppleScript"))
+        XCTAssertFalse(commandRunner.contains("with administrator privileges"))
+        XCTAssertTrue(processManager.contains("processIdentityStatus"))
+        XCTAssertTrue(processManager.contains("matchedIdentities"))
+        XCTAssertTrue(helperClient.contains("expectedStartSeconds"))
+        XCTAssertTrue(helperClient.contains("expectedStartMicroseconds"))
     }
 
     func testProSchemeLaunchesAppAndEmbedsHelperOnlyAsDependency() throws {

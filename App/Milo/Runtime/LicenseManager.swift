@@ -14,6 +14,9 @@ final class LicenseManager: ObservableObject {
     @Published private(set) var pairingChallenge: MLPEnrollmentChallenge?
 
     var isSubscribed: Bool {
+        if MiloBuildMode.isDevelopmentPreview {
+            return true
+        }
         guard snapshot.isPro, let expiration = snapshot.expiresAt else {
             return false
         }
@@ -28,6 +31,19 @@ final class LicenseManager: ObservableObject {
     private let configurationError: String?
 
     private init() {
+        if MiloBuildMode.isDevelopmentPreview {
+            snapshot = LicenseSnapshot(
+                isPro: true,
+                productEntitlements: ["process-control", "system-tuning", "local-preview"],
+                issuedAt: Date(),
+                expiresAt: .distantFuture,
+                releaseChannel: "development-preview"
+            )
+            client = nil
+            configurationError = nil
+            return
+        }
+
         do {
             let configuration = try MLPClientConfiguration(
                 baseURL: try BackendConfiguration.serviceBaseURL(),
@@ -47,6 +63,9 @@ final class LicenseManager: ObservableObject {
 
     /// Restores an unexpired pairing challenge and a cryptographically verified cached license.
     func restoreLocalState() async {
+        guard !MiloBuildMode.isDevelopmentPreview else {
+            return
+        }
         guard beginOperation() else {
             return
         }
@@ -75,6 +94,9 @@ final class LicenseManager: ObservableObject {
 
     /// Creates a short-lived browser pairing challenge without transferring browser credentials to Milo.
     func startEnrollment() async {
+        guard !MiloBuildMode.isDevelopmentPreview else {
+            return
+        }
         guard beginOperation() else {
             return
         }
@@ -94,6 +116,9 @@ final class LicenseManager: ObservableObject {
 
     /// Completes an approved browser pairing and applies only the verified signed license snapshot.
     func completeEnrollment() async {
+        guard !MiloBuildMode.isDevelopmentPreview else {
+            return
+        }
         guard beginOperation() else {
             return
         }
@@ -114,6 +139,9 @@ final class LicenseManager: ObservableObject {
 
     /// Refreshes the license using the enrolled device's signed MLP-v1 request.
     func refreshLicense() async {
+        guard !MiloBuildMode.isDevelopmentPreview else {
+            return
+        }
         guard beginOperation() else {
             return
         }
@@ -136,6 +164,9 @@ final class LicenseManager: ObservableObject {
 
     /// Obtains the MLP-authenticated update descriptor for the signed license channel.
     func updateFeedDescriptor() async throws -> (descriptor: MLPUpdateFeed, channel: String) {
+        guard !MiloBuildMode.isDevelopmentPreview else {
+            throw MLPLicenseError.updateFeedRejected
+        }
         guard !isVerifying else {
             throw MLPLicenseError.updateFeedRejected
         }
@@ -154,6 +185,9 @@ final class LicenseManager: ObservableObject {
 
     /// Removes all device enrollment and cached license material from this Mac.
     func clearLocalLicenseState() async {
+        guard !MiloBuildMode.isDevelopmentPreview else {
+            return
+        }
         guard beginOperation() else {
             return
         }

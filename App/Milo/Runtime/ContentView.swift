@@ -169,6 +169,47 @@ private struct SIPPill: View {
     }
 }
 
+struct BackgroundHelperBanner: View {
+    let status: MiloHelperStatus
+    let enable: () -> Void
+    let openSettings: () -> Void
+
+    private var requiresApproval: Bool {
+        status == .requiresApproval
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "lock.shield.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(requiresApproval ? "Approve Milo in Login Items" : "Enable system actions")
+                    .font(.caption.weight(.semibold))
+                Text("Scanning works now. System-level actions need one macOS approval.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(requiresApproval ? "Open Settings" : "Enable") {
+                if requiresApproval {
+                    openSettings()
+                } else {
+                    enable()
+                }
+            }
+            .controlSize(.small)
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+        }
+        .padding(10)
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.orange.opacity(0.2))
+        }
+    }
+}
+
 private struct ResultsToast: View {
     let results: [KillResult]
     let isSIPEnabled: Bool
@@ -217,6 +258,10 @@ struct ContentView: View {
         appState.selectedForKill.isEmpty || appState.isKilling
     }
 
+    private var hasProAccess: Bool {
+        MiloBuildMode.isDevelopmentPreview || licenseManager.isSubscribed
+    }
+
     private var tintColorOverride: Color? {
         switch appThemeColor {
         case "Blue": return .blue
@@ -238,6 +283,14 @@ struct ContentView: View {
 
             VStack(spacing: 12) {
                 header
+
+                if MiloBuildMode.isDevelopmentPreview, !appState.helperStatus.isEnabled {
+                    BackgroundHelperBanner(
+                        status: appState.helperStatus,
+                        enable: appState.setupPrivileges,
+                        openSettings: appState.openHelperApprovalSettings
+                    )
+                }
 
                 ScrollView {
                     VStack(spacing: 12) {
@@ -329,7 +382,7 @@ struct ContentView: View {
         } message: {
             Text("This removes cached files from your user Library Caches folder. Apps may rebuild caches the next time they open.")
         }
-        .alert("Enable Faster Privileged Actions?", isPresented: $appState.showingFirstLaunchPrivilegePrompt) {
+        .alert("Enable Milo Background Helper?", isPresented: $appState.showingFirstLaunchPrivilegePrompt) {
             Button("Later", role: .cancel) {
                 appState.deferFirstLaunchPrivilegePrompt()
             }
@@ -337,7 +390,15 @@ struct ContentView: View {
                 appState.setupPrivileges()
             }
         } message: {
-            Text("Milo can install a narrow sudoers rule for cache, DNS, Spotlight, and memory maintenance. Process termination still uses explicit per-action approval when macOS requires administrator privileges.")
+            Text("Milo uses one narrowly scoped background helper for system-level actions. macOS may ask you to approve Milo once in Login Items; it will not request your password for every process action.")
+        }
+        .alert("Background Helper Required", isPresented: $appState.showingHelperRequiredAlert) {
+            Button("Not Now", role: .cancel) {}
+            Button("Enable Helper") {
+                appState.setupPrivileges()
+            }
+        } message: {
+            Text("This action needs Milo's approved background helper. Enabling it is a one-time macOS permission step.")
         }
         // Keyboard shortcuts
         .background(
@@ -359,7 +420,7 @@ struct ContentView: View {
                     .opacity(0)
 
                 Button("") {
-                    if licenseManager.isSubscribed {
+                    if hasProAccess {
                         appState.killAllDetected()
                     } else {
                         showPaywall = true
@@ -373,7 +434,7 @@ struct ContentView: View {
     }
 
     private func handleKillRequest() {
-        if licenseManager.isSubscribed {
+        if hasProAccess {
             appState.requestKill()
         } else {
             showPaywall = true
@@ -407,6 +468,11 @@ struct ContentView: View {
                     Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if MiloBuildMode.isDevelopmentPreview {
+                        Text("Development Preview")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.orange)
+                    }
                 }
                 .fixedSize()
 
@@ -540,25 +606,27 @@ struct ContentView: View {
                         .accessibilityLabel("Purge inactive memory")
                         .disabled(appState.isPurgingMemory)
 
-                        Button {
-                            appState.requestClearUserCaches()
-                        } label: {
-                            HStack(spacing: 4) {
-                                if appState.isClearingCaches {
-                                    ProgressView()
-                                        .scaleEffect(0.7)
-                                } else {
-                                    Image(systemName: "trash")
+                        if !MiloBuildMode.isDevelopmentPreview {
+                            Button {
+                                appState.requestClearUserCaches()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    if appState.isClearingCaches {
+                                        ProgressView()
+                                            .scaleEffect(0.7)
+                                    } else {
+                                        Image(systemName: "trash")
+                                    }
+                                    Text("Caches")
+                                        .font(.caption)
                                 }
-                                Text("Caches")
-                                    .font(.caption)
                             }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .help("Clear user caches")
+                            .accessibilityLabel("Clear user caches")
+                            .disabled(appState.isClearingCaches)
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .help("Clear user caches")
-                        .accessibilityLabel("Clear user caches")
-                        .disabled(appState.isClearingCaches)
 
                         Button {
                             appState.flushDNS()
@@ -812,13 +880,13 @@ struct ContentView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "wand.and.stars")
-                        Text("Debloat")
+                        Text("System Tuning")
                             .font(.caption.weight(.medium))
                     }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
-                .help("System Debloat")
+                .help("System Tuning")
                 .accessibilityLabel("Open system debloat")
 
                 Spacer()

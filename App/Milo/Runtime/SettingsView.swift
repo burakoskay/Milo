@@ -1,5 +1,4 @@
 import SwiftUI
-import ServiceManagement
 
 struct SettingsView: View {
     @ObservedObject var appState: AppState
@@ -19,8 +18,6 @@ struct SettingsView: View {
     @AppStorage("Milo.appThemeColor") var appThemeColor: String = "System"
     @AppStorage("Milo.liquidGlass") var liquidGlass: String = "Auto"
     @AppStorage("Milo.viewMode") var viewMode: String = "menuBar"
-
-    @State private var privilegeStatus: String = ""
 
     private let scanIntervalOptions = [0, 60, 120, 300, 600]
 
@@ -54,6 +51,7 @@ struct SettingsView: View {
         .frame(width: isEmbedded ? nil : 360, height: isEmbedded ? nil : 520)
         .onAppear {
             refreshState()
+            appState.refreshHelperStatus()
         }
         .tint(tintColorOverride)
     }
@@ -292,40 +290,44 @@ struct SettingsView: View {
 
     private var privilegesSection: some View {
         GlassCard {
-            Label("Privileges", systemImage: "lock.shield.fill")
+            Label("Background Helper", systemImage: "lock.shield.fill")
                 .font(.headline)
 
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Passwordless Mode")
-                    Text(appState.isPasswordlessConfigured
-                         ? "Configured — faster privileged actions, broader local trust"
-                         : "Off — privileged actions prompt for admin approval")
+                    Text(helperStatusTitle)
+                    Text(helperStatusDetail)
                         .font(.caption)
-                        .foregroundStyle(appState.isPasswordlessConfigured ? .green : .secondary)
+                        .foregroundStyle(appState.helperStatus.isEnabled ? .green : .secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer()
 
-                if appState.isPasswordlessConfigured {
+                if appState.helperStatus.isEnabled {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
+                } else if appState.helperStatus == .requiresApproval {
+                    Button("Open Settings") {
+                        appState.openHelperApprovalSettings()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 } else {
                     Button("Enable") {
                         appState.setupPrivileges()
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .help("Optional. This grants selected system tools passwordless sudo for this macOS user.")
+                    .disabled(appState.isConfiguringPrivileges)
+                    .help("Register Milo's signed, narrowly scoped launch daemon.")
                 }
             }
 
-            if !appState.isPasswordlessConfigured {
-                Text("Security Note: Leave this disabled unless you understand that any process running as your user will be able to invoke the allowed tools without an additional password prompt.")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text("Milo never installs sudoers rules. macOS approval is requested once; the helper then accepts only signed Milo requests and a fixed command policy.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             if let error = appState.privilegeError {
                 Text(error)
@@ -334,15 +336,15 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if appState.isPasswordlessConfigured {
+            if appState.helperStatus.isEnabled {
                 Divider()
 
                 Button(role: .destructive) {
-                    PrivilegeManager.shared.removePrivileges { _ in }
+                    appState.removeHelper()
                 } label: {
                     HStack {
                         Image(systemName: "trash")
-                        Text("Remove Sudoers Rule")
+                        Text("Disable Background Helper")
                     }
                     .font(.caption)
                 }
@@ -350,11 +352,32 @@ struct SettingsView: View {
                 .controlSize(.small)
             }
 
-            if !privilegeStatus.isEmpty {
-                Text(privilegeStatus)
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
+        }
+    }
+
+    private var helperStatusTitle: String {
+        switch appState.helperStatus {
+        case .notRegistered:
+            return "Not Enabled"
+        case .requiresApproval:
+            return "Waiting for macOS Approval"
+        case .enabled:
+            return "Ready"
+        case .unavailable:
+            return "Unavailable"
+        }
+    }
+
+    private var helperStatusDetail: String {
+        switch appState.helperStatus {
+        case .notRegistered:
+            return "Enable once for system-level process and tuning actions."
+        case .requiresApproval:
+            return "Enable Milo under General › Login Items, then return here."
+        case .enabled:
+            return "System-level actions run without repeated password prompts."
+        case .unavailable(let message):
+            return message
         }
     }
 
@@ -373,6 +396,16 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if MiloBuildMode.isDevelopmentPreview {
+                HStack {
+                    Text("Build")
+                    Spacer()
+                    Text("Development Preview")
+                        .foregroundStyle(.orange)
+                        .fontWeight(.medium)
+                }
+            }
+
             HStack {
                 Text("SIP Status")
                 Spacer()
@@ -388,31 +421,33 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Divider()
+            if !MiloBuildMode.isDevelopmentPreview {
+                Divider()
 
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Software Updates")
-                    Text("Authenticated by your Pro device key and verified by Sparkle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button(updateManager.isChecking ? "Checking…" : "Check Now") {
-                    Task {
-                        await updateManager.checkForUpdates()
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Software Updates")
+                        Text("Authenticated by your Pro device key and verified by Sparkle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
+                    Spacer()
+                    Button(updateManager.isChecking ? "Checking…" : "Check Now") {
+                        Task {
+                            await updateManager.checkForUpdates()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(!updateManager.canCheckForUpdates)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(!updateManager.canCheckForUpdates)
-            }
 
-            if let statusMessage = updateManager.statusMessage {
-                Text(statusMessage)
-                    .font(.caption)
-                    .foregroundStyle(updateManager.statusIsError ? .red : .secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let statusMessage = updateManager.statusMessage {
+                    Text(statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(updateManager.statusIsError ? .red : .secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }

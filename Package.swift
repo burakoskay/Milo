@@ -7,6 +7,7 @@ let ignoredCompatibilityFile = packageRoot.appendingPathComponent("App/Milo/Runt
 let appTargetExcludes = [
     "Info.plist",
     "Milo.entitlements",
+    "MiloPreview.entitlements",
     "Sparkle"
 ] + (FileManager.default.fileExists(atPath: ignoredCompatibilityFile.path) ? ["Runtime/Secrets.swift"] : [])
 
@@ -41,6 +42,7 @@ let package = Package(
                 "Runtime/DebloatManager.swift",
                 "Runtime/DebloatView.swift",
                 "Runtime/DedicatedWindowView.swift",
+                "Runtime/DevelopmentPreview.swift",
                 "Runtime/IconManager.swift",
                 "Runtime/LicenseManager.swift",
                 "Runtime/MemoryManager.swift",
@@ -50,6 +52,7 @@ let package = Package(
                 "Runtime/MiloUpdateManager.swift",
                 "Runtime/PaywallView.swift",
                 "Runtime/PrivilegeManager.swift",
+                "Runtime/PrivilegedHelperClient.swift",
                 "Runtime/ProcessData.swift",
                 "Runtime/ProcessManager.swift",
                 "Runtime/SIPChecker.swift",

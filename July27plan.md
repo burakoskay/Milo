@@ -110,6 +110,26 @@ Both the app and canonical website checkouts were already dirty before this docu
 
 ---
 
+## Development Preview delivery track
+
+This bounded track produces the local, interview-ready preview without falsely closing the commercial release phases below. Backend accounts, Paddle, production licensing, public updates, notarization, and Mac App Store delivery remain roadmap work.
+
+1. [x] Add an explicit `Preview` build configuration with a distinct bundle identity, visible Development Preview labeling, locally unlocked Pro capabilities, no runtime license/backend requirement, and disabled preview updates.
+2. [x] Remove sudoers and AppleScript elevation paths. Replace them with a user-initiated `SMAppService` helper registration flow that never retries automatically and exposes enabled, approval-required, unavailable, and disabled states.
+3. [x] Authenticate app/helper XPC peers by designated code-signing requirements and constrain helper requests to fixed executables, argument grammars, request sizes, deadlines, and output limits.
+4. [x] Bind process actions to PID, executable path, and kernel start time; revalidate the identity immediately before both TERM and KILL in the app and helper.
+5. [x] Surface helper state and recovery directly in the menu-bar and dedicated-window UI, retain action confirmations, and relabel the legacy Debloat surface as System Tuning.
+6. [x] Replace the engineering-only README with preview setup, permission behavior, build, verification, architecture, demo flow, limitations, and project-status documentation.
+7. [x] Add a timeless `ROADMAP.md` for deferred commercial, distribution, Lite, tuning, reliability, and experience work.
+8. [x] Complete the clean Preview build, regression suites, lint and forbidden-pattern scans, bundle/signature/requirement checks, deterministic preview smoke suite, DMG verification, launch smoke test, and visual inspection.
+9. [ ] Publish the reviewed preview changes and attach final verification evidence to the existing pull request.
+
+Verification evidence for step 8: clean Xcode 27 beta Preview build with warnings fatal; strict SwiftLint success; 18 root red-team tests, 29 MiloKit tests, and the MiloPro Xcode unit/integration/red-team scheme all passing; six deterministic packaged-app smoke checks passing; app/helper designated requirements and the mounted DMG payload verified; final UI launch inspected with no false integrity-compromise state.
+
+**Preview exit gate:** the verified DMG runs locally with all preview capabilities available, no backend or payment blocker, no recurring privilege prompt path, no known wrong-target signal path, and documentation that makes every deferred production responsibility explicit.
+
+---
+
 ## 3. Current system topology and coherence failure
 
 ```mermaid
@@ -154,7 +174,7 @@ Every item in this table blocks any external beta, paid release, or Mac App Stor
 | P0-09 | `PrivilegeManager.swift:93-102` installs user-wide `NOPASSWD` permissions for root maintenance commands. | Remove sudoers installation and shell-based escalation. Use a separately signed, narrow privileged helper registered via `SMAppService`, with authenticated XPC and fixed operation types. | No `/etc/sudoers.d/milo`; helper has no network, shell, or arbitrary executable API; adversarial XPC tests reject unauthenticated/malformed clients. |
 | P0-10 | Paddle trusts `custom_data.user_id/app_id`, never allowlists price/product, and performs non-transactional mutations (`paddle-webhook/index.ts:70-168`). | Resolve customer/user ownership server-side; allowlist Paddle environment/product/price/currency; process each event through one serializable, idempotent Postgres RPC/state machine with pending/processed/failed state and ordering protection. | Official Paddle fixtures, replay, concurrent duplicate, out-of-order, retry-after-midtransaction-failure, refund, cancel, resubscribe, and wrong-product tests pass. |
 | P0-11 | Enrollment creates a device key then separately marks the challenge complete (`device-enroll-complete/index.ts:45-70`). A failure/race can strand or duplicate enrollment. | Move challenge lock, token/expiry/attempt validation, unique key insertion, completion, and audit append into one transactional RPC. | Concurrent completion/retry tests yield exactly one key and one terminal challenge state. |
-| P0-12 | Executable self-hash is unusable (`Integrity.c:9-54`, `embed-hashes.swift:19-44`), and the build never wires it in. | Delete the self-referential whole-file hash design. Rely on OS code signing/notarization and signed server capabilities; use separately signed resource manifests only where they protect external mutable resources. | Release hardening has an explicit threat model and every enabled check has a deterministic positive and negative test. |
+| P0-12 | **Resolved for the app runtime:** the unusable self-referential executable hash and its orphaned generator were removed. Runtime integrity now validates Apple's code signature against the exact monomacaw Team ID and the approved production/preview bundle identities; packaging runs this check from the signed artifact. | Keep OS code signing/notarization as the executable-integrity boundary and use separately signed manifests only for external mutable resources. | The preview smoke suite proves the positive signed-artifact path; production release work still requires a deliberate negative tamper test and notarized-distribution gate. |
 | P0-13 | Launch integrity runs after `AppState` construction and a failure only sets UserDefaults (`MenuBarAppDelegate.swift:104-116`). | Do not market this as an absolute entry-point crash defense. Gate sensitive operations on a typed integrity state and offer a recoverable diagnostic/reinstall path. | Tampered/ad hoc test builds cannot execute licensed destructive operations; legitimate signed builds never enter a crash loop. |
 | P0-14 | Scan failure returns empty arrays (`ProcessManager.swift:397-402,488-493`), while UI can display “System Clean” (`DedicatedWindowView.swift:453-458`). | Model scans as `success`, `partial`, `permissionDenied`, `unsupported`, `cancelled`, or `failed`; never translate failure into “clean.” | Fault-injection UI tests verify every terminal state and recovery action. |
 | P0-15 | Broad cache deletion removes nearly every item under `~/Library/Caches` (`MemoryManager.swift:44-94`). macOS 27 increases cross-team/XProtect denials. | Remove broad cache clearing from the product. If any cache tool remains, restrict it to Milo-owned data or explicit user-selected app data with preview and exact per-item results. | No default operation traverses/deletes unrelated developer data; denial is not mislabeled as success. |

@@ -21,7 +21,10 @@ final class MiloUpdateManager: ObservableObject {
     }
 
     var canCheckForUpdates: Bool {
-        !isChecking && (controller?.canCheckForUpdates ?? true)
+        if MiloBuildMode.isDevelopmentPreview {
+            return false
+        }
+        return !isChecking && (controller?.canCheckForUpdates ?? true)
     }
 
     var statusMessage: String? {
@@ -59,6 +62,10 @@ final class MiloUpdateManager: ObservableObject {
         controller = nil
         configurationError = nil
 
+        if MiloBuildMode.isDevelopmentPreview {
+            return
+        }
+
         do {
             let serviceURL = try BackendConfiguration.serviceBaseURL()
             guard let serviceHost = serviceURL.host?.lowercased() else {
@@ -77,6 +84,10 @@ final class MiloUpdateManager: ObservableObject {
     }
 
     func checkForUpdates() async {
+        guard !MiloBuildMode.isDevelopmentPreview else {
+            state = .failed(message: "Updates are intentionally disabled in the Development Preview.")
+            return
+        }
         guard !isChecking else {
             state = .failed(message: "An update check is already in progress.")
             return

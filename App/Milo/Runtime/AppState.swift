@@ -22,11 +22,19 @@ struct ProcessItem: Identifiable, Hashable, Sendable {
     let isLaunchdManaged: Bool  // Will respawn if just killed
     let isSystemProcess: Bool   // Requires SIP disabled to permanently stop
     var matchedPIDs: Set<Int32> = []
+    var matchedIdentities: Set<ProcessIdentity> = []
     var telemetryRuleID: String?
     var terminationStrategy: TelemetryTerminationStrategy?
     var launchdLabel: String?
     var launchdDomain: TelemetryLaunchdDomain?
     var isSelected: Bool = false
+}
+
+struct ProcessIdentity: Hashable, Sendable {
+    let pid: Int32
+    let executablePath: String
+    let startSeconds: UInt64
+    let startMicroseconds: UInt64
 }
 
 struct KillResult: Identifiable, Sendable {
@@ -74,6 +82,8 @@ final class AppState: ObservableObject {
     @Published var isConfiguringPrivileges: Bool = false
     @Published var privilegeError: String?
     @Published var showingFirstLaunchPrivilegePrompt: Bool = false
+    @Published var showingHelperRequiredAlert: Bool = false
+    @Published private(set) var helperStatus: MiloHelperStatus = .notRegistered
 
     // Memory management
     @Published var memoryStats: MemoryStats?
@@ -127,7 +137,7 @@ final class AppState: ObservableObject {
 
     // Check if passwordless mode is configured
     var isPasswordlessConfigured: Bool {
-        PrivilegeManager.shared.isConfigured
+        helperStatus.isEnabled
     }
 
     // Total resource usage of detected bloat
@@ -228,6 +238,7 @@ final class AppState: ObservableObject {
 
     init() {
         self.isSIPEnabled = SIPChecker.isSIPEnabled()
+        self.helperStatus = PrivilegeManager.shared.status
         self.scanProcesses()
         self.refreshMemoryStats()
 
@@ -255,19 +266,41 @@ final class AppState: ObservableObject {
         privilegeError = nil
         SettingsManager.shared.privilegeOnboardingPrompted = true
         showingFirstLaunchPrivilegePrompt = false
-        PrivilegeManager.shared.configurePrivileges { [weak self] success in
+        PrivilegeManager.shared.configurePrivileges { [weak self] result in
             guard let appState = self else { return }
             Self.runOnMain {
                 appState.isConfiguringPrivileges = false
-                if success {
+                appState.refreshHelperStatus()
+                switch result {
+                case .enabled:
                     appState.privilegeError = nil
-                } else {
-                    appState.privilegeError = "Failed to configure privileges. Ensure you entered your password correctly."
-                    Self.runOnMain(after: 5.0) {
-                        appState.privilegeError = nil
-                    }
+                case .requiresApproval:
+                    appState.privilegeError = "Approve Milo under System Settings › General › Login Items, then return to Milo. This is a one-time step."
+                case .failed(let message):
+                    appState.privilegeError = message
                 }
             }
+        }
+    }
+
+    func refreshHelperStatus() {
+        helperStatus = PrivilegeManager.shared.status
+        if helperStatus.isEnabled {
+            privilegeError = nil
+        }
+    }
+
+    func openHelperApprovalSettings() {
+        PrivilegeManager.shared.openApprovalSettings()
+    }
+
+    func removeHelper() {
+        PrivilegeManager.shared.removePrivileges { [weak self] success in
+            guard let self else {
+                return
+            }
+            refreshHelperStatus()
+            privilegeError = success ? nil : "Milo could not unregister its background helper."
         }
     }
 
@@ -278,7 +311,7 @@ final class AppState: ObservableObject {
 
     private func prepareFirstLaunchPrivilegePrompt() {
         guard !SettingsManager.shared.privilegeOnboardingPrompted,
-              !PrivilegeManager.shared.isConfigured else {
+              !helperStatus.isEnabled else {
             return
         }
         showingFirstLaunchPrivilegePrompt = true
@@ -390,6 +423,7 @@ final class AppState: ObservableObject {
     }
 
     func handlePopoverOpened() {
+        refreshHelperStatus()
         if SettingsManager.shared.autoScanOnOpen {
             scanProcesses()
             refreshMemoryStats()
@@ -414,6 +448,12 @@ final class AppState: ObservableObject {
         let toKill = pendingKillItems.isEmpty ? selectedForKill : pendingKillItems
         guard !toKill.isEmpty else {
             showingKillConfirmation = false
+            return
+        }
+        if toKill.contains(where: { ProcessManager.shared.requiresPrivilegedHelper(for: $0) }),
+           !helperStatus.isEnabled {
+            showingKillConfirmation = false
+            showingHelperRequiredAlert = true
             return
         }
         showingKillConfirmation = false
@@ -463,6 +503,11 @@ final class AppState: ObservableObject {
     }
 
     func toggleLaunchItem(_ item: LaunchItem) {
+        if ProcessManager.shared.requiresPrivilegedHelper(forLaunchItem: item),
+           !helperStatus.isEnabled {
+            showingHelperRequiredAlert = true
+            return
+        }
         let newState = !item.isLoaded
         ProcessManager.shared.toggleLaunchItem(path: item.path, enable: newState)
 
@@ -495,6 +540,10 @@ final class AppState: ObservableObject {
     }
 
     func purgeMemory() {
+        guard helperStatus.isEnabled else {
+            showingHelperRequiredAlert = true
+            return
+        }
         isPurgingMemory = true
         MemoryManager.shared.purgeMemory { [weak self] success, message in
             Self.runOnMain {
@@ -538,6 +587,10 @@ final class AppState: ObservableObject {
     }
 
     func flushDNS() {
+        guard helperStatus.isEnabled else {
+            showingHelperRequiredAlert = true
+            return
+        }
         isFlushingDNS = true
         MemoryManager.shared.clearDNSCache { [weak self] _, message in
             Self.runOnMain {
