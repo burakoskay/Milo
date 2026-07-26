@@ -6,6 +6,12 @@ version 1.x predates this regime.
 
 ## [Unreleased]
 
+## [2.0.0-preview.1] - 2026-07-27
+
+First public Development Preview. Apple Development signed and not notarized;
+macOS blocks the first launch until the user explicitly allows it.
+
+
 ### Added
 
 - Instantaneous CPU measurement that differentiates cumulative task CPU time across two observations per scan, replacing the lifetime average reported by `ps -o %cpu`.
