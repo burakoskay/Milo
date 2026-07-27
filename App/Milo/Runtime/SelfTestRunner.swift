@@ -123,6 +123,7 @@ enum SelfTestRunner {
         _ = waitUntil(timeout: 8) { !appState.isScanning }
 
         results.append(testWhitelist(using: appState))
+        results.append(testWhitelistManagerIsWhitelisted())
         results.append(contentsOf: testPopoverScanBehavior(using: appState))
         results.append(testScanDoesNotKillAutomatically(using: appState))
         results.append(testBulkKillConfirmation(using: appState))
@@ -336,6 +337,24 @@ enum SelfTestRunner {
         }
 
         return SelfTestResult(name: "Direct command arguments", status: .fail, detail: "Command metacharacters escaped argv isolation")
+    }
+
+    private static func testWhitelistManagerIsWhitelisted() -> SelfTestResult {
+        let dummyProcess = "dummy_process_selftest_\(UUID().uuidString)"
+
+        let initial = WhitelistManager.shared.isWhitelisted(dummyProcess)
+
+        WhitelistManager.shared.addToWhitelist(dummyProcess)
+        let added = WhitelistManager.shared.isWhitelisted(dummyProcess)
+
+        WhitelistManager.shared.removeFromWhitelist(dummyProcess)
+        let removed = WhitelistManager.shared.isWhitelisted(dummyProcess)
+
+        if !initial && added && !removed {
+            return SelfTestResult(name: "WhitelistManager.isWhitelisted", status: .pass, detail: "isWhitelisted correctly reflects adding and removing a process")
+        }
+
+        return SelfTestResult(name: "WhitelistManager.isWhitelisted", status: .fail, detail: "isWhitelisted returned initial: \(initial), added: \(added), removed: \(removed)")
     }
 
     private static func testWhitelist(using appState: AppState) -> SelfTestResult {
