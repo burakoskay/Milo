@@ -1179,4 +1179,11 @@ enum ProcessData {
         // Browsers
         "brave", "firefox", "opera", "vivaldi", "arc"
     ]
+
+    static let launchItemKeywordsRegex: NSRegularExpression = {
+        let pattern = launchItemKeywords
+            .map { NSRegularExpression.escapedPattern(for: $0) }
+            .joined(separator: "|")
+        return try! NSRegularExpression(pattern: pattern, options: [])
+    }()
 }

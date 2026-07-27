@@ -1036,7 +1036,8 @@ final class ProcessManager: Sendable {
                     let fullPath = path + "/" + item
                     let lowerItem = item.lowercased()
 
-                    if ProcessData.launchItemKeywords.contains(where: { lowerItem.contains($0) }) {
+                    let range = NSRange(location: 0, length: lowerItem.utf16.count)
+                    if ProcessData.launchItemKeywordsRegex.firstMatch(in: lowerItem, options: [], range: range) != nil {
                         var label = getPlistLabel(at: fullPath)
 
                         if label == nil || label?.isEmpty == true {

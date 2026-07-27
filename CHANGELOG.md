@@ -6,6 +6,9 @@ version 1.x predates this regime.
 
 ## [Unreleased]
 
+### Performance
+- Optimized keyword matching in `scanForLaunchItems` using a pre-compiled regular expression, drastically improving execution speed from $O(N \cdot M)$ to $O(N)$.
+
 ## [2.0.0-preview.1] - 2026-07-27
 
 First public Development Preview. Apple Development signed and not notarized;
