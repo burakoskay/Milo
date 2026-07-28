@@ -39,6 +39,8 @@ final class ProcessManager: Sendable {
 
     // MARK: - Cache
 
+    // SAFETY: PlistCache isolates its internal mutable dictionary state behind an NSLock,
+    // ensuring thread safety across concurrent readers and writers without actor isolation overhead.
     private final class PlistCache: @unchecked Sendable {
         private var cache: [String: String?] = [:]
         private let lock = NSLock()
