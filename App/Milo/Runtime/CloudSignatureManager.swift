@@ -275,7 +275,7 @@ final class CloudSignatureManager: @unchecked Sendable {
         return parts + Array(repeating: 0, count: max(0, 3 - parts.count))
     }
 
-    private static func wildcardMatch(pattern: String, value: String) -> Bool {
+    internal static func wildcardMatch(pattern: String, value: String) -> Bool {
         let escaped = NSRegularExpression.escapedPattern(for: pattern)
             .replacingOccurrences(of: "\\*", with: ".*")
         let regexPattern = "^\(escaped)$"

@@ -31,6 +31,8 @@ macOS blocks the first launch until the user explicitly allows it.
 
 ### Changed
 
+- Improves `CloudSignatureManager` unit testing coverage by adding `wildcardMatch` edge-case validation.
+
 - Restricts SwiftUI hosting to the active presentation surface, so the menu bar panel and the dedicated window can no longer both present the same confirmation.
 - Derives view-mode transitions from an actual preference change rather than from every write in the application's `UserDefaults` domain.
 - Returns the quit decision synchronously from `applicationShouldTerminate`, so choosing Quit terminates the application.
@@ -83,6 +85,8 @@ macOS blocks the first launch until the user explicitly allows it.
 - Canonical generated Xcode workspace with a strict Swift 6 Pro target and shared hostless regression-test scheme while retaining MiloKit as local Swift packages.
 
 ### Changed
+
+- Improves `CloudSignatureManager` unit testing coverage by adding `wildcardMatch` edge-case validation.
 
 - Removes the standalone Milo backend from this repository. The website owns licensing, Paddle webhooks, device enrollment, update-feed filtering, and app policy documents.
 - License cache fallback is bounded to 30 days from `issuedAt`.
