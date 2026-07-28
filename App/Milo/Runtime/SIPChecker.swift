@@ -1,8 +1,10 @@
 import Foundation
 
 class SIPChecker {
-    static func isSIPEnabled() -> Bool {
-        let result = CommandRunner.run("/usr/bin/csrutil", arguments: ["status"])
+    static func isSIPEnabled(
+        runner: (String, [String]) -> CommandResult = { cmd, args in CommandRunner.run(cmd, arguments: args) }
+    ) -> Bool {
+        let result = runner("/usr/bin/csrutil", ["status"])
         guard result.succeeded else {
             MiloLog.error(.sipStatusReadFailed, category: .security, detail: result.stderr)
             return true
