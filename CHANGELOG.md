@@ -29,6 +29,8 @@ macOS blocks the first launch until the user explicitly allows it.
 - Minimal `MiloPrivilegedHelper` launch-daemon target embedded in the Apple `SMAppService` bundle layout with a deny-all XPC connection boundary.
 - Dedicated red-team, unit, integration, and Milo Lite UI test targets in the canonical Xcode project.
 
+- Implemented a cache in `ProcessManager.validatePlistPath` to eliminate redundant file path resolutions and validations.
+
 ### Changed
 
 - Restricts SwiftUI hosting to the active presentation surface, so the menu bar panel and the dedicated window can no longer both present the same confirmation.

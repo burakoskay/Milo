@@ -37,6 +37,30 @@ final class ProcessManager: Sendable {
         self.cloudSignatureManager = cloudSignatureManager
     }
 
+    // MARK: - Cache
+
+    private final class PlistCache: @unchecked Sendable {
+        private var cache: [String: String?] = [:]
+        private let lock = NSLock()
+
+        func get(_ path: String) -> String?? {
+            lock.lock()
+            defer { lock.unlock() }
+            return cache[path]
+        }
+
+        func set(_ path: String, value: String?) {
+            lock.lock()
+            defer { lock.unlock() }
+            if cache.count >= 1000 {
+                cache.removeAll(keepingCapacity: true)
+            }
+            cache[path] = value
+        }
+    }
+
+    private static let plistCache = PlistCache()
+
     // MARK: - Direct Execution Safety
 
     private static func validateLaunchdLabel(_ label: String) -> String? {
@@ -50,28 +74,37 @@ final class ProcessManager: Sendable {
     }
 
     private static func validatePlistPath(_ path: String) -> String? {
-        let expanded = (path as NSString).expandingTildeInPath
-        let standardized = URL(fileURLWithPath: expanded).standardizedFileURL.path
-        guard standardized.hasSuffix(".plist") else { return nil }
-        guard !standardized.unicodeScalars.contains(where: { CharacterSet.newlines.contains($0) || CharacterSet.controlCharacters.contains($0) }) else {
-            MiloLog.warning(.unsafePlistPath, category: .process, detail: path)
-            return nil
+        if let cached = plistCache.get(path) {
+            return cached
         }
-        let userLaunchAgents = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/LaunchAgents", isDirectory: true)
-            .standardizedFileURL.path
-        let allowedRoots = [
-            "/System/Library/LaunchDaemons",
-            "/System/Library/LaunchAgents",
-            "/Library/LaunchDaemons",
-            "/Library/LaunchAgents",
-            userLaunchAgents
-        ]
-        guard allowedRoots.contains(where: { standardized == $0 || standardized.hasPrefix($0 + "/") }) else {
-            MiloLog.warning(.plistOutsideAllowedRoots, category: .process, detail: path)
-            return nil
-        }
-        return standardized
+
+        let result: String? = {
+            let expanded = (path as NSString).expandingTildeInPath
+            let standardized = URL(fileURLWithPath: expanded).standardizedFileURL.path
+            guard standardized.hasSuffix(".plist") else { return nil }
+            guard !standardized.unicodeScalars.contains(where: { CharacterSet.newlines.contains($0) || CharacterSet.controlCharacters.contains($0) }) else {
+                MiloLog.warning(.unsafePlistPath, category: .process, detail: path)
+                return nil
+            }
+            let userLaunchAgents = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/LaunchAgents", isDirectory: true)
+                .standardizedFileURL.path
+            let allowedRoots = [
+                "/System/Library/LaunchDaemons",
+                "/System/Library/LaunchAgents",
+                "/Library/LaunchDaemons",
+                "/Library/LaunchAgents",
+                userLaunchAgents
+            ]
+            guard allowedRoots.contains(where: { standardized == $0 || standardized.hasPrefix($0 + "/") }) else {
+                MiloLog.warning(.plistOutsideAllowedRoots, category: .process, detail: path)
+                return nil
+            }
+            return standardized
+        }()
+
+        plistCache.set(path, value: result)
+        return result
     }
 
     private static func requiresAdministrator(forPlistPath path: String) -> Bool {
