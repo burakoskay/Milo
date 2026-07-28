@@ -6,6 +6,10 @@ version 1.x predates this regime.
 
 ## [Unreleased]
 
+### Added
+
+- Added unit tests and mockable execution closure to `SIPChecker`.
+
 ## [2.0.0-preview.1] - 2026-07-27
 
 First public Development Preview. Apple Development signed and not notarized;
