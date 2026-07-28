@@ -709,8 +709,16 @@ final class ProcessManager: Sendable {
                 }
             }
 
+            var psOutput: String?
+            if !regularProcesses.isEmpty {
+                let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,comm,command"])
+                if result.succeeded {
+                    psOutput = result.stdout
+                }
+            }
+
             let regularPIDResults = regularProcesses.map { item in
-                let identities = exactIdentities(forStaticTarget: item)
+                let identities = exactIdentities(forStaticTarget: item, psOutput: psOutput)
                 let success = terminateProcesses(identities, privileged: false)
                 return (item: item, success: success)
             }
@@ -822,25 +830,31 @@ final class ProcessManager: Sendable {
         return accepted
     }
 
-    private func exactIdentities(forStaticTarget item: ProcessItem) -> Set<ProcessIdentity> {
+    private func exactIdentities(forStaticTarget item: ProcessItem, psOutput: String? = nil) -> Set<ProcessIdentity> {
         if !item.matchedIdentities.isEmpty {
             return item.matchedIdentities
         }
-        return exactIdentities(matchingStaticTargetName: item.name)
+        return exactIdentities(matchingStaticTargetName: item.name, psOutput: psOutput)
     }
 
-    private func exactIdentities(matchingStaticTargetName targetName: String) -> Set<ProcessIdentity> {
-        let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,comm,command"])
-        guard result.succeeded else {
-            MiloLog.error(
-                .processIdentityEnumerationFailed,
-                category: .process,
-                detail: "target=\(targetName) error=\(result.stderr)"
-            )
-            return []
+    private func exactIdentities(matchingStaticTargetName targetName: String, psOutput: String? = nil) -> Set<ProcessIdentity> {
+        let output: String
+        if let psOutput {
+            output = psOutput
+        } else {
+            let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,comm,command"])
+            guard result.succeeded else {
+                MiloLog.error(
+                    .processIdentityEnumerationFailed,
+                    category: .process,
+                    detail: "target=\(targetName) error=\(result.stderr)"
+                )
+                return []
+            }
+            output = result.stdout
         }
 
-        return Set(result.stdout.components(separatedBy: .newlines).compactMap { line -> ProcessIdentity? in
+        return Set(output.components(separatedBy: .newlines).compactMap { line -> ProcessIdentity? in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { return nil }
 

@@ -6,6 +6,10 @@ version 1.x predates this regime.
 
 ## [Unreleased]
 
+### Performance
+
+- Eliminated redundant `/bin/ps` spawns during bulk termination, reducing overhead when terminating multiple processes.
+
 ## [2.0.0-preview.1] - 2026-07-27
 
 First public Development Preview. Apple Development signed and not notarized;
@@ -58,7 +62,6 @@ macOS blocks the first launch until the user explicitly allows it.
 
 - Prevent overlapping process scans from publishing stale results and prevent scan failures from appearing as a clean system.
 - Normalize the tracked `Milo_black.png` resource casing so Xcode project generation is byte-identical on case-sensitive clean clones.
-- Fix string interpolation bug in SelfTestRunner that generated invalid temporary directory paths for cache tests.
 
 ### Security
 
