@@ -18,6 +18,7 @@ enum MiloLog {
         case persistenceDirectoryCreateFailed = "persistence.directory-create-failed"
         case persistenceLoadFailed = "persistence.load-failed"
         case persistenceSaveFailed = "persistence.save-failed"
+        case persistenceLoadRejected = "persistence.load-rejected"
         case memoryStatisticsReadFailed = "memory.statistics-read-failed"
         case physicalMemoryReadFailed = "memory.physical-read-failed"
         case sipStatusReadFailed = "security.sip-status-read-failed"

@@ -83,6 +83,18 @@ final class StatsManager {
         guard let url = statsFileURL else { return }
 
         do {
+            let resourceValues = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+
+            guard let isRegularFile = resourceValues.isRegularFile, isRegularFile else {
+                MiloLog.warning(.persistenceLoadRejected, category: .persistence, detail: "Stats file is not a regular file")
+                return
+            }
+
+            guard let fileSize = resourceValues.fileSize, fileSize < 2 * 1024 * 1024 else {
+                MiloLog.warning(.persistenceLoadRejected, category: .persistence, detail: "Stats file is too large")
+                return
+            }
+
             let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder().decode(AggregatedStats.self, from: data)
             self.stats = decoded
