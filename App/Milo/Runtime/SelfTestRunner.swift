@@ -671,7 +671,7 @@ enum SelfTestRunner {
 
     private static func testCacheClearingInTemporaryDirectory() -> SelfTestResult {
         let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("milo-selftest-\\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("milo-selftest-\(UUID().uuidString)", isDirectory: true)
         let keep = root.appendingPathComponent("com.monomacaw.milo")
         let remove = root.appendingPathComponent("com.example.Cache")
 
