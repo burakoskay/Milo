@@ -6,6 +6,9 @@ version 1.x predates this regime.
 
 ## [Unreleased]
 
+### Changed
+- Performance: Optimized `ProcessManager.vendorFor` by pre-compiling vendor patterns into O(V) regular expressions.
+
 ## [2.0.0-preview.1] - 2026-07-27
 
 First public Development Preview. Apple Development signed and not notarized;

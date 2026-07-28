@@ -24,6 +24,14 @@ struct LaunchdProcess: Sendable {
 final class ProcessManager: Sendable {
     static let shared = ProcessManager()
 
+    private static let compiledVendorPatterns: [(String, NSRegularExpression)] = ProcessData.vendorPatterns.map { vendor, patterns in
+        let escapedPatterns = patterns.map { NSRegularExpression.escapedPattern(for: $0) }
+        let combinedPattern = escapedPatterns.joined(separator: "|")
+        // We know these patterns compile successfully
+        let regex = try! NSRegularExpression(pattern: combinedPattern, options: [.caseInsensitive])
+        return (vendor, regex)
+    }
+
     private typealias PrivilegedCommand = (executable: String, arguments: [String])
     private struct MatchStats {
         var mem: Double = 0
@@ -338,11 +346,13 @@ final class ProcessManager: Sendable {
     }
 
     func vendorFor(processName: String) -> String {
-        let lower = processName.lowercased()
-        for (vendor, patterns) in ProcessData.vendorPatterns where patterns.contains(where: { lower.contains($0) }) {
-            return vendor
+        let range = NSRange(processName.startIndex..<processName.endIndex, in: processName)
+        for (vendor, regex) in Self.compiledVendorPatterns {
+            if regex.firstMatch(in: processName, range: range) != nil {
+                return vendor
+            }
         }
-        if lower.contains("widget") {
+        if processName.range(of: "widget", options: .caseInsensitive) != nil {
             return "Apple"
         }
         return "Other"
