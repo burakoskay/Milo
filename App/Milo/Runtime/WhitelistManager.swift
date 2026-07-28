@@ -26,6 +26,18 @@ final class WhitelistManager {
         guard let url = whitelistFileURL else { return }
 
         do {
+            let resourceValues = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+
+            guard let isRegularFile = resourceValues.isRegularFile, isRegularFile else {
+                MiloLog.warning(.persistenceLoadRejected, category: .persistence, detail: "Whitelist file is not a regular file")
+                return
+            }
+
+            guard let fileSize = resourceValues.fileSize, fileSize < 2 * 1024 * 1024 else {
+                MiloLog.warning(.persistenceLoadRejected, category: .persistence, detail: "Whitelist file is too large")
+                return
+            }
+
             let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder().decode(Set<String>.self, from: data)
             self.whitelistedProcesses = decoded

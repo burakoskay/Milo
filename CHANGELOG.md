@@ -14,6 +14,10 @@ version 1.x predates this regime.
 
 - Optimized process scanning performance in `DebloatManager.anyWidgetProcessesRunning` to avoid unnecessary string allocations.
 
+### Security
+
+- Reject non-regular or oversized persistence files before decoding stats and whitelist configurations.
+
 ## [2.0.0-preview.1] - 2026-07-27
 
 First public Development Preview. Apple Development signed and not notarized;
