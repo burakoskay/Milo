@@ -10,6 +10,10 @@ version 1.x predates this regime.
 
 - Eliminated redundant `/bin/ps` spawns during bulk termination, reducing overhead when terminating multiple processes.
 
+### Changed
+
+- Optimized process scanning performance in `DebloatManager.anyWidgetProcessesRunning` to avoid unnecessary string allocations.
+
 ## [2.0.0-preview.1] - 2026-07-27
 
 First public Development Preview. Apple Development signed and not notarized;
