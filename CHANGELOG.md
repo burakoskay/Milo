@@ -14,6 +14,7 @@ macOS blocks the first launch until the user explicitly allows it.
 
 ### Added
 
+- Added unit tests for `clearWhitelist()` in `WhitelistManagerTests.swift`.
 - Instantaneous CPU measurement that differentiates cumulative task CPU time across two observations per scan, replacing the lifetime average reported by `ps -o %cpu`.
 - Dynamic launchd detection via a read-only `launchctl list`, so processes managed by launchd are identified even when absent from the static rule catalogue.
 - A distinct `wasRespawned` outcome separating "launchd restarted this agent" from "termination failed".

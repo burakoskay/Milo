@@ -1,0 +1,10 @@
+<<<<<<< SEARCH
+### Added
+
+- Instantaneous CPU measurement that differentiates cumulative task CPU time across two observations per scan, replacing the lifetime average reported by `ps -o %cpu`.
+=======
+### Added
+
+- Add unit test coverage for `clearWhitelist()` in `WhitelistManagerTests.swift`.
+- Instantaneous CPU measurement that differentiates cumulative task CPU time across two observations per scan, replacing the lifetime average reported by `ps -o %cpu`.
+>>>>>>> REPLACE
