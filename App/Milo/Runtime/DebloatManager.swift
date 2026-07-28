@@ -408,12 +408,15 @@ final class DebloatManager: ObservableObject {
         guard result.succeeded else {
             return false
         }
-        return result.stdout
-            .components(separatedBy: .newlines)
-            .contains { line in
-                let lower = line.lowercased()
-                return lower.contains(".appex/contents/macos/") && lower.contains("widget")
+        var found = false
+        result.stdout.enumerateLines { line, stop in
+            let lower = line.lowercased()
+            if lower.contains(".appex/contents/macos/") && lower.contains("widget") {
+                found = true
+                stop = true
             }
+        }
+        return found
     }
 
     /// Check if a launchctl service is disabled for the current user (gui/ domain)
