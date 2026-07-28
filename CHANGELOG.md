@@ -6,6 +6,10 @@ version 1.x predates this regime.
 
 ## [Unreleased]
 
+### Performance
+
+- Eliminated redundant `/bin/ps` spawns during bulk termination, reducing overhead when terminating multiple processes.
+
 ## [2.0.0-preview.1] - 2026-07-27
 
 First public Development Preview. Apple Development signed and not notarized;
