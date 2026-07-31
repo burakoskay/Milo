@@ -20,7 +20,7 @@ version 1.x predates this regime.
 
 ## [2.0.0-preview.1] - 2026-07-27
 
-First public Development Preview. Apple Development signed and not notarized;
+First Public Preview. Apple Development signed and not notarized;
 macOS blocks the first launch until the user explicitly allows it.
 
 
@@ -33,7 +33,7 @@ macOS blocks the first launch until the user explicitly allows it.
 - A preference controlling whether the dedicated window's close button hides Milo or quits it.
 - Statistics, hidden processes, persistent launch items, and Quit in the dedicated window, which previously offered none of them.
 - Screenshots and a public-facing README covering install, permission model, and limitations.
-- A separately identified, locally unlocked Development Preview configuration and reproducible verified DMG build path.
+- A separately identified, locally unlocked Public Preview configuration and reproducible verified DMG build path.
 - A signed `SMAppService` privileged helper with authenticated XPC, a fixed command policy, bounded execution, and process-identity metadata.
 - Presentation-ready product documentation and a timeless roadmap separating preview capability from commercial release work.
 - Typed, generation-aware operation lifecycle primitives covering every planned application operation domain and terminal outcome.

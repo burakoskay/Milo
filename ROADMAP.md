@@ -4,7 +4,7 @@ This roadmap describes product direction without promising delivery dates. Items
 only after their documented acceptance gates pass.
 
 Unchecked items below are **not implemented**. They are listed so the boundary between what the
-Development Preview actually does today and what the commercial product will do is explicit,
+Public Preview actually does today and what the commercial product will do is explicit,
 rather than being implied by UI that quietly fails.
 
 ## Nearest priorities
@@ -15,11 +15,11 @@ rather than being implied by UI that quietly fails.
 - Clean-VM validation of the System Tuning matrix on every supported macOS release.
 - End-to-end exercise of the privileged helper XPC path against a disposable root-owned fixture.
 
-## Development Preview
+## Public Preview
 
 - [x] Local process and launch-item scanning.
 - [x] Locally unlocked Pro feature set with no account, payment, or backend dependency.
-- [x] Explicit Development Preview identity and UI labeling.
+- [x] Explicit Public Preview identity and UI labeling.
 - [x] One-time `SMAppService` helper flow with no sudoers or recurring password fallback.
 - [x] Signed app/helper XPC authentication and fixed privileged command policy.
 - [x] PID-reuse protection before every process signal.
@@ -29,7 +29,7 @@ rather than being implied by UI that quietly fails.
 - [x] Instantaneous CPU measurement by differentiating cumulative task CPU time.
 - [x] Dynamic launchd detection, so a restarted agent is reported as restarted, not failed.
 - [x] Discoverable keyboard shortcuts owned by a real Actions menu.
-- [x] Public repository with downloadable Development Preview release.
+- [x] Public repository with downloadable Public Preview release.
 
 ## Process-control reliability
 

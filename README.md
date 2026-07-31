@@ -23,7 +23,7 @@ lets you stop the ones you did not ask for.
 <br>
 
 > [!IMPORTANT]
-> This is a **Development Preview**. It is a signed development build, not a paid release.
+> This is a **Public Preview**. It is a signed development build, not a paid release.
 > Every local capability is unlocked with no account, payment, or network dependency. It is
 > **not notarized**, so macOS will warn on first launch — see [Installing](#installing).
 > Commercial licensing, updates, and notarized distribution are tracked in [ROADMAP.md](ROADMAP.md).
