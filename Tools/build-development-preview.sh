@@ -12,11 +12,11 @@ APP_SOURCE="${DERIVED_DATA}/Build/Products/Preview/Milo.app"
 APP_STAGED="${STAGING_DIRECTORY}/Milo.app"
 HELPER_RELATIVE_PATH="Contents/Resources/MiloPrivilegedHelper"
 HELPER_STAGED="${APP_STAGED}/${HELPER_RELATIVE_PATH}"
-DMG_PATH="${DIST_DIRECTORY}/Milo-Development-Preview.dmg"
+DMG_PATH="${DIST_DIRECTORY}/Milo-Public-Preview.dmg"
 TEAM_ID="8N738727QB"
 
 fail() {
-    print -u2 -- "Development Preview build failed: $1"
+    print -u2 -- "Public Preview build failed: $1"
     exit 1
 }
 
@@ -63,10 +63,10 @@ LLVM_PROFILE_FILE="${DERIVED_DATA}/MiloPreview-%p.profraw" \
 
 ln -s /Applications "${STAGING_DIRECTORY}/Applications"
 /usr/sbin/diskutil image create from \
-    --volumeName "Milo Development Preview" \
+    --volumeName "Milo Public Preview" \
     --format UDZO \
     "${STAGING_DIRECTORY}" \
     "${DMG_PATH}"
 /usr/bin/hdiutil verify "${DMG_PATH}"
 
-print -- "Development Preview ready: ${DMG_PATH}"
+print -- "Public Preview ready: ${DMG_PATH}"

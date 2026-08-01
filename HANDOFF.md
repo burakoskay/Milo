@@ -92,7 +92,7 @@ The verified preview is installed at:
 
 Installed identity:
 
-- version `2.0.0` (`200`);
+- version `0.2.0` (`20`);
 - bundle `com.monomacaw.milo.preview`;
 - thin Apple-silicon binary;
 - Apple Development signed;
@@ -123,7 +123,7 @@ pgrep -fal '^/Applications/Milo.app/Contents/MacOS/Milo$'
 The locally packaged artifact is:
 
 ```text
-/Volumes/Internal HD/Developer/Pkill/dist/Milo-Development-Preview.dmg
+/Volumes/Internal HD/Developer/Pkill/dist/Milo-Public-Preview.dmg
 ```
 
 SHA-256:

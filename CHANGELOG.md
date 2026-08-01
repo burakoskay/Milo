@@ -18,7 +18,7 @@ version 1.x predates this regime.
 
 - Reject non-regular or oversized persistence files before decoding stats and whitelist configurations.
 
-## [2.0.0-preview.1] - 2026-07-27
+## [0.2.0-preview.1] - 2026-07-27
 
 First Public Preview. Apple Development signed and not notarized;
 macOS blocks the first launch until the user explicitly allows it.
@@ -84,7 +84,7 @@ macOS blocks the first launch until the user explicitly allows it.
 - Adds source and release-binary regression gates that reject legacy desktop authentication/licensing markers and AuthenticationServices/WebKit linkage.
 - Pins Sparkle exactly, disables its sandbox-only downloader service in Pro, rejects remote appcast redirects and oversized/encoded/untrusted responses, requires signed feeds without fail-open expiry, verifies archives before extraction, and keeps automatic update checks disabled until authenticated scheduling is implemented.
 
-## [2.0.0] - 2026-XX-XX
+## [1.0.0] - 2026-XX-XX
 
 ### Added
 
