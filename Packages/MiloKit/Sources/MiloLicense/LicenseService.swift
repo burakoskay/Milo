@@ -624,9 +624,9 @@ private enum MLPWire {
 
     static var appVersion: String {
         guard let value = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String else {
-            return "2.0.0"
+            return "0.2.0"
         }
-        return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "2.0.0" : value
+        return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "0.2.0" : value
     }
 
     static var macOSVersion: String {

@@ -133,7 +133,7 @@ Tools/build-development-preview.sh
 
 That performs a clean `Preview` build, verifies app and helper signatures and exact bundle
 identifiers, runs a six-check packaged-app smoke suite, and produces
-`dist/Milo-Development-Preview.dmg` with a verified checksum.
+`dist/Milo-Public-Preview.dmg` with a verified checksum.
 
 Verification spine:
 

@@ -217,7 +217,7 @@ enum SelfTestRunner {
             )
         )
 
-        emit("Milo Development Preview smoke test")
+        emit("Milo Public Preview smoke test")
         for result in results {
             emit("[\(result.status.rawValue)] \(result.name): \(result.detail)")
         }

@@ -27,9 +27,9 @@ Non-negotiable engineering rules from the project agent directives still apply:
 | Branch | `fable/milo-test` |
 | Upstream | `origin/fable/milo-test` |
 | Verified implementation baseline | `2cc15c7 fix: correct surface lifecycle, CPU measurement, and kill reporting` |
-| Main implementation commit | `d822311 feat: ship local development preview` |
+| Main implementation commit | `11e9caf feat: ship Milo Public Preview (#9)` |
 | Handoff commit | The commit containing this document; confirm current HEAD with `git log -1 --oneline` |
-| Pull request | `#9 feat: ship Milo Development Preview` |
+| Pull request | `#9 feat: ship Milo Public Preview` |
 | PR URL | `https://github.com/burakoskay/Milo/pull/9` |
 | PR base/head | `main` ← `fable/milo-test` |
 | PR state | Draft, merge state clean |
@@ -92,7 +92,7 @@ The verified preview is installed at:
 
 Installed identity:
 
-- version `2.0.0` (`200`);
+- version `0.2.0` (`20`);
 - bundle `com.monomacaw.milo.preview`;
 - thin Apple-silicon binary;
 - Apple Development signed;
@@ -123,7 +123,7 @@ pgrep -fal '^/Applications/Milo.app/Contents/MacOS/Milo$'
 The locally packaged artifact is:
 
 ```text
-/Volumes/Internal HD/Developer/Pkill/dist/Milo-Development-Preview.dmg
+/Volumes/Internal HD/Developer/Pkill/dist/Milo-Public-Preview.dmg
 ```
 
 SHA-256:
