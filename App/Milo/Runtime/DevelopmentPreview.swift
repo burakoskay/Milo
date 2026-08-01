@@ -3,7 +3,7 @@ import Foundation
 enum MiloBuildMode {
     #if MILO_DEVELOPMENT_PREVIEW
     static let isDevelopmentPreview = true
-    static let displayName = "Development Preview"
+    static let displayName = "Public Preview"
     #else
     static let isDevelopmentPreview = false
     static let displayName = "Production"

@@ -467,7 +467,7 @@ struct SettingsView: View {
                 HStack {
                     Text("Build")
                     Spacer()
-                    Text("Development Preview")
+                    Text("Public Preview")
                         .foregroundStyle(.orange)
                         .fontWeight(.medium)
                 }

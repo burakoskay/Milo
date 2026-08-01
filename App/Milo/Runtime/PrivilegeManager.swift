@@ -38,7 +38,7 @@ final class PrivilegeManager {
         case .requiresApproval:
             return .requiresApproval
         case .notFound:
-            return .unavailable("The embedded Milo helper could not be found. Reinstall the Development Preview in Applications.")
+            return .unavailable("The embedded Milo helper could not be found. Reinstall the Public Preview in Applications.")
         @unknown default:
             return .unavailable("macOS returned an unknown background-helper state.")
         }
