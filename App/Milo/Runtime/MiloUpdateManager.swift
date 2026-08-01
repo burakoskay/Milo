@@ -85,7 +85,7 @@ final class MiloUpdateManager: ObservableObject {
 
     func checkForUpdates() async {
         guard !MiloBuildMode.isDevelopmentPreview else {
-            state = .failed(message: "Updates are intentionally disabled in the Development Preview.")
+            state = .failed(message: "Updates are intentionally disabled in the Public Preview.")
             return
         }
         guard !isChecking else {

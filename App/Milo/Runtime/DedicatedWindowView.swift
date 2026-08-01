@@ -182,7 +182,7 @@ struct DedicatedWindowView: View {
             }
 
             if MiloBuildMode.isDevelopmentPreview {
-                Text("Development Preview")
+                Text("Public Preview")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.orange)
                     .padding(.horizontal, 8)

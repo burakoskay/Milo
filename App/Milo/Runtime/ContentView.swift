@@ -483,7 +483,7 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     if MiloBuildMode.isDevelopmentPreview {
-                        Text("Development Preview")
+                        Text("Public Preview")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(.orange)
                             .lineLimit(1)

@@ -8,7 +8,7 @@ Milo finds the background processes, launch agents, telemetry daemons, and Apple
 services running on your Mac, shows you what each one actually costs you in CPU and memory, and
 lets you stop the ones you did not ask for.
 
-[![Download](https://img.shields.io/badge/Download-Development%20Preview-blue?style=for-the-badge)](https://github.com/burakoskay/Milo/releases/latest)
+[![Download](https://img.shields.io/badge/Download-Public%20Preview-blue?style=for-the-badge)](https://github.com/burakoskay/Milo/releases/latest)
 [![Platform](https://img.shields.io/badge/macOS-13.0%2B-lightgrey?style=for-the-badge)](#building-from-source)
 [![Swift](https://img.shields.io/badge/Swift-6-orange?style=for-the-badge)](#building-from-source)
 
@@ -23,7 +23,7 @@ lets you stop the ones you did not ask for.
 <br>
 
 > [!IMPORTANT]
-> This is a **Development Preview**. It is a signed development build, not a paid release.
+> This is a **Public Preview**. It is a signed development build, not a paid release.
 > Every local capability is unlocked with no account, payment, or network dependency. It is
 > **not notarized**, so macOS will warn on first launch — see [Installing](#installing).
 > Commercial licensing, updates, and notarized distribution are tracked in [ROADMAP.md](ROADMAP.md).

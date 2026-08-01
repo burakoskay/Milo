@@ -1,12 +1,12 @@
-# Milo Development Preview handoff
+# Milo Public Preview handoff
 
 This document is the operational handoff for the next agent working in this checkout. Read it before changing code or exercising privileged actions.
 
 ## 1. Mission and current boundary
 
-The immediate product is an interview-ready **Development Preview** of Milo: a local-first macOS menu bar utility that scans for selected background processes and launch items, lets the user terminate chosen targets, reports CPU and memory usage, and exposes reviewed system-tuning actions.
+The immediate product is an interview-ready **Public Preview** of Milo: a local-first macOS menu bar utility that scans for selected background processes and launch items, lets the user terminate chosen targets, reports CPU and memory usage, and exposes reviewed system-tuning actions.
 
-The Development Preview deliberately unlocks the local Pro feature set without accounts, Paddle, Supabase, production licensing, or network updates. It must never be presented as the commercial release. The deferred commercial and public-distribution work is explicit in `ROADMAP.md` and the larger release program in `July27plan.md`.
+The Public Preview deliberately unlocks the local Pro feature set without accounts, Paddle, Supabase, production licensing, or network updates. It must never be presented as the commercial release. The deferred commercial and public-distribution work is explicit in `ROADMAP.md` and the larger release program in `July27plan.md`.
 
 Non-negotiable engineering rules from the project agent directives still apply:
 
@@ -60,13 +60,13 @@ Without that override, SwiftLint can fail loading SourceKit and SwiftPM can fail
 
 Xcode 27 beta can emit an internal `DVTAssertions` warning about `IDELaunchSession` when running tests. The verified Milo test run still exited successfully; distinguish that Xcode beta diagnostic from Milo compiler warnings.
 
-## 4. Delivered Development Preview
+## 4. Delivered Public Preview
 
 The completed preview slice includes:
 
 - a distinct `Preview` Xcode configuration;
 - bundle identifier `com.monomacaw.milo.preview`;
-- visible **Development Preview** labeling;
+- visible **Public Preview** labeling;
 - local Pro access with no backend, payment, or account gate;
 - preview update checks disabled;
 - process scanning with CPU and memory measurements;
@@ -333,9 +333,9 @@ These are in `ROADMAP.md` and `July27plan.md`. The preview DMG is an Apple Devel
 
 Unless the user changes direction, resume in this order:
 
-1. Read the active project agent directives, this file, `README.md`, `ROADMAP.md`, and the Development Preview delivery track in `July27plan.md`.
+1. Read the active project agent directives, this file, `README.md`, `ROADMAP.md`, and the Public Preview delivery track in `July27plan.md`.
 2. Confirm `git status -sb`, HEAD, PR #9, and CI rather than trusting this snapshot.
-3. Launch `/Applications/Milo.app` and verify the visible Development Preview badge.
+3. Launch `/Applications/Milo.app` and verify the visible Public Preview badge.
 4. Confirm the helper banner reports the actual Service Management state.
 5. Exercise the helper health/XPC path with one nonmutating allowlisted request. Confirm the helper launches, authenticates the app, returns within its deadline, and becomes idle afterward.
 6. Test a user-level termination only against a disposable synthetic process. Never use a real system or user application as the first target.
@@ -349,7 +349,7 @@ If the user instead asks to continue toward commercial release, stop treating th
 
 For the interview demonstration:
 
-1. Open the installed app and show the Development Preview badge.
+1. Open the installed app and show the Public Preview badge.
 2. Show local scanning and resource metrics.
 3. Explain that scan is read-only and termination is user initiated.
 4. Show confirmation before a selected or bulk action.
@@ -403,4 +403,4 @@ The next agent has successfully picked up the work when it has:
 - reproduced the relevant tests before changing behavior;
 - tested the next unknown with a bounded, disposable fixture;
 - updated documentation and the tracked plan with evidence;
-- avoided claiming public-release readiness from the local Development Preview.
+- avoided claiming public-release readiness from the local Public Preview.
