@@ -139,9 +139,20 @@ private enum HelperPolicy {
               let pid = Int32(arguments[1]),
               pid > 1,
               pid != getpid(),
-              expectedProcessIdentity?.pid == pid else {
+              let expectedProcessIdentity,
+              expectedProcessIdentity.pid == pid else {
             return false
         }
+
+        // The helper runs as root and must not depend on the client having asked correctly.
+        // The client already refuses these, but a gate that exists only on the far side of an
+        // XPC boundary is a gate that a client-side regression silently removes.
+        //
+        // The list is shared source with the app rather than a copy, so the two cannot drift.
+        guard !MiloProcessSafetyPolicy.isCriticalSystemExecutable(expectedProcessIdentity.executablePath) else {
+            return false
+        }
+
         return true
     }
 

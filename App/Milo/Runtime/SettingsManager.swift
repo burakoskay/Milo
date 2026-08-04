@@ -23,6 +23,8 @@ final class SettingsManager {
         static let showMemoryInHeader  = "Milo.showMemoryInHeader"
         static let notifyOnDetection   = "Milo.notifyOnDetection"
         static let privilegeOnboardingPrompted = "Milo.privilegeOnboardingPrompted"
+        static let showsDiscovery      = "Milo.showsDiscovery"
+        static let showsProtectedProcesses = "Milo.showsProtectedProcesses"
     }
 
     // MARK: - Properties
@@ -84,6 +86,20 @@ final class SettingsManager {
     var notifyOnDetection: Bool {
         get { defaults.bool(forKey: Key.notifyOnDetection) }
         set { defaults.set(newValue, forKey: Key.notifyOnDetection) }
+    }
+
+    /// List background processes outside the shipped catalogue. On by default: the catalogue
+    /// answers "what does Milo have an opinion about", not "what is running on this Mac".
+    var showsDiscovery: Bool {
+        get { defaults.object(forKey: Key.showsDiscovery) == nil ? true : defaults.bool(forKey: Key.showsDiscovery) }
+        set { defaults.set(newValue, forKey: Key.showsDiscovery) }
+    }
+
+    /// Also list processes Milo will never signal. Off by default, because a list dominated
+    /// by rows nobody can act on buries the ones that matter.
+    var showsProtectedProcesses: Bool {
+        get { defaults.bool(forKey: Key.showsProtectedProcesses) }
+        set { defaults.set(newValue, forKey: Key.showsProtectedProcesses) }
     }
 
     /// Tracks whether the first-launch privilege explanation has already been shown.

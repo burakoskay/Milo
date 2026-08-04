@@ -32,6 +32,19 @@ lets you stop the ones you did not ask for.
 
 **Sees what is actually running.** Milo scans for known background processes, telemetry agents,
 and launch items, groups them by vendor, and measures each one's real CPU and memory cost.
+Everything else running on the Mac is listed too, under **Other Background Processes** — the
+stray `node`, the daemon an installer left behind, the job you started in a shell and forgot.
+
+**Knows what it must not touch.** Every process is classified from evidence, not from its name:
+the kernel-reported owner, whether the binary satisfies Apple's own `anchor apple` code
+requirement, and which launchd job owns it. Anything that is macOS itself is shown read-only,
+and Milo signals Apple system software only where it ships a reviewed rule for that specific
+target. The root helper enforces that refusal independently rather than trusting the app.
+
+**Removes itself cleanly.** Deleting an app that installed a privileged helper leaves the
+helper registered with macOS and running as root. Settings › Uninstall unregisters the helper
+first, then removes Milo's own files, and refuses to bin the app at all if the helper could not
+be unregistered.
 
 **Measures CPU honestly.** CPU is sampled the way Activity Monitor does it — by differentiating
 cumulative task CPU time across two observations. Tools that read `ps -o %cpu` report a

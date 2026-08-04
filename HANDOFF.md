@@ -301,7 +301,17 @@ as root* with its executable already unlinked, and no in-app route to remove it.
 System Settings > General > Login Items & Extensions (`sudo launchctl bootout system/<id>` is the
 fallback; never `sfltool resetbtm`, which resets background items for every app on the machine).
 
-Milo has no uninstall flow. That is a product gap, listed in section 18.
+**Milo now has an uninstall flow** (Settings > Uninstall, `UninstallManager.swift`). It unregisters
+the helper *before* removing any file, so a partial failure can never leave a running root daemon
+whose owning app has been dismantled, and it declines to move the bundle to the Trash at all if the
+unregistration failed. Files are removed against an exact-path allowlist generated from an explicit
+identifier table in `MiloUninstallPlan`, never a pattern match — the developer's own machine carries
+`com.monomacaw.picoberry.prototype` and `com.monomacaw.squeaky.preview` from unrelated products, and
+a vendor-name match would have destroyed both.
+
+What Milo still cannot do is unregister a helper belonging to a *different* bundle identifier;
+`SMAppService` only ever acts on the calling app's own records. Those are detected with a read-only
+`launchctl print system/<id>` and reported with recovery steps instead.
 
 ### Runtime integrity
 
@@ -340,6 +350,12 @@ Apple owns the final Background Items approval. Milo must not simulate, bypass, 
 | `Helper/MiloPrivilegedHelper/main.swift` | Root helper authentication and command policy |
 | `App/Milo/Runtime/CommandRunner.swift` | Direct user/helper command routing with no sudo fallback |
 | `App/Milo/Runtime/ProcessManager.swift` | Scanning and PID-reuse-safe termination |
+| `Packages/MiloKit/Sources/MiloDomain/ProcessSafetyPolicy.swift` | Pure classification policy; shared source with the root helper |
+| `App/Milo/Runtime/ProcessSafetyInspector.swift` | Code-signature, ancestry, and foreground-app evidence |
+| `App/Milo/Runtime/BackgroundProcessScanner.swift` | Open discovery over the full process table |
+| `App/Milo/Runtime/DiscoveredProcessesView.swift` | Discovery card shared by both surfaces |
+| `Packages/MiloKit/Sources/MiloDomain/UninstallPlan.swift` | Exact-path uninstall allowlist and containment gate |
+| `App/Milo/Runtime/UninstallManager.swift` | Ordered uninstall and orphaned-helper detection |
 | `App/Milo/Runtime/AppState.swift` | Typed UI operation orchestration |
 | `App/Milo/Runtime/ContentView.swift` | Menu bar preview/helper UI |
 | `App/Milo/Runtime/DedicatedWindowView.swift` | Dedicated-window preview/helper UI |
@@ -365,6 +381,36 @@ git diff --check
 Commit both `project.yml` and the regenerated `Milo.xcodeproj/project.pbxproj`.
 
 ## 10. Verification completed at this handoff
+
+### Open discovery and uninstall, verified on 2026-08-04
+
+Measured on this host, macOS 27.0, against the Debug build. Gates: `swiftlint --quiet` 0 violations;
+`swift test` (root) 0 failures; `swift test --package-path Packages/MiloKit` 41 tests, 0 failures;
+`xcodebuild ... -scheme MiloPro test` `** TEST SUCCEEDED **`.
+
+| Claim | Evidence |
+|---|---|
+| Discovery finds arbitrary background processes | 306–332 processes classified per scan, 120–152 actionable |
+| **The case the previous handoff called impossible** | `sleep 900 &` → pid 90418, `/bin/sleep`, classified `userOwned`, actionable with no helper |
+| Discovery terminates what it finds | Destructive self-test discovered its own fixture and terminated it at user level; process confirmed gone |
+| Session-critical services stay read-only | No critical service was actionable on any run |
+| The root helper is never offered Apple system software | No sealed-volume executable was routed to the privileged path |
+| Milo does not signal itself or its ancestors | Milo absent from actionable rows |
+| Kernel and launchd are protected | pid 0 and pid 1 never actionable |
+| Every actionable row is PID-reuse safe | All carry pid, absolute path, and start time |
+| Uninstall plan is correctly scoped | 11 real Milo artifacts matched on this host, including 6 legacy `com.monomacaw.milo*` ones |
+| Uninstall refuses unrelated products | `picoberry`, both `squeaky` variants, and `~/Library`, `~/Library/Preferences`, `~` all rejected |
+
+`/bin/sleep` is the load-bearing case: it is Apple-signed *and* on the sealed system volume, so a
+naive "Apple binary is untouchable" rule would have kept it invisible. It is reachable because it
+runs under the user's own account with no `com.apple.` launchd label — a job the user started, which
+their uid could already signal without Milo.
+
+Two self-test failures remain and are **pre-existing**, confirmed by running the same suite on the
+stashed pre-change tree: `simdiskimaged detection` (the daemon runs as root, so `proc_pidpath` is
+unreadable from the user session) and `Widget detection` (its liveness heuristic ANDs two substrings
+across the whole `ps` output, so it can fire when no widget is running at all). Neither involves
+discovery or uninstall.
 
 ### Verified at `0.2.0-preview.2` on 2026-08-04
 
@@ -598,20 +644,20 @@ is deferred, and the UI must not imply otherwise.
 
 ### Nearest priorities
 
-1. **An uninstall path for the privileged helper.** Deleting `Milo.app` leaves its root helper
-   registered and running, recoverable only through System Settings or `launchctl`. Milo needs an
-   in-app "disable and remove helper" action, a warning before the app is removed while registered,
-   and documented recovery steps. Observed live on 2026-08-04; see section 7.
-2. Notarized Developer ID distribution, so first launch does not require a Gatekeeper override.
-3. Disabling a launchd job directly from the process row that reported the restart, as a labelled and
+1. Notarized Developer ID distribution, so first launch does not require a Gatekeeper override.
+2. Disabling a launchd job directly from the process row that reported the restart, as a labelled and
    confirmed action rather than a side effect of terminating the process.
-4. Clean-VM validation of the System Tuning matrix on every supported macOS release.
-5. A negative tamper test for the runtime signature check, plus rejection cases for the helper's
+3. Clean-VM validation of the System Tuning matrix on every supported macOS release.
+4. A negative tamper test for the runtime signature check, plus rejection cases for the helper's
    PID/path/start-time revalidation against a disposable root-owned fixture. The positive path is now
    proven; the rejection paths are not.
 
 ### Process-control reliability
 
+- Re-verify the discovery classification on a clean VM per supported macOS release. The
+  `criticalExecutablePaths` list is keyed on absolute paths, and Apple moves binaries between
+  releases; a path that no longer exists silently stops contributing its second gate. (The
+  primary gate — Apple signature plus effective uid — does not depend on the path list.)
 - Expand typed per-target results for exited, replaced, protected, denied, timed out, and launchd-respawned processes.
 - Add disposable-VM integration coverage for system launchd services, helper upgrade/version skew, reboot, denial, and uninstall.
 - Version the local rule catalogue and add reviewed compatibility fixtures for supported macOS releases.
@@ -709,11 +755,21 @@ build, sign, lint, and test cleanly, then fail on first real use.
    rather than failing silently. A widget extension is the right choice: macOS respawns it on
    demand and no data is lost.
 
-   Do **not** try to use an ad-hoc synthetic process such as `sleep 600 &`. Milo only lists
-   processes that match a rule — a signed telemetry signature, a launchd label, or the static
-   catalogue — so an arbitrary process never appears, by design. Milo is a curated targeter, not
-   Activity Monitor. Do not broaden a match to make this step work.
-6. Confirm no repeated permission or password prompts appeared at any point.
+   This step covers the *reviewed-rule* lane only. It is the lane that may act on Apple system
+   software, so it is still the one that must be exercised by hand. Do not broaden a catalogue
+   match to make it pass.
+6. Exercise the *discovery* lane, which does list arbitrary background processes. Start
+   `sleep 600 &` in a shell, rescan, and confirm it appears under **Other Background
+   Processes** as an actionable row, then terminate it and confirm it is gone.
+
+   Earlier revisions of this document told the reader that an arbitrary process could never
+   appear. That was true of the catalogue and is no longer true of Milo: discovery classifies
+   every process by measured evidence and shows the ones it can act on. What has not changed is
+   the boundary — a process that is Apple-signed system software is listed read-only unless a
+   reviewed rule names it.
+7. Confirm no repeated permission or password prompts appeared at any point.
+8. Open **Settings › Uninstall** and confirm the plan lists only Milo's own paths. Do not run it
+   unless you intend to remove the install.
 
 Record what actually happened in section 10. A path is not verified because it was read.
 

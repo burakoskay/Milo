@@ -12,6 +12,36 @@ struct LaunchItem: Identifiable, Hashable, Sendable {
     let description: String?
 }
 
+/// What a scan is asked to produce.
+///
+/// Discovery is opt-in per call so the deterministic self-test and the reviewed-rule paths
+/// keep exercising exactly the behaviour they always did.
+struct ProcessScanOptions: Sendable {
+    let includesDiscovery: Bool
+    /// Applications that own a Dock icon. Resolved on the main actor by the caller, because
+    /// `NSWorkspace` is main-actor isolated and the scan itself is detached.
+    let foregroundApplicationPIDs: Set<Int32>
+    let protectedProcessNames: Set<String>
+
+    static let cataloguedOnly = ProcessScanOptions(
+        includesDiscovery: false,
+        foregroundApplicationPIDs: [],
+        protectedProcessNames: []
+    )
+}
+
+struct ProcessScanResult: Sendable {
+    let bloat: [ProcessItem]
+    let intelligence: [ProcessItem]
+    let discovered: [DiscoveredProcess]
+
+    init(bloat: [ProcessItem], intelligence: [ProcessItem], discovered: [DiscoveredProcess] = []) {
+        self.bloat = bloat
+        self.intelligence = intelligence
+        self.discovered = discovered
+    }
+}
+
 // Represents a launchd-managed process that will respawn
 struct LaunchdProcess: Sendable {
     let label: String           // Main launchd label
@@ -32,9 +62,14 @@ final class ProcessManager: Sendable {
         var telemetryMatch: TelemetryMatch?
     }
     private let cloudSignatureManager: CloudSignatureManager
+    private let backgroundProcessScanner: BackgroundProcessScanner
 
-    init(cloudSignatureManager: CloudSignatureManager = .shared) {
+    init(
+        cloudSignatureManager: CloudSignatureManager = .shared,
+        backgroundProcessScanner: BackgroundProcessScanner = .shared
+    ) {
         self.cloudSignatureManager = cloudSignatureManager
+        self.backgroundProcessScanner = backgroundProcessScanner
     }
 
     // MARK: - Direct Execution Safety
@@ -513,7 +548,9 @@ final class ProcessManager: Sendable {
 
     // MARK: - Scanning
 
-    func scanForRunningTargetsWithResources() throws -> (bloat: [ProcessItem], intelligence: [ProcessItem]) {
+    /// Parses the process table once. Both scanning lanes read these rows, so discovery adds
+    /// no second `ps` invocation.
+    private func processTableRows() throws -> [ProcessTableRow] {
         let result = CommandRunner.run("/bin/ps", arguments: ["-Axo", "pid,%cpu,rss,comm,command"])
         guard result.succeeded else {
             MiloLog.error(.processScanFailed, category: .process, detail: "status=\(result.status)")
@@ -525,25 +562,40 @@ final class ProcessManager: Sendable {
             )
         }
 
-        let lines = result.stdout.components(separatedBy: .newlines)
+        return result.stdout.components(separatedBy: .newlines).dropFirst().compactMap { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { return nil }
+
+            let parts = trimmed.split(separator: " ", maxSplits: 4, omittingEmptySubsequences: true)
+            guard parts.count >= 5, let pid = Int32(String(parts[0])) else { return nil }
+
+            // parts[1] is ps's lifetime-average %cpu. It is deliberately unused: instantaneous
+            // utilisation is measured below by differentiating cumulative task CPU time.
+            let memoryKB = Double(parts[2]) ?? 0.0
+            return ProcessTableRow(
+                pid: pid,
+                memoryMB: memoryKB / 1024.0,
+                executablePath: resolvedExecutablePath(pid: pid, fallback: String(parts[3])),
+                command: String(parts[4])
+            )
+        }
+    }
+
+    func scanForRunningTargetsWithResources() throws -> ProcessScanResult {
+        try scanForRunningTargetsWithResources(options: .cataloguedOnly)
+    }
+
+    func scanForRunningTargetsWithResources(options: ProcessScanOptions) throws -> ProcessScanResult {
+        let rows = try processTableRows()
 
         var bloatMatches: [String: MatchStats] = [:]
         var intelMatches: [String: MatchStats] = [:]
 
-        for line in lines.dropFirst() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty else { continue }
-
-            let parts = trimmed.split(separator: " ", maxSplits: 4, omittingEmptySubsequences: true)
-            guard parts.count >= 5 else { continue }
-
-            guard let pid = Int32(String(parts[0])) else { continue }
-            // parts[1] is ps's lifetime-average %cpu. It is deliberately unused: instantaneous
-            // utilisation is measured below by differentiating cumulative task CPU time.
-            let memKB = Double(parts[2]) ?? 0.0
-            let memMB = memKB / 1024.0
-            let executable = resolvedExecutablePath(pid: pid, fallback: String(parts[3]))
-            let command = String(parts[4])
+        for row in rows {
+            let pid = row.pid
+            let memMB = row.memoryMB
+            let executable = row.executablePath
+            let command = row.command
 
             if let detection = detectTarget(pid: pid, executablePath: executable, command: command) {
                 guard let identity = processIdentity(pid: pid, fallbackPath: executable) else { continue }
@@ -573,10 +625,14 @@ final class ProcessManager: Sendable {
         }
 
         // One sampling window covers every matched process, so scan cost does not grow with
-        // the number of detections.
+        // the number of detections. When discovery is on, the same window covers the whole
+        // process table rather than opening a second one.
         let matchedPIDs = Set(bloatMatches.values.flatMap { $0.pids })
             .union(intelMatches.values.flatMap { $0.pids })
-        let cpuByPID = sampleCPUPercentages(for: matchedPIDs)
+        let sampledPIDs = options.includesDiscovery
+            ? matchedPIDs.union(rows.map(\.pid))
+            : matchedPIDs
+        let cpuByPID = sampleCPUPercentages(for: sampledPIDs)
         let cpuFor: (Set<Int32>) -> Double = { pids in
             pids.reduce(0.0) { $0 + (cpuByPID[$1] ?? 0.0) }
         }
@@ -625,7 +681,23 @@ final class ProcessManager: Sendable {
             )
         }.sorted { $0.name < $1.name }
 
-        return (bloatItems, intelItems)
+        let discovered: [DiscoveredProcess]
+        if options.includesDiscovery {
+            discovered = backgroundProcessScanner.discover(
+                BackgroundProcessScanner.Context(
+                    rows: rows,
+                    cataloguedPIDs: matchedPIDs,
+                    launchdLabels: launchdLabels,
+                    foregroundApplicationPIDs: options.foregroundApplicationPIDs,
+                    protectedProcessNames: options.protectedProcessNames,
+                    cpuByPID: cpuByPID
+                )
+            )
+        } else {
+            discovered = []
+        }
+
+        return ProcessScanResult(bloat: bloatItems, intelligence: intelItems, discovered: discovered)
     }
 
     func scanForRunningTargets() -> (bloat: [String], intelligence: [String]) {
@@ -771,6 +843,115 @@ final class ProcessManager: Sendable {
 
             DispatchQueue.main.async {
                 completion(results)
+            }
+        }
+    }
+
+    // MARK: - Discovered process termination
+
+    /// Terminates processes found by open discovery.
+    ///
+    /// Protected rows are refused here as well as in the UI. The classification travelled
+    /// from the scanner through view state before arriving back, and a refusal that exists
+    /// only in the view is a refusal that a future refactor can delete by accident.
+    func terminateDiscoveredProcesses(
+        _ processes: [DiscoveredProcess],
+        completion: @escaping @Sendable ([KillResult]) -> Void
+    ) {
+        let actionable = processes.filter { candidate in
+            guard candidate.safety.isActionable else {
+                MiloLog.warning(
+                    .protectedProcessTerminationRefused,
+                    category: .process,
+                    detail: "pid=\(candidate.pid) reason=\(candidate.protectionReason?.rawValue ?? "unknown")"
+                )
+                return false
+            }
+            return true
+        }
+
+        guard !actionable.isEmpty else {
+            completion([])
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            let privileged = actionable.filter(\.requiresPrivilegedHelper)
+            let userLevel = actionable.filter { !$0.requiresPrivilegedHelper }
+
+            if !privileged.isEmpty {
+                // One round trip: the helper performs TERM, a bounded wait, then KILL,
+                // revalidating each identity immediately before every signal.
+                _ = MiloPrivilegedHelperClient.shared.terminate(
+                    identities: Set(privileged.map(\.identity))
+                )
+            }
+
+            if !userLevel.isEmpty {
+                signalUserLevelProcesses(userLevel)
+            }
+
+            // Outcomes are read from the kernel rather than from exit codes: a signal that
+            // was accepted still leaves the question of whether the process actually went.
+            Thread.sleep(forTimeInterval: 0.5)
+            let survivingLabels = launchdLabelsByPID()
+            let results = actionable.map { candidate -> KillResult in
+                let exited: Bool
+                switch processIdentityStatus(candidate.identity) {
+                case .gone:
+                    exited = true
+                case .changed:
+                    // The pid now refers to a different process, so the original one exited.
+                    exited = true
+                case .same:
+                    exited = false
+                }
+
+                let respawned = exited
+                    && candidate.isLaunchdManaged
+                    && survivingLabels.values.contains(candidate.launchdLabel ?? "")
+
+                return KillResult(
+                    name: candidate.name,
+                    success: exited,
+                    isLaunchdManaged: candidate.isLaunchdManaged,
+                    requiresSIPDisabled: false,
+                    wasRespawned: respawned
+                )
+            }
+
+            DispatchQueue.main.async {
+                completion(results)
+            }
+        }
+    }
+
+    /// TERM every target, wait once, then KILL whatever is left.
+    ///
+    /// Batched deliberately: signalling each process with its own escalation window made a
+    /// ten-row selection take ten seconds.
+    private func signalUserLevelProcesses(_ processes: [DiscoveredProcess]) {
+        let identities = processes.map(\.identity).sorted { $0.pid < $1.pid }
+
+        for identity in identities where processIdentityStatus(identity) == .same {
+            if Darwin.kill(identity.pid, SIGTERM) != 0, errno != ESRCH {
+                MiloLog.warning(
+                    .backgroundProcessSignalFailed,
+                    category: .process,
+                    detail: "pid=\(identity.pid) signal=TERM errno=\(errno)"
+                )
+            }
+        }
+
+        Thread.sleep(forTimeInterval: 1.0)
+
+        for identity in identities where processIdentityStatus(identity) == .same {
+            if Darwin.kill(identity.pid, SIGKILL) != 0, errno != ESRCH {
+                MiloLog.warning(
+                    .backgroundProcessSignalFailed,
+                    category: .process,
+                    detail: "pid=\(identity.pid) signal=KILL errno=\(errno)"
+                )
             }
         }
     }

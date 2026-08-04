@@ -13,6 +13,8 @@ struct SettingsView: View {
     @State private var showMemoryInHeader: Bool = SettingsManager.shared.showMemoryInHeader
     @State private var autoScanInterval: Int = SettingsManager.shared.autoScanInterval
     @State private var notifyOnDetection: Bool = SettingsManager.shared.notifyOnDetection
+    @State private var showingUninstall: Bool = false
+    @ObservedObject private var uninstallManager = UninstallManager.shared
 
     @AppStorage("Milo.appAppearance") var appAppearance: String = "Auto"
     @AppStorage("Milo.appThemeColor") var appThemeColor: String = "System"
@@ -44,6 +46,7 @@ struct SettingsView: View {
                         uiSection
                         shortcutsSection
                         privilegesSection
+                        uninstallSection
                         aboutSection
                     }
                     .padding(16)
@@ -54,6 +57,11 @@ struct SettingsView: View {
         .onAppear {
             refreshState()
             appState.refreshHelperStatus()
+            uninstallManager.refreshOrphanedHelpers()
+        }
+        .sheet(isPresented: $showingUninstall) {
+            UninstallView(appState: appState, manager: uninstallManager)
+                .roundedSheetWindow()
         }
         .tint(tintColorOverride)
     }
@@ -266,6 +274,37 @@ struct SettingsView: View {
                     appState.configureAutoScan(interval: newValue)
                 }
             }
+
+            Divider()
+
+            Toggle(isOn: Binding(
+                get: { appState.showsDiscovery },
+                set: { appState.setShowsDiscovery($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Find Other Background Processes")
+                    Text("List background processes outside Milo's reviewed catalogue, such as a job you started yourself")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if appState.showsDiscovery {
+                Toggle(isOn: Binding(
+                    get: { appState.showsProtectedProcesses },
+                    set: { appState.setShowsProtectedProcesses($0) }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Include Protected Processes")
+                        Text("Also list macOS system processes. They are shown read-only; Milo never signals them.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.leading, 16)
+            }
         }
     }
 
@@ -445,6 +484,42 @@ struct SettingsView: View {
             return "System-level actions run without repeated password prompts."
         case .unavailable(let message):
             return message
+        }
+    }
+
+    // MARK: - Uninstall
+
+    private var uninstallSection: some View {
+        GlassCard {
+            Label("Uninstall", systemImage: "trash")
+                .font(.headline)
+
+            Text("Deleting Milo from Applications leaves its background helper registered with macOS. Use this to remove the helper registration and Milo's files first.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !uninstallManager.orphanedHelpers.isEmpty {
+                Label(
+                    "A helper from an earlier Milo install is still registered on this Mac.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button(role: .destructive) {
+                showingUninstall = true
+            } label: {
+                HStack {
+                    Image(systemName: "trash")
+                    Text("Remove Milo…")
+                }
+                .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
     }
 
