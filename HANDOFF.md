@@ -55,14 +55,15 @@ This table was re-verified on 2026-08-04. Confirm it again rather than trusting 
 | Repository | `/Volumes/Internal HD/Developer/Milo` |
 | Branch | `refactor/gonggong-rebrand`, branched from `main` |
 | Upstream | `main` is in sync with `origin/main`; the rebrand branch is local only and unpushed |
-| HEAD | `fd6b7d3 feat: rename version scheme from 2.0.0 to 0.2.0 (#25)` |
+| HEAD | the rebrand branch tip; confirm with `git log -1 --oneline` |
 | Main implementation commit | `11e9caf feat: ship Milo Public Preview (#9)` |
 | Preview delivery pull request | `#9 feat: ship Milo Public Preview`, **merged**; branch `fable/milo-test` no longer exists on `origin` |
 | Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0` |
 | Published release | `v0.2.0-preview.1`, GitHub pre-release at `fd6b7d3`, DMG asset SHA-256 `c4742debfb7dee4f4991fcb04698454bf15ff08b46516f91d171cb4b6c473eee` |
 | Remotes | `origin` → `https://github.com/burakoskay/Milo.git`; `gitlab` → `git@gitlab.com:burakoskay-group/burakoskay-project.git` |
-| Stale local tag | `v2.0.0-preview.1` exists locally only; `origin` carries only `v0.2.0-preview.1`. Delete or push it deliberately, do not assume it is published |
+| Tags | `origin` carries `v0.2.0-preview.1` only. The local-only `v2.0.0-preview.1` was deleted on 2026-08-04: it recorded build `200` under the discarded numbering scheme, which would have permanently blocked the build-number check in `Tools/release.sh` |
 | Repository visibility | Public |
+| Release process | `Tools/release.sh`, section 19. Branch and PR for every change; never commit to `main` directly |
 
 The Public Preview slice is merged, so there is no open PR to continue. Open a new branch and PR for
 the next slice; do not reopen `#9` or resurrect `fable/milo-test`.
@@ -597,3 +598,60 @@ individually shippable items:
 - Add comprehensive VoiceOver, keyboard, reduced-motion, high-contrast, and localization coverage.
 - Add safe onboarding that adapts to helper status without nagging or permission loops.
 - Add a concise in-app explanation of target confidence, impact, and recovery for every action.
+
+## 19. Release process
+
+Policy and rationale: `docs/decisions/0003-release-and-development-process.md`.
+
+### Rules
+
+- **Versioning.** `MAJOR.MINOR.PATCH[-preview.N]`. Marketing version stays `0.2.0` across the preview
+  series; `CFBundleVersion` increments by one per published release and must exceed every released
+  build. Both `Info.plist` files carry the same numbers. Tags are `v<version>`. Releases are
+  immutable — never move a published tag.
+- **Branching.** Every change goes through a branch and a PR. No direct commits to `main`; that
+  bypasses the `unit-tests`, `conventional-commits`, and `changelog-check` gates. Release from `main`
+  after the merge.
+- **Publishing.** A human runs the publish commands. CI never builds releases, because it cannot
+  reproduce the local signing identity.
+
+### Cutting a release
+
+1. Bump `CFBundleVersion` in `App/Milo/Info.plist` and `App/MiloLite/Info.plist`.
+2. Write the `## [<version>]` section in `CHANGELOG.md`.
+3. Merge to `main` through a PR.
+4. Run the preparation script, which stops before publishing:
+
+```bash
+Tools/release.sh 0.2.0-preview.3
+```
+
+5. Run the live smoke check below.
+6. Run the `git push` and `gh release create` commands the script printed.
+
+### The live smoke check
+
+**Required before every publish.** The mechanical gates cannot catch these failures: a wrong
+code-signing requirement, a helper that registers but never launches, and a rejected XPC peer all
+build, sign, lint, and test cleanly, then fail on first real use.
+
+1. Install the built DMG over the current `/Applications/Milo.app`.
+   If the previous install used different bundle identifiers, first unregister its helper from the
+   **old** app and confirm with `launchctl print system/<old helper id>` failing. See decision 0001.
+2. Launch it and confirm the visible **Public Preview** badge and the version you just built.
+3. Confirm the helper banner reports the real Service Management state, not a stale one.
+4. Enable the helper once, then exercise **one non-mutating** allowlisted request. Confirm the helper
+   launches, authenticates the app, returns within its deadline, and goes idle.
+5. Terminate **one disposable synthetic process** — never a real system or user application as the
+   first target. For example, `sleep 600 &`, then terminate it from Milo and confirm the typed
+   result.
+6. Confirm no repeated permission or password prompts appeared at any point.
+
+Record what actually happened in section 10. A path is not verified because it was read.
+
+### After publishing
+
+Update section 2 (release row), section 5 (installed application state), and section 10 (evidence)
+in this file. An installed app that has drifted from HEAD makes every later live observation
+worthless — that is exactly how the `2.0.0` build lingered in `/Applications` while the source had
+moved on.

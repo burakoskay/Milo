@@ -5,7 +5,7 @@ APP_PATH="${1:-}"
 EXPECTED_BUNDLE_ID="${EXPECTED_BUNDLE_ID:-com.gonggong.milo}"
 EXPECTED_TEAM_ID="${EXPECTED_TEAM_ID:-8N738727QB}"
 EXPECTED_VERSION="${EXPECTED_VERSION:-0.2.0}"
-EXPECTED_BUILD="${EXPECTED_BUILD:-20}"
+EXPECTED_BUILD="${EXPECTED_BUILD:-21}"
 
 if [[ -z "$APP_PATH" ]]; then
   echo "usage: Tools/verify-build.sh /path/to/Milo.app" >&2
