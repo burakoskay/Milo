@@ -27,6 +27,7 @@ before installing — see the install notes in `README.md`.
 
 ### Removed
 
+- The secondary git mirror. The `gitlab` remote and the scheduled `mirror` workflow that pushed to it are gone. That workflow ran an unattended, destructive `git push --mirror` to a destination named only inside a secret; `origin` is now the single remote. See `docs/decisions/0004-retire-the-secondary-git-mirror.md`.
 - The cross-repository MLP-v1 contract check in CI. Licensing is out of scope until 1.0, no backend is deployed, and the contract did not move to the new site repository, so the step could only pass against a stale repository. MiloKit's golden fixtures remain and are still exercised by `swift test`.
 
 ### Performance

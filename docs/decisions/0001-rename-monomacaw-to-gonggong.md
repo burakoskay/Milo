@@ -107,11 +107,10 @@ These are outside this repository and block a production build:
 2. **Backend.** `gonggong.tech` must serve the MLP endpoints and `/releases/milo/appcast.xml` before a
    production build validates. `Tools/generate-build-configuration.sh` and `Tools/verify-build.sh` now
    hard-require `https://gonggong.tech` and will fail the build otherwise.
-3. **GitHub.** One secret left: add `GONGGONG_INTERNAL_MIRROR_URL` with the same value as
-   `MONOMACAW_INTERNAL_MIRROR_URL`, confirm a green `mirror` run, then delete the old secret. The
-   workflow already reads the new name first, so there is no downtime and no YAML change to make.
-   The `MONOMACAW_WEBSITE_REPOSITORY`, `MONOMACAW_CONTRACT_REF`, and `MONOMACAW_CONTRACT_DEPLOY_KEY`
-   variables and secrets are now **unused** and can be deleted — see decision 0002.
+3. **GitHub.** Nothing left to rename. Every `MONOMACAW_*` secret and variable is now unused and can
+   be deleted outright: `MONOMACAW_WEBSITE_REPOSITORY`, `MONOMACAW_CONTRACT_REF`, and
+   `MONOMACAW_CONTRACT_DEPLOY_KEY` because the contract check was removed (decision 0002), and
+   `MONOMACAW_INTERNAL_MIRROR_URL` because the mirror was retired (decision 0004).
 4. **Published artifacts.** Release `v0.2.0-preview.1` and its DMG remain pre-rebrand. They were not
    rewritten. `v0.2.0-preview.2` is the first release under the new identifiers and is **not** an
    in-place upgrade of the old.

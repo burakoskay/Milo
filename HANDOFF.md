@@ -60,7 +60,7 @@ This table was re-verified on 2026-08-04. Confirm it again rather than trusting 
 | Preview delivery pull request | `#9 feat: ship Milo Public Preview`, **merged**; branch `fable/milo-test` no longer exists on `origin` |
 | Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0` |
 | Published release | `v0.2.0-preview.1`, GitHub pre-release at `fd6b7d3`, DMG asset SHA-256 `c4742debfb7dee4f4991fcb04698454bf15ff08b46516f91d171cb4b6c473eee` |
-| Remotes | `origin` → `https://github.com/burakoskay/Milo.git`; `gitlab` → `git@gitlab.com:burakoskay-group/burakoskay-project.git` |
+| Remotes | `origin` → `https://github.com/burakoskay/Milo.git`, the only remote. The `gitlab` mirror and its scheduled `--mirror` workflow were retired on 2026-08-04 (decision 0004); there is no off-GitHub copy |
 | Tags | `origin` carries `v0.2.0-preview.1` only. The local-only `v2.0.0-preview.1` was deleted on 2026-08-04: it recorded build `200` under the discarded numbering scheme, which would have permanently blocked the build-number check in `Tools/release.sh` |
 | Repository visibility | Public |
 | Release process | `Tools/release.sh`, section 19. Branch and PR for every change; never commit to `main` directly |
@@ -81,8 +81,8 @@ today without them:
 2. MLP endpoints and the appcast served from `gonggong.tech`.
 
 A few `monomacaw` strings survive on purpose: the signed MLP-v1 golden fixture (the string is inside
-signed material), the MLP protocol name, one GitHub secret pending rename, and historical changelog
-entries. `docs/decisions/0001-rename-monomacaw-to-gonggong.md` lists each and why. Do not "finish the
+signed material), the MLP protocol name, and historical changelog entries. No GitHub secret needs
+renaming — every `MONOMACAW_*` secret and variable is now unreferenced and can simply be deleted. `docs/decisions/0001-rename-monomacaw-to-gonggong.md` lists each and why. Do not "finish the
 rename" by grepping and replacing them.
 
 ## 3. Host and toolchain snapshot
