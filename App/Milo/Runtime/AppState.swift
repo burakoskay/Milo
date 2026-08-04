@@ -67,6 +67,7 @@ struct KillResult: Identifiable, Sendable {
 struct ProcessScanSnapshot: Equatable, Sendable {
     let bloat: [ProcessItem]
     let intelligence: [ProcessItem]
+    let discovered: [DiscoveredProcess]
     let launchItems: [LaunchItem]
     let completedAt: Date
 }
@@ -79,7 +80,14 @@ final class AppState: ObservableObject {
     @Published var activeBloat: [ProcessItem] = []
     @Published var activeIntelligence: [ProcessItem] = []
 
+    // Open discovery: background processes outside the shipped catalogue
+    @Published var discoveredProcesses: [DiscoveredProcess] = []
+    @Published var discoverySearchText: String = ""
+    @Published var showsDiscovery: Bool = SettingsManager.shared.showsDiscovery
+    @Published var showsProtectedProcesses: Bool = SettingsManager.shared.showsProtectedProcesses
+
     @Published var showingKillConfirmation: Bool = false
+    @Published var showingDiscoveryKillConfirmation: Bool = false
     @Published var lastKillResults: [KillResult] = []
     @Published var showingResults: Bool = false
 
@@ -116,6 +124,7 @@ final class AppState: ObservableObject {
     // Auto-scan timer
     private var autoScanTimer: Timer?
     private var pendingKillItems: [ProcessItem] = []
+    private var pendingDiscovered: [DiscoveredProcess] = []
     private var scanLifecycle = MiloOperationLifecycle<ProcessScanSnapshot>()
     private var scanWorker: Task<ProcessScanSnapshot, Error>?
     private var scanCompletionTask: Task<Void, Never>?
@@ -203,6 +212,38 @@ final class AppState: ObservableObject {
         detectedLaunchItems
     }
 
+    /// Discovered processes after the user's own filters.
+    ///
+    /// Protected rows stay hidden by default. They are not dangerous to *show* — the point is
+    /// that a list dominated by rows nobody can act on buries the handful that matter.
+    var visibleDiscovered: [DiscoveredProcess] {
+        let query = discoverySearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return discoveredProcesses.filter { candidate in
+            if !showsProtectedProcesses, !candidate.isActionable {
+                return false
+            }
+            guard !query.isEmpty else { return true }
+            return candidate.name.localizedCaseInsensitiveContains(query)
+                || candidate.executablePath.localizedCaseInsensitiveContains(query)
+                || (candidate.launchdLabel?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
+
+    var discoveredActionableCount: Int {
+        discoveredProcesses.filter(\.isActionable).count
+    }
+
+    var selectedDiscovered: [DiscoveredProcess] {
+        discoveredProcesses.filter { $0.isSelected && $0.isActionable }
+    }
+
+    var discoveredSelectionSummary: (cpu: Double, memory: Double) {
+        selectedDiscovered.reduce(into: (cpu: 0.0, memory: 0.0)) { total, item in
+            total.cpu += item.cpuUsage
+            total.memory += item.memoryMB
+        }
+    }
+
     // Group bloat by vendor
     var bloatByVendor: [String: [ProcessItem]] {
         Dictionary(grouping: visibleBloat, by: { $0.vendor })
@@ -215,6 +256,15 @@ final class AppState: ObservableObject {
 
     var pendingKillCount: Int {
         pendingKillItems.isEmpty ? selectedForKill.count : pendingKillItems.count
+    }
+
+    /// The discovered processes awaiting confirmation, for the dialog to enumerate.
+    var pendingDiscoveredProcesses: [DiscoveredProcess] {
+        pendingDiscovered
+    }
+
+    var pendingDiscoveredRequiresHelper: Bool {
+        pendingDiscovered.contains(where: \.requiresPrivilegedHelper)
     }
 
     // MARK: - Selection Bindings (breaks AttributeGraph cycle)
@@ -244,6 +294,25 @@ final class AppState: ObservableObject {
                 if let idx = self?.activeIntelligence.firstIndex(where: { $0.id == itemID }) {
                     self?.activeIntelligence[idx].isSelected = newValue
                 }
+            }
+        )
+    }
+
+    /// Selection binding for a discovered row.
+    ///
+    /// The setter refuses protected rows outright, so no view can select something the
+    /// policy classified as read-only, whatever its own enablement logic does.
+    func discoveredSelectionBinding(for pid: Int32) -> Binding<Bool> {
+        Binding<Bool>(
+            get: { [weak self] in
+                self?.discoveredProcesses.first(where: { $0.pid == pid })?.isSelected ?? false
+            },
+            set: { [weak self] newValue in
+                guard let index = self?.discoveredProcesses.firstIndex(where: { $0.pid == pid }),
+                      self?.discoveredProcesses[index].isActionable == true else {
+                    return
+                }
+                self?.discoveredProcesses[index].isSelected = newValue
             }
         )
     }
@@ -346,14 +415,33 @@ final class AppState: ObservableObject {
         scanState = scanLifecycle.state
 
         let processManager = ProcessManager.shared
+        // NSWorkspace and the protected list are main-actor state, so they are read here and
+        // handed to the detached worker rather than reached for from inside it.
+        let options = ProcessScanOptions(
+            includesDiscovery: showsDiscovery,
+            foregroundApplicationPIDs: ProcessSafetyInspector.shared.foregroundApplicationPIDs(),
+            protectedProcessNames: Set(WhitelistManager.shared.getWhitelistedProcesses())
+        )
+        let previousSelection = Set(discoveredProcesses.filter(\.isSelected).map(\.pid))
+
         let worker = Task.detached(priority: .userInitiated) {
             try Task.checkCancellation()
-            let result = try processManager.scanForRunningTargetsWithResources()
+            let result = try processManager.scanForRunningTargetsWithResources(options: options)
             let launchItems = processManager.scanForLaunchItems()
             try Task.checkCancellation()
+            // A rescan must not silently drop a selection the user made moments ago.
+            let discovered = result.discovered.map { process -> DiscoveredProcess in
+                guard previousSelection.contains(process.pid), process.isActionable else {
+                    return process
+                }
+                var restored = process
+                restored.isSelected = true
+                return restored
+            }
             return ProcessScanSnapshot(
                 bloat: result.bloat,
                 intelligence: result.intelligence,
+                discovered: discovered,
                 launchItems: launchItems,
                 completedAt: Date()
             )
@@ -380,6 +468,7 @@ final class AppState: ObservableObject {
             let previousCount = totalBloatCount
             activeBloat = snapshot.bloat
             activeIntelligence = snapshot.intelligence
+            discoveredProcesses = snapshot.discovered
             detectedLaunchItems = snapshot.launchItems
             lastScanDate = snapshot.completedAt
             scanState = scanLifecycle.state
@@ -495,7 +584,77 @@ final class AppState: ObservableObject {
 
     func cancelKill() {
         pendingKillItems = []
+        pendingDiscovered = []
         showingKillConfirmation = false
+        showingDiscoveryKillConfirmation = false
+    }
+
+    // MARK: - Discovered Processes
+
+    func setShowsDiscovery(_ enabled: Bool) {
+        showsDiscovery = enabled
+        SettingsManager.shared.showsDiscovery = enabled
+        if !enabled {
+            discoveredProcesses = []
+        }
+        scanProcesses()
+    }
+
+    func setShowsProtectedProcesses(_ enabled: Bool) {
+        showsProtectedProcesses = enabled
+        SettingsManager.shared.showsProtectedProcesses = enabled
+    }
+
+    func requestKillDiscovered() {
+        let selected = selectedDiscovered
+        guard !selected.isEmpty else { return }
+
+        if selected.contains(where: \.requiresPrivilegedHelper), !helperStatus.isEnabled {
+            showingHelperRequiredAlert = true
+            return
+        }
+
+        pendingDiscovered = selected
+        // Discovery reaches processes Milo ships no reviewed opinion about, so the
+        // confirmation is always shown — the "don't ask again" preference covers catalogued
+        // targets, where Milo knows what the process is and that it comes back.
+        showingDiscoveryKillConfirmation = true
+    }
+
+    func confirmKillDiscovered() {
+        let targets = pendingDiscovered
+        showingDiscoveryKillConfirmation = false
+        guard !targets.isEmpty else { return }
+        isKilling = true
+
+        ProcessManager.shared.terminateDiscoveredProcesses(targets) { [weak self] results in
+            Self.runOnMain {
+                guard let appState = self else { return }
+                appState.pendingDiscovered = []
+                appState.lastKillResults = results
+                appState.showingResults = true
+                appState.isKilling = false
+
+                Self.runOnMain(after: 1.5) {
+                    appState.scanProcesses()
+                    appState.refreshMemoryStats()
+                    Self.runOnMain(after: 3.0) {
+                        appState.showingResults = false
+                    }
+                }
+            }
+        }
+    }
+
+    func selectAllDiscovered(_ selected: Bool) {
+        for index in discoveredProcesses.indices where discoveredProcesses[index].isActionable {
+            discoveredProcesses[index].isSelected = selected
+        }
+    }
+
+    func protectDiscovered(_ process: DiscoveredProcess) {
+        addToWhitelist(process.name)
+        scanProcesses()
     }
 
     // MARK: - Vendor Quick Kill

@@ -117,6 +117,8 @@ enum SelfTestRunner {
             )
         }
         results.append(testProtectedToolsExcludedFromDefaultTargets())
+        results.append(contentsOf: testOpenDiscoverySafety())
+        results.append(testDiscoveredProcessTermination(includeDestructive: includeDestructive))
         results.append(testDirectCommandArgumentsDoNotInvokeShell())
 
         let appState = AppState()
@@ -161,6 +163,7 @@ enum SelfTestRunner {
     static func runPreviewSmoke() -> Int32 {
         var results: [SelfTestResult] = []
         results.append(testProtectedToolsExcludedFromDefaultTargets())
+        results.append(contentsOf: testOpenDiscoverySafety())
         results.append(testDirectCommandArgumentsDoNotInvokeShell())
         results.append(testDebloatCommandCatalog())
 
@@ -248,7 +251,207 @@ enum SelfTestRunner {
         return SelfTestResult(name: "Search box removal", status: .fail, detail: "Search UI or search state still exists in the main view")
     }
 
-    private static func testScannerCoverage(with scan: (bloat: [ProcessItem], intelligence: [ProcessItem])) -> [SelfTestResult] {
+    /// Exercises open discovery against the live process table.
+    ///
+    /// This is the check the 0.2.0-preview.2 handoff could not offer. Its smoke step told the
+    /// reader to terminate a synthetic process such as `sleep 600 &`, which could never
+    /// appear, because Milo listed a process only when a shipped rule named it. Discovery
+    /// makes that observable, so the safety properties are now assertable on real data rather
+    /// than argued for in prose.
+    private static func testOpenDiscoverySafety() -> [SelfTestResult] {
+        let options = ProcessScanOptions(
+            includesDiscovery: true,
+            foregroundApplicationPIDs: ProcessSafetyInspector.shared.foregroundApplicationPIDs(),
+            protectedProcessNames: []
+        )
+
+        let discovered: [DiscoveredProcess]
+        do {
+            discovered = try ProcessManager.shared.scanForRunningTargetsWithResources(options: options).discovered
+        } catch {
+            return [
+                SelfTestResult(
+                    name: "Open discovery",
+                    status: .fail,
+                    detail: "The discovery scan failed with \(error.localizedDescription)"
+                )
+            ]
+        }
+
+        var results: [SelfTestResult] = []
+
+        let actionable = discovered.filter(\.isActionable)
+        // Naming a few makes the smoke check falsifiable by eye. The previous handoff's step
+        // ("terminate `sleep 600 &`") looked reasonable and was impossible; printing what was
+        // actually found is what makes the difference visible.
+        let sample = actionable.prefix(5).map { "\($0.name)(\($0.pid))" }.joined(separator: ", ")
+        results.append(
+            SelfTestResult(
+                name: "Open discovery finds background processes",
+                status: discovered.isEmpty ? .fail : .pass,
+                detail: "\(discovered.count) classified, \(actionable.count) actionable"
+                    + (sample.isEmpty ? "" : " — e.g. \(sample)")
+            )
+        )
+
+        // No actionable row may be operating-system infrastructure.
+        let actionableSystemPaths = discovered
+            .filter(\.isActionable)
+            .filter { MiloProcessSafetyPolicy.isCriticalSystemExecutable($0.executablePath) }
+            .map(\.executablePath)
+        results.append(
+            SelfTestResult(
+                name: "Discovery never offers a session-critical service",
+                status: actionableSystemPaths.isEmpty ? .pass : .fail,
+                detail: actionableSystemPaths.isEmpty
+                    ? "No critical service was actionable"
+                    : "Actionable critical services: \(actionableSystemPaths.joined(separator: ", "))"
+            )
+        )
+
+        // The privileged path is the one that can break the machine.
+        let privilegedAppleTargets = discovered
+            .filter(\.requiresPrivilegedHelper)
+            .filter { MiloProcessSafetyPolicy.isOnSealedSystemVolume($0.executablePath) }
+            .map(\.executablePath)
+        results.append(
+            SelfTestResult(
+                name: "Root helper is never offered an Apple system binary",
+                status: privilegedAppleTargets.isEmpty ? .pass : .fail,
+                detail: privilegedAppleTargets.isEmpty
+                    ? "No sealed-volume executable was routed to the helper"
+                    : "Sealed-volume targets: \(privilegedAppleTargets.joined(separator: ", "))"
+            )
+        )
+
+        let selfIsActionable = discovered.contains { $0.isActionable && $0.pid == getpid() }
+        results.append(
+            SelfTestResult(
+                name: "Discovery never offers Milo itself",
+                status: selfIsActionable ? .fail : .pass,
+                detail: selfIsActionable ? "Milo appeared as an actionable target" : "Milo is not a target"
+            )
+        )
+
+        let initIsPresent = discovered.contains { $0.pid <= 1 && $0.isActionable }
+        results.append(
+            SelfTestResult(
+                name: "Discovery never offers the kernel or launchd",
+                status: initIsPresent ? .fail : .pass,
+                detail: initIsPresent ? "pid <= 1 was actionable" : "pid 0 and pid 1 are protected"
+            )
+        )
+
+        // Every actionable process must carry a revalidatable identity; a PID-only target
+        // races process exit and can signal a reused pid.
+        let identitiesAreComplete = discovered.filter(\.isActionable).allSatisfy { candidate in
+            candidate.identity.pid == candidate.pid
+                && candidate.identity.executablePath.hasPrefix("/")
+                && candidate.identity.startSeconds > 0
+        }
+        results.append(
+            SelfTestResult(
+                name: "Actionable discoveries carry a full process identity",
+                status: identitiesAreComplete ? .pass : .fail,
+                detail: identitiesAreComplete
+                    ? "Every actionable row has pid, path and start time"
+                    : "At least one actionable row lacks a revalidatable identity"
+            )
+        )
+
+        return results
+    }
+
+    /// Discovers a process this test started, then terminates it through the shipped path.
+    ///
+    /// The fixture is a copy of `/bin/sleep` under a temporary directory: a user-owned,
+    /// non-launchd background job — exactly the shape open discovery exists to reach, and one
+    /// whose loss costs nothing.
+    private static func testDiscoveredProcessTermination(includeDestructive: Bool) -> SelfTestResult {
+        let name = "Discovered process termination"
+        guard includeDestructive else {
+            return SelfTestResult(
+                name: name,
+                status: .skip,
+                detail: "Run with --self-test-destructive to discover and terminate a real background process"
+            )
+        }
+
+        guard let handle = spawnSyntheticProcess(named: "milo-discovery-fixture", vendor: "Self Test") else {
+            return SelfTestResult(name: name, status: .fail, detail: "Could not start the fixture process")
+        }
+        defer { cleanupSyntheticProcesses([handle]) }
+
+        // The kernel reports `/private/var/folders/...` while NSTemporaryDirectory() reports
+        // `/var/folders/...`, and Foundation's path-resolving APIs strip a leading `/private`
+        // rather than adding it, so the two never compare equal. The fixture directory name
+        // carries a UUID, so matching on the trailing components is unambiguous.
+        let fixtureURL = handle.directory.appendingPathComponent(handle.name)
+        let fixturePath = fixtureURL.path
+        let fixtureSuffix = "/\(handle.directory.lastPathComponent)/\(handle.name)"
+        let options = ProcessScanOptions(
+            includesDiscovery: true,
+            foregroundApplicationPIDs: [],
+            protectedProcessNames: []
+        )
+
+        let discovered: [DiscoveredProcess]
+        do {
+            discovered = try ProcessManager.shared.scanForRunningTargetsWithResources(options: options).discovered
+        } catch {
+            return SelfTestResult(name: name, status: .fail, detail: "Discovery scan failed: \(error.localizedDescription)")
+        }
+
+        guard let target = discovered.first(where: { $0.executablePath.hasSuffix(fixtureSuffix) }) else {
+            return SelfTestResult(
+                name: name,
+                status: .fail,
+                detail: "Discovery did not find the fixture at \(fixturePath)"
+            )
+        }
+
+        guard target.safety == .userOwned else {
+            return SelfTestResult(
+                name: name,
+                status: .fail,
+                detail: "Fixture classified as \(target.safety) rather than userOwned"
+            )
+        }
+
+        // The completion is delivered on the main queue, so the run loop has to keep turning
+        // while the test waits. Blocking on a semaphore here deadlocks against it.
+        let outcome = SelfTestResultBox(
+            SelfTestResult(name: name, status: .fail, detail: "Termination did not report a result")
+        )
+        let finished = MainActorFlagBox()
+        ProcessManager.shared.terminateDiscoveredProcesses([target]) { results in
+            let reported = results.allSatisfy(\.success)
+            outcome.set(
+                SelfTestResult(
+                    name: name,
+                    status: reported ? .pass : .fail,
+                    detail: reported ? "Termination reported success" : "Termination reported failure"
+                )
+            )
+            finished.set()
+        }
+        guard waitUntil(timeout: 20, condition: { finished.isSet }) else {
+            return SelfTestResult(name: name, status: .fail, detail: "Termination timed out")
+        }
+
+        let reported = outcome.get().status == .pass
+        let stillRunning = syntheticProcessIsRunning(at: URL(fileURLWithPath: fixturePath))
+
+        return SelfTestResult(
+            name: name,
+            status: reported && !stillRunning ? .pass : .fail,
+            detail: reported && !stillRunning
+                ? "Discovered \(target.name) (pid \(target.pid)) as userOwned and terminated it without the helper"
+                : "reported=\(reported) stillRunning=\(stillRunning)"
+        )
+    }
+
+    private static func testScannerCoverage(with scan: ProcessScanResult) -> [SelfTestResult] {
         let rawProcesses = CommandRunner.run("/bin/ps", arguments: ["-Axo", "command"]).stdout.lowercased()
         let detected = Set((scan.bloat.map { $0.name.lowercased() } + scan.intelligence.map { $0.name.lowercased() }))
 
@@ -284,7 +487,17 @@ enum SelfTestRunner {
             }
         }
 
-        let widgetsRunning = rawProcesses.contains(".appex/contents/macos/") && rawProcesses.contains("widget")
+        // Both substrings must occur on the *same* process line. Testing them against the
+        // whole `ps` blob asked "is any process an app extension, and does the word 'widget'
+        // appear anywhere on this Mac" — two unrelated questions. Observed live on
+        // 2026-08-04: no widget was running, 32 unrelated `.appex/Contents/MacOS/` processes
+        // were, and an unrelated developer tool carried "widget" in its argv. The test failed
+        // three runs in a row reporting widgets that did not exist.
+        let widgetsRunning = rawProcesses
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .contains { line in
+                line.contains(".appex/contents/macos/") && line.contains("widget")
+            }
         if widgetsRunning {
             let detectedWidgets = scan.bloat.filter { $0.name.localizedCaseInsensitiveContains("widget") }
             if detectedWidgets.isEmpty {
@@ -994,6 +1207,28 @@ enum SelfTestRunner {
 
         let result = resultBox.get()
         return SelfTestResult(name: result.name, status: .fail, detail: "Timed out waiting for completion")
+    }
+
+    /// A one-way completion flag readable from the waiting run loop.
+    ///
+    /// SAFETY: the single mutable property is read and written only while `lock` is held, by
+    /// the two accessors below. No other stored property exists.
+    private final class MainActorFlagBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var flag = false
+
+        func set() {
+            lock.lock()
+            flag = true
+            lock.unlock()
+        }
+
+        var isSet: Bool {
+            lock.lock()
+            let current = flag
+            lock.unlock()
+            return current
+        }
     }
 
     private static func waitUntil(timeout: TimeInterval, interval: TimeInterval = 0.1, condition: @escaping () -> Bool) -> Bool {

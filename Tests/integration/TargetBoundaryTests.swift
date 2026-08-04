@@ -206,7 +206,11 @@ final class TargetBoundaryTests: XCTestCase {
             at: repositoryRoot.appendingPathComponent("App/Milo/Runtime/ProcessManager.swift")
         )
 
-        XCTAssertTrue(processManager.contains("init(cloudSignatureManager: CloudSignatureManager = .shared)"))
+        // Asserted without the enclosing `init(...)` so the guard survives the addition of
+        // further injected collaborators. The intent is unchanged: cloud rules must arrive by
+        // injection rather than through a singleton reached from inside the scanner.
+        XCTAssertTrue(processManager.contains("cloudSignatureManager: CloudSignatureManager = .shared"))
+        XCTAssertTrue(processManager.contains("backgroundProcessScanner: BackgroundProcessScanner = .shared"))
         XCTAssertTrue(processManager.contains("cloudSignatureManager.hasCloudLocatorCandidate"))
         XCTAssertTrue(processManager.contains("cloudSignatureManager.matchCloudSignature"))
         XCTAssertFalse(processManager.contains("CloudSignatureManager.shared.hasCloudLocatorCandidate"))

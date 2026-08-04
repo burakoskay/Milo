@@ -34,19 +34,34 @@ verified, installed on this host, and tagged **locally** — it is **not publish
 check passed, including the privileged helper path, which had never been exercised before today
 (section 10).
 
+Two items this checkpoint previously listed as open are now **built and verified live** (section 10):
+open process discovery and the uninstall path. They are in review, not on `main`.
+
+| Ref | Contents | State |
+|---|---|---|
+| PR #27, `docs/checkpoint-preview2-live-verification` | The preview.2 live-verification checkpoint | **Merged** 2026-08-04 |
+| [PR #28](https://github.com/burakoskay/Milo/pull/28), `feat/open-discovery-and-uninstall` (`b80b2b1`, `73b6050`) | Open discovery, uninstall, widget-liveness test fix | **Open**, pushed, awaiting review |
+
 **Immediately actionable, in order:**
 
-1. Publish `v0.2.0-preview.2` — re-run `Tools/release.sh 0.2.0-preview.2` and run the commands it
-   prints. Awaiting a go-ahead; nothing else blocks it.
-2. Give Milo an uninstall path for its root helper (section 18, nearest priority 1).
+1. Land PR #28.
+2. **Re-cut `v0.2.0-preview.2` once #28 lands.** The existing tag is local-only and points at
+   `08a799a`, which predates the discovery and uninstall work — publishing it as it stands would ship
+   a build with neither feature. Decided 2026-08-04: delete the local tag, then re-run
+   `Tools/release.sh 0.2.0-preview.2` against the merged `main` so the release contains what section
+   10 verifies. Nothing else blocks publication.
 
-**Open discussion the user raised and has not yet had:** how Milo decides which processes to surface
-and how it handles them. Relevant context for that conversation — Milo lists a process only when it
-matches a signed telemetry signature, a launchd label, or the static catalogue in
-`ProcessData.swift`; scanning and grouping live in `ProcessManager.swift`; termination revalidates
-PID, executable path, and start time before every signal. An arbitrary process such as `sleep` never
-appears, by design. The user has raised no defect here — treat it as an open design conversation,
-not a bug report.
+Re-cutting is safe precisely because the tag was never pushed; `origin` still carries
+`v0.2.0-preview.1` only. Do not rewrite a tag that has been published.
+
+**The discovery design question is settled, not open.** Earlier checkpoints recorded it as an
+unhad conversation. `b80b2b1` answered it: visibility and actionability are now separate concerns.
+Everything on the process table is listed; what Milo may signal is decided from measured evidence —
+kernel-reported pid and effective uid, the `anchor apple` code requirement, and the owning launchd
+label — never from a display name. The policy is pure and lives in
+`Packages/MiloKit/Sources/MiloDomain/ProcessSafetyPolicy.swift`, so the root helper enforces the
+critical-service refusal from the same source rather than a copy. See section 7 for the invariant and
+section 10 for the live evidence.
 
 **Local environment caveats for anyone reading live results:** SIP is **disabled** on this host, so
 it is not representative for validating System Tuning recipes. The pre-rebrand app and its legacy
@@ -76,19 +91,21 @@ This table was re-verified on 2026-08-04. Confirm it again rather than trusting 
 | Item | Current value |
 |---|---|
 | Repository | `/Volumes/Internal HD/Developer/Milo` |
-| Branch | `main` |
-| Upstream | `main` in sync with `origin/main` |
-| HEAD | `08a799a Merge pull request #26 from burakoskay/refactor/gonggong-rebrand` |
+| Branch | `feat/open-discovery-and-uninstall`, pushed and tracking `origin` |
+| Upstream | `main` is `8aacac2` on both sides; the working branch is 2 commits ahead of it |
+| HEAD | `73b6050 fix(test): match widget liveness on one process line` |
 | Main implementation commit | `11e9caf feat: ship Milo Public Preview (#9)` |
 | Preview delivery pull request | `#9 feat: ship Milo Public Preview`, **merged**; branch `fable/milo-test` no longer exists on `origin` |
-| Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0`, `#26` gonggong rebrand and single source of truth |
-| Published release | `v0.2.0-preview.1` only. **`v0.2.0-preview.2` is prepared, fully verified, and tagged locally — it has NOT been pushed or published.** Publish with the commands `Tools/release.sh` prints, or re-run it |
+| Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0`, `#26` gonggong rebrand and single source of truth, `#27` preview.2 live-verification checkpoint |
+| Open pull request | [`#28` open discovery and uninstall](https://github.com/burakoskay/Milo/pull/28), based on `main` |
+| Published release | `v0.2.0-preview.1` only. `v0.2.0-preview.2` is tagged **locally at `08a799a`** and has NOT been pushed. That commit predates PR #28, so the tag is to be deleted and re-cut after #28 lands — see the checkpoint in section 0 |
 | Remotes | `origin` → `https://github.com/burakoskay/Milo.git`, the only remote. The `gitlab` mirror and its scheduled `--mirror` workflow were retired on 2026-08-04 (decision 0004); there is no off-GitHub copy |
 | Tags | `origin` carries `v0.2.0-preview.1` only. The local-only `v2.0.0-preview.1` was deleted on 2026-08-04: it recorded build `200` under the discarded numbering scheme, which would have permanently blocked the build-number check in `Tools/release.sh` |
 | Repository visibility | Public |
 | Release process | `Tools/release.sh`, section 19. Branch and PR for every change; never commit to `main` directly |
 
-No PR is open. Open a new branch and PR for the next slice; never commit to `main` directly.
+PR #28 is open and carries the current work. Open a new branch and PR for the next slice; never commit
+to `main` directly.
 
 ### Company rename
 
@@ -301,7 +318,17 @@ as root* with its executable already unlinked, and no in-app route to remove it.
 System Settings > General > Login Items & Extensions (`sudo launchctl bootout system/<id>` is the
 fallback; never `sfltool resetbtm`, which resets background items for every app on the machine).
 
-Milo has no uninstall flow. That is a product gap, listed in section 18.
+**Milo now has an uninstall flow** (Settings > Uninstall, `UninstallManager.swift`). It unregisters
+the helper *before* removing any file, so a partial failure can never leave a running root daemon
+whose owning app has been dismantled, and it declines to move the bundle to the Trash at all if the
+unregistration failed. Files are removed against an exact-path allowlist generated from an explicit
+identifier table in `MiloUninstallPlan`, never a pattern match — the developer's own machine carries
+`com.monomacaw.picoberry.prototype` and `com.monomacaw.squeaky.preview` from unrelated products, and
+a vendor-name match would have destroyed both.
+
+What Milo still cannot do is unregister a helper belonging to a *different* bundle identifier;
+`SMAppService` only ever acts on the calling app's own records. Those are detected with a read-only
+`launchctl print system/<id>` and reported with recovery steps instead.
 
 ### Runtime integrity
 
@@ -340,6 +367,12 @@ Apple owns the final Background Items approval. Milo must not simulate, bypass, 
 | `Helper/MiloPrivilegedHelper/main.swift` | Root helper authentication and command policy |
 | `App/Milo/Runtime/CommandRunner.swift` | Direct user/helper command routing with no sudo fallback |
 | `App/Milo/Runtime/ProcessManager.swift` | Scanning and PID-reuse-safe termination |
+| `Packages/MiloKit/Sources/MiloDomain/ProcessSafetyPolicy.swift` | Pure classification policy; shared source with the root helper |
+| `App/Milo/Runtime/ProcessSafetyInspector.swift` | Code-signature, ancestry, and foreground-app evidence |
+| `App/Milo/Runtime/BackgroundProcessScanner.swift` | Open discovery over the full process table |
+| `App/Milo/Runtime/DiscoveredProcessesView.swift` | Discovery card shared by both surfaces |
+| `Packages/MiloKit/Sources/MiloDomain/UninstallPlan.swift` | Exact-path uninstall allowlist and containment gate |
+| `App/Milo/Runtime/UninstallManager.swift` | Ordered uninstall and orphaned-helper detection |
 | `App/Milo/Runtime/AppState.swift` | Typed UI operation orchestration |
 | `App/Milo/Runtime/ContentView.swift` | Menu bar preview/helper UI |
 | `App/Milo/Runtime/DedicatedWindowView.swift` | Dedicated-window preview/helper UI |
@@ -365,6 +398,57 @@ git diff --check
 Commit both `project.yml` and the regenerated `Milo.xcodeproj/project.pbxproj`.
 
 ## 10. Verification completed at this handoff
+
+### Open discovery and uninstall, verified on 2026-08-04
+
+Measured on this host, macOS 27.0, against the Debug build. Gates: `swiftlint --quiet` 0 violations;
+`swift test` (root) 0 failures; `swift test --package-path Packages/MiloKit` 41 tests, 0 failures;
+`xcodebuild ... -scheme MiloPro test` `** TEST SUCCEEDED **`.
+
+| Claim | Evidence |
+|---|---|
+| Discovery finds arbitrary background processes | 306–332 processes classified per scan, 120–152 actionable |
+| **The case the previous handoff called impossible** | `sleep 900 &` → pid 90418, `/bin/sleep`, classified `userOwned`, actionable with no helper |
+| Discovery terminates what it finds | Destructive self-test discovered its own fixture and terminated it at user level; process confirmed gone |
+| Session-critical services stay read-only | No critical service was actionable on any run |
+| The root helper is never offered Apple system software | No sealed-volume executable was routed to the privileged path |
+| Milo does not signal itself or its ancestors | Milo absent from actionable rows |
+| Kernel and launchd are protected | pid 0 and pid 1 never actionable |
+| Every actionable row is PID-reuse safe | All carry pid, absolute path, and start time |
+| Uninstall plan is correctly scoped | 11 real Milo artifacts matched on this host, including 6 legacy `com.monomacaw.milo*` ones |
+| Uninstall refuses unrelated products | `picoberry`, both `squeaky` variants, and `~/Library`, `~/Library/Preferences`, `~` all rejected |
+
+`/bin/sleep` is the load-bearing case: it is Apple-signed *and* on the sealed system volume, so a
+naive "Apple binary is untouchable" rule would have kept it invisible. It is reachable because it
+runs under the user's own account with no `com.apple.` launchd label — a job the user started, which
+their uid could already signal without Milo.
+
+One self-test failure remains and is **pre-existing**, confirmed by running the same suite on the
+stashed pre-change tree: `simdiskimaged detection`. The daemon runs as root, so `proc_pidpath` is
+unreadable from the user session and the scan falls back to the truncated `ps` comm column. It does
+not involve discovery or uninstall.
+
+`Widget detection` was the second such failure and is now fixed; see below.
+
+### Widget liveness heuristic, corrected on 2026-08-04
+
+`testScannerCoverage(with:)` decided widgets were live with
+`rawProcesses.contains(".appex/contents/macos/") && rawProcesses.contains("widget")`, where
+`rawProcesses` is the whole system's `ps -Axo command` output. Matching the two substrings
+independently across one blob asks two unrelated questions, so the check fired when *any* process
+was an app extension and *any other* process merely had "widget" somewhere in its argv. It reported
+FAIL on three consecutive runs while zero widget processes were running.
+
+Both substrings must now occur on the same process line. Verified in both directions: SKIP with no
+widget-shaped process running, and PASS against a live fixture at
+`Sample.appex/Contents/MacOS/SampleWidget` (which the run also detected alongside a real
+`WeatherWidget`).
+
+A caveat worth knowing before trusting this test: it still reads `ps` command lines, so a shell
+command whose argv genuinely contains both strings on one line is indistinguishable from a widget.
+That is how the first verification attempt of this very fix produced a false FAIL — the measuring
+command contained both patterns. Capture the self-test to a file and inspect it in a *separate*
+invocation.
 
 ### Verified at `0.2.0-preview.2` on 2026-08-04
 
@@ -507,12 +591,14 @@ Unless the user changes direction, resume in this order:
    section 18), and `docs/decisions/README.md`.
 2. Confirm `git status -sb`, HEAD, and the release state in section 2 rather than trusting this
    snapshot.
-3. Publish `v0.2.0-preview.2` if the user gives the go-ahead. It is verified and tagged locally;
-   re-run `Tools/release.sh 0.2.0-preview.2` and use the commands it prints.
-4. Build the helper uninstall path (section 18, nearest priority 1).
-5. If the user wants to discuss which processes Milo surfaces and how it handles them, start from
-   `ProcessData.swift` (the static catalogue), `ProcessManager.swift` (scanning, grouping, and
-   PID-reuse-safe termination), and the checkpoint note in section 0.
+3. Land [PR #28](https://github.com/burakoskay/Milo/pull/28).
+4. Delete the local `v0.2.0-preview.2` tag and re-cut it against the merged `main`, then publish. The
+   tag currently points at a commit that predates #28; see the checkpoint in section 0.
+5. To work on which processes Milo surfaces and how it handles them, start from
+   `Packages/MiloKit/Sources/MiloDomain/ProcessSafetyPolicy.swift` (the classification policy, shared
+   with the root helper), then `BackgroundProcessScanner.swift` (open discovery) and
+   `ProcessManager.swift` (grouping and PID-reuse-safe termination). `ProcessData.swift` is now only
+   the reviewed-rule catalogue, not the visibility gate.
 
 The install-and-live-verify steps that used to sit here are done; their results are in section 10.
 The remaining runtime unknowns are the **rejection** paths, not the happy path:
@@ -598,20 +684,20 @@ is deferred, and the UI must not imply otherwise.
 
 ### Nearest priorities
 
-1. **An uninstall path for the privileged helper.** Deleting `Milo.app` leaves its root helper
-   registered and running, recoverable only through System Settings or `launchctl`. Milo needs an
-   in-app "disable and remove helper" action, a warning before the app is removed while registered,
-   and documented recovery steps. Observed live on 2026-08-04; see section 7.
-2. Notarized Developer ID distribution, so first launch does not require a Gatekeeper override.
-3. Disabling a launchd job directly from the process row that reported the restart, as a labelled and
+1. Notarized Developer ID distribution, so first launch does not require a Gatekeeper override.
+2. Disabling a launchd job directly from the process row that reported the restart, as a labelled and
    confirmed action rather than a side effect of terminating the process.
-4. Clean-VM validation of the System Tuning matrix on every supported macOS release.
-5. A negative tamper test for the runtime signature check, plus rejection cases for the helper's
+3. Clean-VM validation of the System Tuning matrix on every supported macOS release.
+4. A negative tamper test for the runtime signature check, plus rejection cases for the helper's
    PID/path/start-time revalidation against a disposable root-owned fixture. The positive path is now
    proven; the rejection paths are not.
 
 ### Process-control reliability
 
+- Re-verify the discovery classification on a clean VM per supported macOS release. The
+  `criticalExecutablePaths` list is keyed on absolute paths, and Apple moves binaries between
+  releases; a path that no longer exists silently stops contributing its second gate. (The
+  primary gate — Apple signature plus effective uid — does not depend on the path list.)
 - Expand typed per-target results for exited, replaced, protected, denied, timed out, and launchd-respawned processes.
 - Add disposable-VM integration coverage for system launchd services, helper upgrade/version skew, reboot, denial, and uninstall.
 - Version the local rule catalogue and add reviewed compatibility fixtures for supported macOS releases.
@@ -709,11 +795,21 @@ build, sign, lint, and test cleanly, then fail on first real use.
    rather than failing silently. A widget extension is the right choice: macOS respawns it on
    demand and no data is lost.
 
-   Do **not** try to use an ad-hoc synthetic process such as `sleep 600 &`. Milo only lists
-   processes that match a rule — a signed telemetry signature, a launchd label, or the static
-   catalogue — so an arbitrary process never appears, by design. Milo is a curated targeter, not
-   Activity Monitor. Do not broaden a match to make this step work.
-6. Confirm no repeated permission or password prompts appeared at any point.
+   This step covers the *reviewed-rule* lane only. It is the lane that may act on Apple system
+   software, so it is still the one that must be exercised by hand. Do not broaden a catalogue
+   match to make it pass.
+6. Exercise the *discovery* lane, which does list arbitrary background processes. Start
+   `sleep 600 &` in a shell, rescan, and confirm it appears under **Other Background
+   Processes** as an actionable row, then terminate it and confirm it is gone.
+
+   Earlier revisions of this document told the reader that an arbitrary process could never
+   appear. That was true of the catalogue and is no longer true of Milo: discovery classifies
+   every process by measured evidence and shows the ones it can act on. What has not changed is
+   the boundary — a process that is Apple-signed system software is listed read-only unless a
+   reviewed rule names it.
+7. Confirm no repeated permission or password prompts appeared at any point.
+8. Open **Settings › Uninstall** and confirm the plan lists only Milo's own paths. Do not run it
+   unless you intend to remove the install.
 
 Record what actually happened in section 10. A path is not verified because it was read.
 

@@ -113,6 +113,16 @@ struct DedicatedWindowView: View {
         } message: {
             Text("This will terminate the requested processes. Some apps may lose unsaved data.")
         }
+        .alert("Terminate Background Processes?", isPresented: $appState.showingDiscoveryKillConfirmation) {
+            Button("Cancel", role: .cancel) {
+                appState.cancelKill()
+            }
+            Button("Terminate", role: .destructive) {
+                appState.confirmKillDiscovered()
+            }
+        } message: {
+            Text(discoveryConfirmationMessage)
+        }
         .alert("Clear User Caches?", isPresented: $appState.showingCacheConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Clear Caches", role: .destructive) {
@@ -548,6 +558,22 @@ struct DedicatedWindowView: View {
         }
     }
 
+    /// Names the processes rather than describing them in the abstract. These are targets
+    /// Milo ships no reviewed opinion about, so the user is the one who has to recognise them.
+    private var discoveryConfirmationMessage: String {
+        let targets = appState.pendingDiscoveredProcesses
+        let names = targets.prefix(5).map { "\($0.name) (\($0.pid))" }.joined(separator: ", ")
+        let remainder = targets.count > 5 ? " and \(targets.count - 5) more" : ""
+        var message = "Milo will send TERM, then KILL if needed, to: \(names)\(remainder). Unsaved work in these processes will be lost."
+        if appState.pendingDiscoveredRequiresHelper {
+            message += " Some run under another account and will be signalled by Milo's approved background helper."
+        }
+        if targets.contains(where: \.isLaunchdManaged) {
+            message += " Processes that launchd manages will be started again."
+        }
+        return message
+    }
+
     // MARK: - Processes
 
     private var processesContent: some View {
@@ -612,6 +638,10 @@ struct DedicatedWindowView: View {
                         }
                     }
                 }
+            }
+
+            if appState.showsDiscovery {
+                DiscoveredProcessesCard(appState: appState, rowLimit: 40)
             }
 
             if let scanFailure = appState.scanFailureMessage {
