@@ -42,7 +42,7 @@ fi
 if [[ -z "$canonical_fixture_dir" ]]; then
   for candidate in \
     "$repo_root/_contract/website/tests/fixtures" \
-    "$repo_root/../monomacaw/website/tests/fixtures" \
+    "$repo_root/../gonggong-site/tests/fixtures" \
     "$repo_root/../website/tests/fixtures"; do
     if [[ -f "$candidate/${fixture_names[0]}" ]]; then
       canonical_fixture_dir="$candidate"
@@ -57,7 +57,10 @@ if [[ -z "$local_fixture_dir" || ! -d "$local_fixture_dir" ]]; then
 fi
 if [[ -z "$canonical_fixture_dir" || ! -d "$canonical_fixture_dir" ]]; then
   echo "Missing canonical MLP-v1 fixture directory." >&2
-  echo "Set MLP_GOLDEN_FIXTURE_DIR or checkout monomacaw/website into _contract/website." >&2
+  echo "This check compares MiloKit's fixtures against the backend repository that owns the MLP-v1" >&2
+  echo "contract. Licensing is out of scope until 1.0 and no repository currently holds it, so this" >&2
+  echo "script is dormant and is not run by CI. Set MLP_GOLDEN_FIXTURE_DIR to the contract fixtures" >&2
+  echo "when licensing resumes." >&2
   exit 1
 fi
 

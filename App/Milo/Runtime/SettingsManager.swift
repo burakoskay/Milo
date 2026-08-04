@@ -120,7 +120,7 @@ final class SettingsManager {
             }
         } else {
             // Fallback: shared file list (deprecated but functional on 12)
-            let success = SMLoginItemSetEnabled("com.monomacaw.milo" as CFString, enable)
+            let success = SMLoginItemSetEnabled("com.gonggong.milo" as CFString, enable)
             if !success {
                 MiloLog.error(.loginItemUpdateFailed, category: .settings, detail: "enable=\(enable)")
             }

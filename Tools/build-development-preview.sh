@@ -13,6 +13,7 @@ APP_STAGED="${STAGING_DIRECTORY}/Milo.app"
 HELPER_RELATIVE_PATH="Contents/Resources/MiloPrivilegedHelper"
 HELPER_STAGED="${APP_STAGED}/${HELPER_RELATIVE_PATH}"
 DMG_PATH="${DIST_DIRECTORY}/Milo-Public-Preview.dmg"
+DMG_CHECKSUM_PATH="${DMG_PATH}.sha256"
 TEAM_ID="8N738727QB"
 
 fail() {
@@ -27,7 +28,7 @@ export DEVELOPER_DIR="${XCODE_APPLICATION}/Contents/Developer"
 
 rm -rf -- "${DERIVED_DATA}" "${STAGING_DIRECTORY}"
 mkdir -p -- "${DIST_DIRECTORY}" "${STAGING_DIRECTORY}"
-rm -f -- "${DMG_PATH}"
+rm -f -- "${DMG_PATH}" "${DMG_CHECKSUM_PATH}"
 
 xcodebuild \
     -workspace "${REPOSITORY_ROOT}/Milo.xcworkspace" \
@@ -45,18 +46,18 @@ xcodebuild \
 /usr/bin/codesign \
     --verify \
     --strict \
-    -R="anchor apple generic and identifier \"com.monomacaw.milo.preview\" and certificate leaf[subject.OU] = \"${TEAM_ID}\"" \
+    -R="anchor apple generic and identifier \"com.gonggong.milo.preview\" and certificate leaf[subject.OU] = \"${TEAM_ID}\"" \
     "${APP_STAGED}"
 /usr/bin/codesign \
     --verify \
     --strict \
-    -R="anchor apple generic and identifier \"com.monomacaw.milo.helper\" and certificate leaf[subject.OU] = \"${TEAM_ID}\"" \
+    -R="anchor apple generic and identifier \"com.gonggong.milo.helper\" and certificate leaf[subject.OU] = \"${TEAM_ID}\"" \
     "${HELPER_STAGED}"
 
 APP_IDENTIFIER=$(/usr/bin/codesign -dv "${APP_STAGED}" 2>&1 | /usr/bin/sed -n 's/^Identifier=//p')
 HELPER_IDENTIFIER=$(/usr/bin/codesign -dv "${HELPER_STAGED}" 2>&1 | /usr/bin/sed -n 's/^Identifier=//p')
-[[ "${APP_IDENTIFIER}" == "com.monomacaw.milo.preview" ]] || fail "Unexpected app identifier."
-[[ "${HELPER_IDENTIFIER}" == "com.monomacaw.milo.helper" ]] || fail "Unexpected helper identifier."
+[[ "${APP_IDENTIFIER}" == "com.gonggong.milo.preview" ]] || fail "Unexpected app identifier."
+[[ "${HELPER_IDENTIFIER}" == "com.gonggong.milo.helper" ]] || fail "Unexpected helper identifier."
 
 LLVM_PROFILE_FILE="${DERIVED_DATA}/MiloPreview-%p.profraw" \
     "${APP_STAGED}/Contents/MacOS/Milo" --preview-smoke-test
@@ -69,4 +70,15 @@ ln -s /Applications "${STAGING_DIRECTORY}/Applications"
     "${DMG_PATH}"
 /usr/bin/hdiutil verify "${DMG_PATH}"
 
+# The checksum sidecar is the artifact's published integrity record. Regenerate it in the same
+# run that produced the image and verify it immediately: a stale sidecar left beside a rebuilt
+# DMG asserts a hash the artifact no longer has.
+DMG_RELATIVE_PATH="${DMG_PATH#${REPOSITORY_ROOT}/}"
+DMG_CHECKSUM_LINE=$(cd -- "${REPOSITORY_ROOT}" && /usr/bin/shasum -a 256 -- "${DMG_RELATIVE_PATH}") \
+    || fail "The DMG checksum could not be computed."
+print -r -- "${DMG_CHECKSUM_LINE}" > "${DMG_CHECKSUM_PATH}"
+(cd -- "${REPOSITORY_ROOT}" && /usr/bin/shasum -a 256 -c -- "${DMG_CHECKSUM_PATH}") \
+    || fail "The DMG checksum sidecar does not match the image it was written for."
+
 print -- "Public Preview ready: ${DMG_PATH}"
+print -r -- "Checksum: ${DMG_CHECKSUM_LINE}"

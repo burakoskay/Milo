@@ -32,7 +32,7 @@ public final class MiloLoopbackAppcastServer: @unchecked Sendable {
     private static let startupTimeout: TimeInterval = 10
     private static let lifetime: TimeInterval = 120
 
-    private let queue = DispatchQueue(label: "com.monomacaw.milo.update-feed-loopback")
+    private let queue = DispatchQueue(label: "com.gonggong.milo.update-feed-loopback")
     private var listener: NWListener?
     private var expiryWorkItem: DispatchWorkItem?
     private var startContinuation: CheckedContinuation<MiloLoopbackAppcastEndpoint, Error>?

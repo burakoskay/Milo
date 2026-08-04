@@ -15,7 +15,7 @@ static int mh_integrity_check_requirement(void) {
     SecRequirementRef requirement = NULL;
     CFStringRef requirement_source = CFSTR(
         "anchor apple generic and certificate leaf[subject.OU] = \"8N738727QB\" "
-        "and (identifier \"com.monomacaw.milo\" or identifier \"com.monomacaw.milo.preview\")"
+        "and (identifier \"com.gonggong.milo\" or identifier \"com.gonggong.milo.preview\")"
     );
     OSStatus requirement_status = SecRequirementCreateWithString(requirement_source, kSecCSDefaultFlags, &requirement);
     if (requirement_status != errSecSuccess || requirement == NULL) {

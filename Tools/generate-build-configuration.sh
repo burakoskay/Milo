@@ -59,7 +59,7 @@ case "$CONFIGURATION_ENVIRONMENT" in
         if [[ -z "$SERVICE_BASE_URL" ]]; then
             SERVICE_BASE_URL="https://milo-development.invalid"
         fi
-        if [[ "$SERVICE_BASE_URL" == "https://monomacaw.com" || "$SERVICE_BASE_URL" == "https://monomacaw.com/" ]]; then
+        if [[ "$SERVICE_BASE_URL" == "https://gonggong.tech" || "$SERVICE_BASE_URL" == "https://gonggong.tech/" ]]; then
             fail "development configuration cannot use the production service"
         fi
         if [[ -z "$LICENSE_PUBLIC_KEY" ]]; then
@@ -67,8 +67,8 @@ case "$CONFIGURATION_ENVIRONMENT" in
         fi
         ;;
     production)
-        if [[ "$SERVICE_BASE_URL" != "https://monomacaw.com" ]]; then
-            fail "production MILO_SERVICE_BASE_URL must be https://monomacaw.com"
+        if [[ "$SERVICE_BASE_URL" != "https://gonggong.tech" ]]; then
+            fail "production MILO_SERVICE_BASE_URL must be https://gonggong.tech"
         fi
         if [[ -z "$LICENSE_PUBLIC_KEY" ]]; then
             fail "production MILO_LICENSE_PUBLIC_KEY is required"

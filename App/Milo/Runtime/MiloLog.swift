@@ -47,7 +47,7 @@ enum MiloLog {
         case mainActorDelayFailed = "runtime.main-actor-delay-failed"
     }
 
-    private static let subsystem = "com.monomacaw.milo"
+    private static let subsystem = "com.gonggong.milo"
 
     private static let generalLogger = Logger(subsystem: subsystem, category: "General")
     private static let processLogger = Logger(subsystem: subsystem, category: "Process")

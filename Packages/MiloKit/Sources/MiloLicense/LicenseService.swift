@@ -47,15 +47,15 @@ public enum MLPLicenseError: Error, LocalizedError, Sendable {
         case .deviceFingerprintUnavailable:
             return "Milo could not derive this Mac's device fingerprint."
         case .enrollmentMissing:
-            return "This Mac has not been paired with a Monomacaw account."
+            return "This Mac has not been paired with a Gonggong account."
         case .enrollmentNotApproved:
-            return "Approve the pairing code in your Monomacaw account, then try again."
+            return "Approve the pairing code in your Gonggong account, then try again."
         case .enrollmentExpired:
             return "The pairing code expired. Start a new pairing request."
         case .malformedResponse:
-            return "The Monomacaw service returned an invalid response."
+            return "The Gonggong service returned an invalid response."
         case .responseTooLarge:
-            return "The Monomacaw service returned an oversized response."
+            return "The Gonggong service returned an oversized response."
         case .serverRejected(let message):
             return message
         case .invalidEnvelope:
@@ -67,7 +67,7 @@ public enum MLPLicenseError: Error, LocalizedError, Sendable {
         case .appMismatch:
             return "The signed license is not for Milo."
         case .userMismatch:
-            return "The signed license is not for the paired Monomacaw account."
+            return "The signed license is not for the paired Gonggong account."
         case .deviceKeyMismatch:
             return "The signed license is not bound to this Milo device key."
         case .deviceMismatch:
@@ -88,7 +88,7 @@ public enum MLPLicenseError: Error, LocalizedError, Sendable {
 
 /// Immutable configuration for a Milo MLP-v1 device client.
 public struct MLPClientConfiguration: Sendable {
-    /// Monomacaw's HTTPS backend root, such as `https://monomacaw.com`.
+    /// Gonggong's HTTPS backend root, such as `https://gonggong.tech`.
     public let baseURL: URL
     /// The ecosystem app identifier bound into all requests and envelopes.
     public let appID: String
@@ -122,7 +122,7 @@ public struct MLPClientConfiguration: Sendable {
 public struct MLPEnrollmentChallenge: Sendable, Equatable {
     /// Opaque challenge identifier used only by the enrollment completion request.
     public let id: String
-    /// Short human-entered code displayed in the Monomacaw account dashboard.
+    /// Short human-entered code displayed in the Gonggong account dashboard.
     public let pairingCode: String
     /// Server-provided expiration time for the pairing code.
     public let expiresAt: Date
@@ -577,9 +577,9 @@ public actor MLPDeviceLicenseClient {
                 return .serverRejected(message)
             }
         } catch {
-            return .serverRejected("The Monomacaw service rejected this request (HTTP \(fallbackStatus)).")
+            return .serverRejected("The Gonggong service rejected this request (HTTP \(fallbackStatus)).")
         }
-        return .serverRejected("The Monomacaw service rejected this request (HTTP \(fallbackStatus)).")
+        return .serverRejected("The Gonggong service rejected this request (HTTP \(fallbackStatus)).")
     }
 
     private static func deviceFingerprint(for userID: UUID) throws -> String {
@@ -603,16 +603,21 @@ public actor MLPDeviceLicenseClient {
         return fingerprint
     }
 
+    // Keychain service names are persistent storage keys. These three moved to com.gonggong.* in one
+    // step, without a read-old/write-new migration, because no device was ever enrolled against a
+    // deployed backend. A stale pre-rebrand item is simply never read again. Once real devices are
+    // enrolled this is no longer a free change: renaming a service then orphans the item it names,
+    // and needs a migration. See docs/decisions/0001-rename-monomacaw-to-gonggong.md.
     private let registrationStore = MLPKeychainStore<MLPDeviceRegistration>(
-        service: "com.monomacaw.milo.mlp-v1",
+        service: "com.gonggong.milo.mlp-v1",
         account: "device-registration"
     )
     private let pendingEnrollmentStore = MLPKeychainStore<MLPPendingEnrollment>(
-        service: "com.monomacaw.milo.mlp-v1",
+        service: "com.gonggong.milo.mlp-v1",
         account: "pending-enrollment"
     )
     private let envelopeStore = MLPKeychainStore<MLPSignedEnvelopeResponse>(
-        service: "com.monomacaw.milo.license",
+        service: "com.gonggong.milo.license",
         account: "mlp-v1-license-envelope"
     )
 }
@@ -733,7 +738,7 @@ private enum MLPBase64URL {
 }
 
 private final class MLPDeviceKeyStore {
-    private let tag = Data("com.monomacaw.milo.mlp-v1.device-key".utf8)
+    private let tag = Data("com.gonggong.milo.mlp-v1.device-key".utf8)
     private let publicKeySPKIPrefix = Data([
         0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D,
         0x02, 0x01, 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01,

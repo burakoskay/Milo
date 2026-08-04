@@ -196,7 +196,7 @@ struct PaywallView: View {
             .disabled(licenseManager.isVerifying)
             .accessibilityIdentifier("start-secure-pairing")
 
-            Button("Open Monomacaw Account") {
+            Button("Open Gonggong Account") {
                 licenseManager.openAccount()
             }
             .buttonStyle(.bordered)

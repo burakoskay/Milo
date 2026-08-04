@@ -58,7 +58,7 @@ final class MemoryManager: Sendable {
 
             for itemURL in contents {
                 let name = itemURL.lastPathComponent
-                if name.localizedCaseInsensitiveContains("Milo") || name.localizedCaseInsensitiveContains("com.monomacaw.milo") {
+                if name.localizedCaseInsensitiveContains("Milo") || name.localizedCaseInsensitiveContains("com.gonggong.milo") {
                     continue
                 }
 

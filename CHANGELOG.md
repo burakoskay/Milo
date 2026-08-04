@@ -1,18 +1,42 @@
 # Changelog
 
 All notable changes to Milo are documented here. Format: Keep a Changelog 1.1.0.
-This project adheres to Semantic Versioning 2.0.0 from version 2.0.0 onward;
-version 1.x predates this regime.
+This project adheres to Semantic Versioning 2.0.0. Milo is pre-1.0: the public preview
+series is `0.2.x`, and no 1.x release has shipped.
 
 ## [Unreleased]
+
+## [0.2.0-preview.2] - 2026-08-04
+
+Second Public Preview, and the first build under the gonggong name. Apple Development signed and
+not notarized; macOS blocks the first launch until the user explicitly allows it.
+
+This preview does **not** upgrade an installed `0.2.0-preview.1` in place. Its bundle identifiers
+changed, so macOS treats it as a different application. Unregister the old helper from the old app
+before installing — see the install notes in `README.md`.
+
+### Changed
+
+- Renamed the company from monomacaw to gonggong. Bundle identifiers move from `com.monomacaw.*` to `com.gonggong.*`, the privileged helper's mach service and launchd plist follow, Keychain service names and the device-key tag move with them, and the production service origin becomes `https://gonggong.tech`. See `docs/decisions/0001-rename-monomacaw-to-gonggong.md` for what deliberately did not move.
+- A rebranded build does not adopt a previous install's registered helper or login item. Unregister the old helper from the old app before installing, or the pre-rebrand Background Item persists alongside the new one.
+- Optimized process scanning performance in `DebloatManager.anyWidgetProcessesRunning` to avoid unnecessary string allocations.
+
+### Added
+
+- `docs/decisions/`, a numbered record of consequential decisions, their non-scope, and the external actions they oblige.
+
+### Removed
+
+- The secondary git mirror. The `gitlab` remote and the scheduled `mirror` workflow that pushed to it are gone. That workflow ran an unattended, destructive `git push --mirror` to a destination named only inside a secret; `origin` is now the single remote. See `docs/decisions/0004-retire-the-secondary-git-mirror.md`.
+- The cross-repository MLP-v1 contract check in CI. Licensing is out of scope until 1.0, no backend is deployed, and the contract did not move to the new site repository, so the step could only pass against a stale repository. MiloKit's golden fixtures remain and are still exercised by `swift test`.
 
 ### Performance
 
 - Eliminated redundant `/bin/ps` spawns during bulk termination, reducing overhead when terminating multiple processes.
 
-### Changed
+### Fixed
 
-- Optimized process scanning performance in `DebloatManager.anyWidgetProcessesRunning` to avoid unnecessary string allocations.
+- `Tools/build-development-preview.sh` now writes and re-verifies the `dist/Milo-Public-Preview.dmg.sha256` sidecar in the same run that produces the image. A rebuild previously replaced the DMG while leaving the previous build's checksum file beside it, so the recorded hash no longer described the artifact.
 
 ### Security
 

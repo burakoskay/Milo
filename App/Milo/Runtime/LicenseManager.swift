@@ -246,7 +246,7 @@ final class LicenseManager: ObservableObject {
         do {
             let url = try BackendConfiguration.websiteURL(path: path)
             guard NSWorkspace.shared.open(url) else {
-                licenseError = "macOS could not open your default browser. Visit monomacaw.com\(path) manually."
+                licenseError = "macOS could not open your default browser. Visit gonggong.tech\(path) manually."
                 return
             }
             licenseError = nil

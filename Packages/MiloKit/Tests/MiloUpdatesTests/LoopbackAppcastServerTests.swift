@@ -94,9 +94,9 @@ struct LoopbackAppcastServerTests {
     }
 
     private func verifiedAppcast(bytes: Data) throws -> MiloVerifiedAppcast {
-        let remoteURL = try #require(URL(string: "https://monomacaw.com/releases/appcast.xml"))
+        let remoteURL = try #require(URL(string: "https://gonggong.tech/releases/appcast.xml"))
         let hash = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
-        let policy = try MiloAppcastPolicy(allowedHosts: ["monomacaw.com"])
+        let policy = try MiloAppcastPolicy(allowedHosts: ["gonggong.tech"])
         return try MiloAppcastVerifier.verify(
             descriptor: MLPUpdateFeed(appcastURL: remoteURL, appcastSHA256: hash),
             bytes: bytes,

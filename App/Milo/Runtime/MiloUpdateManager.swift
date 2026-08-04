@@ -73,7 +73,7 @@ final class MiloUpdateManager: ObservableObject {
             }
             let policy = try MiloAppcastPolicy(allowedHosts: [serviceHost])
             controller = MiloSparkleController(
-                expectedBundleIdentifier: "com.monomacaw.milo",
+                expectedBundleIdentifier: "com.gonggong.milo",
                 appcastPolicy: policy
             ) { [weak self] event in
                 self?.handle(event: event)

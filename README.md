@@ -26,7 +26,7 @@ lets you stop the ones you did not ask for.
 > This is a **Public Preview**. It is a signed development build, not a paid release.
 > Every local capability is unlocked with no account, payment, or network dependency. It is
 > **not notarized**, so macOS will warn on first launch — see [Installing](#installing).
-> Commercial licensing, updates, and notarized distribution are tracked in [ROADMAP.md](ROADMAP.md).
+> Commercial licensing, updates, and notarized distribution are tracked in [HANDOFF.md](HANDOFF.md#18-next).
 
 ## What it does
 
@@ -71,7 +71,7 @@ calls for a different fix — disabling the launch item rather than killing the 
 4. Milo appears in the menu bar. Scanning works immediately.
 5. For system-level actions only, click **Enable** in the background-helper banner once.
 
-Step 3 is expected, not a defect. Notarization is [on the roadmap](ROADMAP.md); until then this
+Step 3 is expected, not a defect. Notarization is [planned](HANDOFF.md#18-next); until then this
 is a build for people who are willing to inspect what they run.
 
 ## Permission model
@@ -185,7 +185,7 @@ Stated plainly, because a tool that signals processes should not overstate what 
 ## Roadmap
 
 Commercial licensing, notarized distribution, the Mac App Store Lite funnel, and the reversible
-system-tuning matrix are in progress and tracked in **[ROADMAP.md](ROADMAP.md)**. Nothing
+system-tuning matrix are in progress and tracked in **[HANDOFF.md](HANDOFF.md#18-next)**. Nothing
 unfinished is hidden behind a fake success state in the shipping UI.
 
 ## Security

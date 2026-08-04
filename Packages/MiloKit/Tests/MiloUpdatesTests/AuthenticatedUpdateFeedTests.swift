@@ -6,12 +6,12 @@ import Testing
 
 @Suite("Authenticated update feed")
 struct AuthenticatedUpdateFeedTests {
-    private let trustedURL = URL(string: "https://monomacaw.com/releases/milo/appcast.xml")
+    private let trustedURL = URL(string: "https://gonggong.tech/releases/milo/appcast.xml")
 
     @Test("authenticated digest accepts the exact trusted appcast bytes")
     func exactDigest() throws {
         let bytes = Data("<rss version=\"2.0\"></rss>".utf8)
-        let policy = try MiloAppcastPolicy(allowedHosts: ["monomacaw.com"])
+        let policy = try MiloAppcastPolicy(allowedHosts: ["gonggong.tech"])
         let descriptor = MLPUpdateFeed(
             appcastURL: try #require(trustedURL),
             appcastSHA256: sha256(bytes)
@@ -31,7 +31,7 @@ struct AuthenticatedUpdateFeedTests {
     @Test("digest mismatch fails closed")
     func digestMismatch() throws {
         let bytes = Data("<rss></rss>".utf8)
-        let policy = try MiloAppcastPolicy(allowedHosts: ["monomacaw.com"])
+        let policy = try MiloAppcastPolicy(allowedHosts: ["gonggong.tech"])
         let descriptor = MLPUpdateFeed(
             appcastURL: try #require(trustedURL),
             appcastSHA256: String(repeating: "0", count: 64)
@@ -45,7 +45,7 @@ struct AuthenticatedUpdateFeedTests {
     @Test("descriptor digest must use canonical lowercase hexadecimal")
     func canonicalDigest() throws {
         let bytes = Data("<rss></rss>".utf8)
-        let policy = try MiloAppcastPolicy(allowedHosts: ["monomacaw.com"])
+        let policy = try MiloAppcastPolicy(allowedHosts: ["gonggong.tech"])
         let descriptor = MLPUpdateFeed(
             appcastURL: try #require(trustedURL),
             appcastSHA256: String(repeating: "A", count: 64)
@@ -59,16 +59,16 @@ struct AuthenticatedUpdateFeedTests {
     @Test(
         "untrusted remote locations are rejected",
         arguments: [
-            "http://monomacaw.com/releases/appcast.xml",
+            "http://gonggong.tech/releases/appcast.xml",
             "https://cdn.example.com/releases/appcast.xml",
-            "https://user@monomacaw.com/releases/appcast.xml",
-            "https://monomacaw.com:8443/releases/appcast.xml",
-            "https://monomacaw.com/releases/appcast.xml#fragment",
-            "https://monomacaw.com/"
+            "https://user@gonggong.tech/releases/appcast.xml",
+            "https://gonggong.tech:8443/releases/appcast.xml",
+            "https://gonggong.tech/releases/appcast.xml#fragment",
+            "https://gonggong.tech/"
         ]
     )
     func untrustedLocation(rawURL: String) throws {
-        let policy = try MiloAppcastPolicy(allowedHosts: ["monomacaw.com"])
+        let policy = try MiloAppcastPolicy(allowedHosts: ["gonggong.tech"])
         let url = try #require(URL(string: rawURL))
 
         #expect(throws: MiloUpdateError.untrustedAppcastURL) {
@@ -79,7 +79,7 @@ struct AuthenticatedUpdateFeedTests {
     @Test("configured body limit is enforced before Sparkle receives bytes")
     func bodyLimit() throws {
         let policy = try MiloAppcastPolicy(
-            allowedHosts: ["monomacaw.com"],
+            allowedHosts: ["gonggong.tech"],
             maximumByteCount: 4
         )
         let bytes = Data("12345".utf8)
@@ -99,10 +99,10 @@ struct AuthenticatedUpdateFeedTests {
             try MiloAppcastPolicy(allowedHosts: [])
         }
         #expect(throws: MiloUpdateError.invalidPolicy) {
-            try MiloAppcastPolicy(allowedHosts: ["*.monomacaw.com"])
+            try MiloAppcastPolicy(allowedHosts: ["*.gonggong.tech"])
         }
         #expect(throws: MiloUpdateError.invalidPolicy) {
-            try MiloAppcastPolicy(allowedHosts: ["MONOMACAW.COM"])
+            try MiloAppcastPolicy(allowedHosts: ["GONGGONG.TECH"])
         }
     }
 
@@ -110,7 +110,7 @@ struct AuthenticatedUpdateFeedTests {
     func responseMetadata() throws {
         let url = try #require(trustedURL)
         let policy = try MiloAppcastPolicy(
-            allowedHosts: ["monomacaw.com"],
+            allowedHosts: ["gonggong.tech"],
             maximumByteCount: 16
         )
         let acceptedResponse = try #require(HTTPURLResponse(
@@ -167,7 +167,7 @@ struct AuthenticatedUpdateFeedTests {
             headerFields: headers
         ))
         let policy = try MiloAppcastPolicy(
-            allowedHosts: ["monomacaw.com"],
+            allowedHosts: ["gonggong.tech"],
             maximumByteCount: 16
         )
         #expect(throws: expectedError) {

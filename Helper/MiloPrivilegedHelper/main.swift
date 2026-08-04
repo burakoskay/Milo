@@ -7,8 +7,8 @@ import MiloDomain
 }
 
 private enum MiloPrivilegedHelperIdentity {
-    static let machServiceName = "com.monomacaw.milo.helper"
-    static let clientRequirement = "anchor apple generic and (identifier \"com.monomacaw.milo\" or identifier \"com.monomacaw.milo.preview\") and certificate leaf[subject.OU] = \"8N738727QB\""
+    static let machServiceName = "com.gonggong.milo.helper"
+    static let clientRequirement = "anchor apple generic and (identifier \"com.gonggong.milo\" or identifier \"com.gonggong.milo.preview\") and certificate leaf[subject.OU] = \"8N738727QB\""
 }
 
 private struct HelperCommand {

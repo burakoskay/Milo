@@ -28,20 +28,20 @@ final class BuildConfigurationRegressionTests: XCTestCase {
 
     func testTrackedConfigurationSeparatesProductsAndEnvironments() throws {
         let expectedValues: [(path: String, flavor: String, bundleID: String, environment: String)] = [
-            ("MiloPro.Debug.xcconfig", "pro", "com.monomacaw.milo", "development"),
-            ("MiloPro.Release.xcconfig", "pro", "com.monomacaw.milo", "production"),
-            ("MiloLite.Debug.xcconfig", "lite", "com.monomacaw.milo.lite", "development"),
-            ("MiloLite.Release.xcconfig", "lite", "com.monomacaw.milo.lite", "production"),
+            ("MiloPro.Debug.xcconfig", "pro", "com.gonggong.milo", "development"),
+            ("MiloPro.Release.xcconfig", "pro", "com.gonggong.milo", "production"),
+            ("MiloLite.Debug.xcconfig", "lite", "com.gonggong.milo.lite", "development"),
+            ("MiloLite.Release.xcconfig", "lite", "com.gonggong.milo.lite", "production"),
             (
                 "MiloPrivilegedHelper.Debug.xcconfig",
                 "privileged-helper",
-                "com.monomacaw.milo.helper",
+                "com.gonggong.milo.helper",
                 "development"
             ),
             (
                 "MiloPrivilegedHelper.Release.xcconfig",
                 "privileged-helper",
-                "com.monomacaw.milo.helper",
+                "com.gonggong.milo.helper",
                 "production"
             )
         ]
@@ -56,10 +56,10 @@ final class BuildConfigurationRegressionTests: XCTestCase {
 
         let proDebug = try source(at: configurationDirectory.appendingPathComponent("MiloPro.Debug.xcconfig"))
         XCTAssertTrue(proDebug.contains("https:/$()/milo-development.invalid"))
-        XCTAssertFalse(proDebug.contains("https:/$()/monomacaw.com"))
+        XCTAssertFalse(proDebug.contains("https:/$()/gonggong.tech"))
 
         let proRelease = try source(at: configurationDirectory.appendingPathComponent("MiloPro.Release.xcconfig"))
-        XCTAssertTrue(proRelease.contains("https:/$()/monomacaw.com"))
+        XCTAssertTrue(proRelease.contains("https:/$()/gonggong.tech"))
         XCTAssertTrue(proRelease.contains("MILO_LICENSE_PUBLIC_KEY =\n"))
         XCTAssertTrue(proRelease.contains("SPARKLE_PUBLIC_ED_KEY =\n"))
     }
@@ -119,7 +119,7 @@ final class BuildConfigurationRegressionTests: XCTestCase {
             output: productionOutput,
             environment: [
                 "MILO_CONFIGURATION_ENVIRONMENT": "production",
-                "MILO_SERVICE_BASE_URL": "https://monomacaw.com"
+                "MILO_SERVICE_BASE_URL": "https://gonggong.tech"
             ]
         )
         XCTAssertEqual(production.status, 78)

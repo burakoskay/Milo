@@ -8,17 +8,17 @@ enum BackendConfigurationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidEnvironment:
-            return "Milo's build environment is invalid. Reinstall Milo from monomacaw.com."
+            return "Milo's build environment is invalid. Reinstall Milo from gonggong.tech."
         case .invalidServiceURL:
-            return "Milo's service URL is invalid. Reinstall Milo from monomacaw.com."
+            return "Milo's service URL is invalid. Reinstall Milo from gonggong.tech."
         case .invalidWebsitePath:
-            return "Milo could not construct the requested Monomacaw page."
+            return "Milo could not construct the requested Gonggong page."
         }
     }
 }
 
 enum BackendConfiguration {
-    private static let productionOrigin = "https://monomacaw.com"
+    private static let productionOrigin = "https://gonggong.tech"
 
     static func serviceBaseURL() throws -> URL {
         guard let environment = MiloConfigurationEnvironment(
@@ -56,7 +56,7 @@ enum BackendConfiguration {
               !path.contains("?"),
               !path.contains("#"),
               let url = URL(string: path, relativeTo: websiteOrigin)?.absoluteURL,
-              url.host(percentEncoded: false) == "monomacaw.com" else {
+              url.host(percentEncoded: false) == "gonggong.tech" else {
             throw BackendConfigurationError.invalidWebsitePath
         }
         return url

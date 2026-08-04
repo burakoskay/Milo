@@ -76,7 +76,7 @@ Stated plainly, because they affect what a report should be measured against:
   for a fix. Users must download a new release.
 - **The privileged execution path has not been exercised end-to-end against a disposable
   root-owned fixture**, and System Tuning has not been validated on clean virtual machines
-  across every supported macOS release. Both are tracked in [ROADMAP.md](ROADMAP.md).
+  across every supported macOS release. Both are tracked in [HANDOFF.md](HANDOFF.md#18-next).
 - **No independent security assessment has been performed.**
 
 Commercial licensing, payment, and backend components referenced elsewhere in the project's
