@@ -24,10 +24,33 @@ goes stale.
 Before claiming anything is done, check section 11 ("What is intentionally not complete"), section
 18 ("Next"), and the "Required external actions" of any decision record marked incomplete.
 
-### Current state in one line
+### Checkpoint: 2026-08-04
 
 Milo **0.2.0-preview.2**, the first build under the gonggong name: a working local macOS menu bar
 process manager, Apple Development signed, not notarized, no backend, no licensing, no paid users.
+
+**Where things stand.** The rebrand is merged to `main` (PR #26). `0.2.0-preview.2` is built,
+verified, installed on this host, and tagged **locally** — it is **not published**. The live smoke
+check passed, including the privileged helper path, which had never been exercised before today
+(section 10).
+
+**Immediately actionable, in order:**
+
+1. Publish `v0.2.0-preview.2` — re-run `Tools/release.sh 0.2.0-preview.2` and run the commands it
+   prints. Awaiting a go-ahead; nothing else blocks it.
+2. Give Milo an uninstall path for its root helper (section 18, nearest priority 1).
+
+**Open discussion the user raised and has not yet had:** how Milo decides which processes to surface
+and how it handles them. Relevant context for that conversation — Milo lists a process only when it
+matches a signed telemetry signature, a launchd label, or the static catalogue in
+`ProcessData.swift`; scanning and grouping live in `ProcessManager.swift`; termination revalidates
+PID, executable path, and start time before every signal. An arbitrary process such as `sleep` never
+appears, by design. The user has raised no defect here — treat it as an open design conversation,
+not a bug report.
+
+**Local environment caveats for anyone reading live results:** SIP is **disabled** on this host, so
+it is not representative for validating System Tuning recipes. The pre-rebrand app and its legacy
+backup were deleted, so there is no local rollback target.
 
 ## 1. Mission and current boundary
 
@@ -53,20 +76,19 @@ This table was re-verified on 2026-08-04. Confirm it again rather than trusting 
 | Item | Current value |
 |---|---|
 | Repository | `/Volumes/Internal HD/Developer/Milo` |
-| Branch | `refactor/gonggong-rebrand`, branched from `main` |
-| Upstream | `main` is in sync with `origin/main`; the rebrand branch is local only and unpushed |
-| HEAD | the rebrand branch tip; confirm with `git log -1 --oneline` |
+| Branch | `main` |
+| Upstream | `main` in sync with `origin/main` |
+| HEAD | `08a799a Merge pull request #26 from burakoskay/refactor/gonggong-rebrand` |
 | Main implementation commit | `11e9caf feat: ship Milo Public Preview (#9)` |
 | Preview delivery pull request | `#9 feat: ship Milo Public Preview`, **merged**; branch `fable/milo-test` no longer exists on `origin` |
-| Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0` |
-| Published release | `v0.2.0-preview.1`, GitHub pre-release at `fd6b7d3`, DMG asset SHA-256 `c4742debfb7dee4f4991fcb04698454bf15ff08b46516f91d171cb4b6c473eee` |
+| Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0`, `#26` gonggong rebrand and single source of truth |
+| Published release | `v0.2.0-preview.1` only. **`v0.2.0-preview.2` is prepared, fully verified, and tagged locally — it has NOT been pushed or published.** Publish with the commands `Tools/release.sh` prints, or re-run it |
 | Remotes | `origin` → `https://github.com/burakoskay/Milo.git`, the only remote. The `gitlab` mirror and its scheduled `--mirror` workflow were retired on 2026-08-04 (decision 0004); there is no off-GitHub copy |
 | Tags | `origin` carries `v0.2.0-preview.1` only. The local-only `v2.0.0-preview.1` was deleted on 2026-08-04: it recorded build `200` under the discarded numbering scheme, which would have permanently blocked the build-number check in `Tools/release.sh` |
 | Repository visibility | Public |
 | Release process | `Tools/release.sh`, section 19. Branch and PR for every change; never commit to `main` directly |
 
-The Public Preview slice is merged, so there is no open PR to continue. Open a new branch and PR for
-the next slice; do not reopen `#9` or resurrect `fable/milo-test`.
+No PR is open. Open a new branch and PR for the next slice; never commit to `main` directly.
 
 ### Company rename
 
@@ -136,28 +158,27 @@ The verified preview is installed at:
 /Applications/Milo.app
 ```
 
-Installed identity as measured on 2026-08-04:
+Installed identity, verified 2026-08-04 after installing `0.2.0-preview.2` from the DMG:
 
-- version `2.0.0` (`200`);
-- bundle `com.monomacaw.milo.preview` — the **pre-rebrand** identifier;
+- version `0.2.0` (`21`);
+- bundle `com.gonggong.milo.preview`;
 - thin Apple-silicon binary;
 - Apple Development signed;
 - Team ID `8N738727QB`;
 - hardened runtime enabled;
 - runtime built against macOS 27.
 
-The installed bundle therefore **predates the `0.2.0` version rename in `fd6b7d3`**; it is not the
-build the current source produces. `launchctl` also reports the registered helper's parent bundle
-version as `200`, matching this installed bundle rather than HEAD. Reinstall from a freshly built
-DMG before treating anything observed in `/Applications/Milo.app` as evidence about HEAD.
-Its signature was re-verified on 2026-08-04: valid on disk, satisfies its designated requirement,
-and the embedded helper satisfies the exact helper identifier and Team ID requirement.
+**This matches HEAD.** The pre-rebrand `2.0.0` (`200`) bundle and the ad-hoc legacy backup were both
+deleted from `/Applications`.
 
-The previous ad-hoc production-ID build was preserved, not deleted:
+A drifted install is worthless as evidence, and this project has already been burned by it: the
+`2.0.0` bundle sat in `/Applications` for eight days while `main` moved on, and its UI was mistaken
+for a labelling regression that had in fact been fixed two PRs earlier. Reinstall before treating
+anything observed in `/Applications/Milo.app` as evidence about HEAD.
 
-```text
-/Applications/Milo-legacy-backup-2026-07-26.app
-```
+No other Milo build remains on this host. The pre-rebrand bundle and the ad-hoc
+`Milo-legacy-backup-2026-07-26.app` were both deleted on 2026-08-04, so there is no local rollback
+target; rebuild from a tag if one is needed.
 
 The preview was not running when this handoff was written. Launch it with:
 
@@ -254,21 +275,33 @@ Key properties:
 - no recurring AppleScript/sudo password fallback;
 - UI distinguishes not registered, approval required, enabled, and unavailable.
 
-Service Management evidence measured on this host on 2026-08-04. Every identifier below is the
-**pre-rebrand** one, because the registered helper came from the installed pre-rebrand build:
+Service Management evidence measured on this host on 2026-08-04, after installing
+`0.2.0-preview.2`:
 
-- `launchctl` reports `system/com.monomacaw.milo.helper` submitted by Service Management;
-- parent bundle is `com.monomacaw.milo.preview`, version `200`;
-- Launch Weight Code Requirement records helper signing identifier `com.monomacaw.milo.helper` and Team ID `8N738727QB`;
-- the helper is currently idle;
-- run count is zero and it has never exited.
+- `launchctl` reports `system/com.gonggong.milo.helper` submitted by Service Management;
+- parent bundle is `com.gonggong.milo.preview`, version `21`;
+- `runs = 1`, `state = running`, `last exit code = (never exited)`.
 
-Registration is therefore confirmed, but a real post-install XPC request has not yet proved helper launch and the privileged execution path. That is the highest-value next test.
+**The privileged path is now proven end to end.** A DNS/memory-purge action launched the helper,
+which accepted the XPC connection and executed the command as root under the new identifiers. This
+is the first time that path has been exercised in this project, and it is the one failure mode no
+headless check can reach: if the requirement strings in `PrivilegedHelperClient.swift`, the helper's
+`main.swift`, and `Integrity.c` disagreed, the connection would be refused at click time rather than
+failing the build.
 
-After the `com.gonggong.*` rebrand this registration is **stale and orphaned**: a rebranded build
-registers `system/com.gonggong.milo.helper` as a separate Background Item, and the `com.monomacaw`
-entry survives independently. See `docs/decisions/0001-rename-monomacaw-to-gonggong.md` for the
-required unregister-then-reinstall order.
+A subsequent user-level termination left `runs = 1` untouched, confirming ordinary kills do not
+cross the privilege boundary.
+
+### Orphaned helper hazard, observed
+
+Deleting `Milo.app` does **not** unregister its helper. `SMAppService` records live in macOS's
+Background Task Management database, not in the bundle. On 2026-08-04 the pre-rebrand app was
+deleted while its helper was registered, leaving `com.monomacaw.milo.helper` registered *and running
+as root* with its executable already unlinked, and no in-app route to remove it. It was cleared via
+System Settings > General > Login Items & Extensions (`sudo launchctl bootout system/<id>` is the
+fallback; never `sfltool resetbtm`, which resets background items for every app on the machine).
+
+Milo has no uninstall flow. That is a product gap, listed in section 18.
 
 ### Runtime integrity
 
@@ -353,8 +386,22 @@ The packaged *Runtime code signature* smoke check passing is the load-bearing ev
 rebrand: it proves the rewritten requirement in `MiloHardening/Integrity.c` matches the newly signed
 identity. A mistake there produces a false compromise state at launch, not a build failure.
 
-Still not verified under the new identifiers: any live launch, helper XPC round trip, or privileged
-action. Section 12 covers how to test those safely.
+### Live smoke check passed on 2026-08-04
+
+Run against the installed `0.2.0-preview.2` build, per section 19:
+
+| Step | Result |
+|---|---|
+| Install and launch from the DMG | `com.gonggong.milo.preview`, `0.2.0` (`21`), running |
+| Preview badge and version in UI | Reads **Public Preview** / **v0.2.0** |
+| Helper registration | `com.gonggong.milo.helper` submitted, parent bundle version `21` |
+| **Privileged XPC execution** | Memory purge launched the helper: `runs = 1`, `state = running`, never exited |
+| User-level termination | A weather widget extension was terminated from the UI; the process is gone |
+| Privilege boundary | The user-level kill left `runs = 1` untouched — it did not cross into the helper |
+| Repeated permission prompts | None observed |
+
+This closes the longest-standing unknown in the project. Everything before this date was static and
+packaging evidence only.
 
 ### Earlier: re-verified against `fd6b7d3` on 2026-08-04
 
@@ -456,16 +503,26 @@ These are in section 18 ("Next"). The preview DMG is an Apple Development-signed
 
 Unless the user changes direction, resume in this order:
 
-1. Read the active project agent directives, this file (including section 18), and `docs/decisions/README.md`.
-2. Confirm `git status -sb`, HEAD, the merged-PR/release state in section 2, and CI rather than trusting this snapshot.
-3. Reinstall `/Applications/Milo.app` from a DMG built at current HEAD before any live testing. The installed bundle is still the pre-rename `2.0.0` (`200`) build, so live observations against it say nothing about HEAD, and the registered helper's recorded parent bundle version matches that old bundle.
-4. Launch the reinstalled app and verify the visible Public Preview badge.
-5. Confirm the helper banner reports the actual Service Management state.
-6. Exercise the helper health/XPC path with one nonmutating allowlisted request. Confirm the helper launches, authenticates the app, returns within its deadline, and becomes idle afterward.
-7. Test a user-level termination only against a disposable synthetic process. Never use a real system or user application as the first target.
-8. If a privileged termination test is necessary, construct a disposable root-owned fixture in a controlled environment and verify PID/path/start-time rejection cases. Do not improvise on the live host.
-9. Test decline/recovery behavior without repeatedly unregistering or re-registering the helper.
-10. Record actual results in the plan or PR; do not mark an end-to-end path complete based only on static inspection.
+1. Read the active project agent directives, this file (including the checkpoint in section 0 and
+   section 18), and `docs/decisions/README.md`.
+2. Confirm `git status -sb`, HEAD, and the release state in section 2 rather than trusting this
+   snapshot.
+3. Publish `v0.2.0-preview.2` if the user gives the go-ahead. It is verified and tagged locally;
+   re-run `Tools/release.sh 0.2.0-preview.2` and use the commands it prints.
+4. Build the helper uninstall path (section 18, nearest priority 1).
+5. If the user wants to discuss which processes Milo surfaces and how it handles them, start from
+   `ProcessData.swift` (the static catalogue), `ProcessManager.swift` (scanning, grouping, and
+   PID-reuse-safe termination), and the checkpoint note in section 0.
+
+The install-and-live-verify steps that used to sit here are done; their results are in section 10.
+The remaining runtime unknowns are the **rejection** paths, not the happy path:
+
+- a negative tamper test for the runtime signature check;
+- helper PID/path/start-time rejection against a disposable root-owned fixture, built in a controlled
+  environment rather than improvised on this host;
+- helper decline and recovery behaviour, tested without repeatedly unregistering and re-registering.
+
+Record actual results in section 10. Do not mark a path complete from static inspection alone.
 
 If the user asks to continue toward commercial release, work from section 18 ("Next"), not from `docs/archive/July27plan.md`. That archived plan predates the gonggong rename and the decision to defer licensing to 1.0; it is history, not a checklist.
 
@@ -541,11 +598,17 @@ is deferred, and the UI must not imply otherwise.
 
 ### Nearest priorities
 
-1. Notarized Developer ID distribution, so first launch does not require a Gatekeeper override.
-2. End-to-end exercise of the privileged helper XPC path against a disposable root-owned fixture.
+1. **An uninstall path for the privileged helper.** Deleting `Milo.app` leaves its root helper
+   registered and running, recoverable only through System Settings or `launchctl`. Milo needs an
+   in-app "disable and remove helper" action, a warning before the app is removed while registered,
+   and documented recovery steps. Observed live on 2026-08-04; see section 7.
+2. Notarized Developer ID distribution, so first launch does not require a Gatekeeper override.
 3. Disabling a launchd job directly from the process row that reported the restart, as a labelled and
    confirmed action rather than a side effect of terminating the process.
 4. Clean-VM validation of the System Tuning matrix on every supported macOS release.
+5. A negative tamper test for the runtime signature check, plus rejection cases for the helper's
+   PID/path/start-time revalidation against a disposable root-owned fixture. The positive path is now
+   proven; the rejection paths are not.
 
 ### Process-control reliability
 
@@ -642,9 +705,14 @@ build, sign, lint, and test cleanly, then fail on first real use.
 3. Confirm the helper banner reports the real Service Management state, not a stale one.
 4. Enable the helper once, then exercise **one non-mutating** allowlisted request. Confirm the helper
    launches, authenticates the app, returns within its deadline, and goes idle.
-5. Terminate **one disposable synthetic process** — never a real system or user application as the
-   first target. For example, `sleep 600 &`, then terminate it from Milo and confirm the typed
-   result.
+5. Terminate one **low-consequence catalogued target** and confirm Milo reports a typed result
+   rather than failing silently. A widget extension is the right choice: macOS respawns it on
+   demand and no data is lost.
+
+   Do **not** try to use an ad-hoc synthetic process such as `sleep 600 &`. Milo only lists
+   processes that match a rule — a signed telemetry signature, a launchd label, or the static
+   catalogue — so an arbitrary process never appears, by design. Milo is a curated targeter, not
+   Activity Monitor. Do not broaden a match to make this step work.
 6. Confirm no repeated permission or password prompts appeared at any point.
 
 Record what actually happened in section 10. A path is not verified because it was read.
