@@ -211,9 +211,9 @@ fi
 
 # ── Step 4b: Copy resource images ────────────────────────────────────────────
 echo "→ Copying resource images..."
-RESOURCE_IMAGES=(Milo/Resources/*.png)
+RESOURCE_IMAGES=(App/Milo/Resources/*.png)
 if [[ ! -e "${RESOURCE_IMAGES[0]}" ]]; then
-    echo "✘  No PNG resources found in Milo/Resources."
+    echo "✘  No PNG resources found in App/Milo/Resources."
     exit 1
 fi
 cp "${RESOURCE_IMAGES[@]}" "$APP_DIR/Contents/Resources/"

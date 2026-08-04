@@ -164,7 +164,7 @@ final class TargetBoundaryTests: XCTestCase {
     }
 
     func testGeneratedProjectPreservesCanonicalResourceFilenameCase() throws {
-        let resourcesDirectory = repositoryRoot.appendingPathComponent("Milo/Resources")
+        let resourcesDirectory = repositoryRoot.appendingPathComponent("App/Milo/Resources")
         let resourceNames = try FileManager.default.contentsOfDirectory(atPath: resourcesDirectory.path)
         XCTAssertTrue(resourceNames.contains("Milo_black.png"))
         XCTAssertFalse(resourceNames.contains("milo_black.png"))

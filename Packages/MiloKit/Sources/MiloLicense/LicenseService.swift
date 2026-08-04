@@ -603,20 +603,21 @@ public actor MLPDeviceLicenseClient {
         return fingerprint
     }
 
+    // Keychain service names are persistent storage keys. These three moved to com.gonggong.* in one
+    // step, without a read-old/write-new migration, because no device was ever enrolled against a
+    // deployed backend. A stale pre-rebrand item is simply never read again. Once real devices are
+    // enrolled this is no longer a free change: renaming a service then orphans the item it names,
+    // and needs a migration. See docs/decisions/0001-rename-monomacaw-to-gonggong.md.
     private let registrationStore = MLPKeychainStore<MLPDeviceRegistration>(
-        service: "com.monomacaw.milo.mlp-v1",
+        service: "com.gonggong.milo.mlp-v1",
         account: "device-registration"
     )
     private let pendingEnrollmentStore = MLPKeychainStore<MLPPendingEnrollment>(
-        service: "com.monomacaw.milo.mlp-v1",
+        service: "com.gonggong.milo.mlp-v1",
         account: "pending-enrollment"
     )
-    // Keychain service names are persistent storage keys, not branding. They intentionally keep the
-    // pre-rebrand identifier alongside the MLP-v1 registration and device-key stores above: renaming
-    // one without a read-old/write-new migration orphans the item it names. Migrate all three
-    // together, with the MLP protocol change. See docs/decisions/0001-rename-monomacaw-to-gonggong.md.
     private let envelopeStore = MLPKeychainStore<MLPSignedEnvelopeResponse>(
-        service: "com.monomacaw.milo.license",
+        service: "com.gonggong.milo.license",
         account: "mlp-v1-license-envelope"
     )
 }
@@ -737,7 +738,7 @@ private enum MLPBase64URL {
 }
 
 private final class MLPDeviceKeyStore {
-    private let tag = Data("com.monomacaw.milo.mlp-v1.device-key".utf8)
+    private let tag = Data("com.gonggong.milo.mlp-v1.device-key".utf8)
     private let publicKeySPKIPrefix = Data([
         0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D,
         0x02, 0x01, 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01,

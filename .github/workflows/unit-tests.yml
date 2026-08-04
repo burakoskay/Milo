@@ -13,18 +13,11 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Checkout canonical website contract
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ vars.MONOMACAW_WEBSITE_REPOSITORY || 'burakoskay/monomacaw-website' }}
-          ref: ${{ vars.MONOMACAW_CONTRACT_REF || 'main' }}
-          path: _contract/website
-          ssh-key: ${{ secrets.MONOMACAW_CONTRACT_DEPLOY_KEY }}
-          persist-credentials: false
-      - name: Verify MLP-v1 golden fixture
-        run: Tools/verify-mlp-golden-fixture.sh
-        env:
-          MLP_GOLDEN_FIXTURE_DIR: ${{ github.workspace }}/_contract/website/tests/fixtures
+      # The cross-repository MLP-v1 contract check was removed on 2026-08-04. Licensing is out of
+      # scope until 1.0, no backend is deployed, and the contract did not move to the new site repo,
+      # so the step could only pass against a stale repository. The golden fixtures remain in
+      # MiloKit and are still exercised by MLP1GoldenVectorTests in `swift test` below. Restore this
+      # step, against whichever repository then holds the contract, when licensing resumes.
       - name: Test app package
         run: swift test
       - name: Test MiloKit package

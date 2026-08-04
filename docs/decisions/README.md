@@ -24,12 +24,12 @@ Set **Status** to `Accepted`, `Superseded by NNNN`, or `Reverted`. Never delete 
 | # | Title | Status | Date |
 |---|---|---|---|
 | [0001](0001-rename-monomacaw-to-gonggong.md) | Rename monomacaw to gonggong | Accepted, incomplete | 2026-08-04 |
+| [0002](0002-defer-licensing-and-consolidate-docs.md) | Defer licensing to 1.0, HANDOFF.md is the single source of truth | Accepted | 2026-08-04 |
 
 ## Related documents
 
 | Document | Purpose |
 |---|---|
-| `../../HANDOFF.md` | Operational state: what is built, installed, verified, and unfinished right now |
-| `../../ROADMAP.md` | Product direction without dates |
+| `../../HANDOFF.md` | **Single source of truth**: what is built, installed, verified, unfinished, and next |
 | `../../CHANGELOG.md` | What shipped, per release |
 | `../../CLAUDE.md` | Agent directives and non-negotiable engineering rules |

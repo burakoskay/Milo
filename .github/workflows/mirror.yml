@@ -17,7 +17,9 @@ jobs:
           fetch-depth: 0
       - name: Mirror main to secondary remote
         env:
-          MIRROR_URL: ${{ secrets.MONOMACAW_INTERNAL_MIRROR_URL }}
+          # Accepts either name so the secret can be renamed with no CI downtime: add
+          # GONGGONG_INTERNAL_MIRROR_URL, confirm a green run, then delete the MONOMACAW_ one.
+          MIRROR_URL: ${{ secrets.GONGGONG_INTERNAL_MIRROR_URL || secrets.MONOMACAW_INTERNAL_MIRROR_URL }}
         run: |
           test -n "$MIRROR_URL"
           git remote add mirror "$MIRROR_URL"

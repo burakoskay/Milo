@@ -4,27 +4,36 @@ This document is the operational handoff for the next agent working in this chec
 
 ## 0. Document map
 
-Four documents carry state between sessions. Keep them separate; do not merge them.
+**This file is the single source of truth for project state.** If another document disagrees with
+it, this one wins and the other is stale. Three documents support it; nothing else carries state.
 
 | Document | Answers | Update when |
 |---|---|---|
-| `HANDOFF.md` (this file) | What is built, installed, verified, and unfinished **right now** | Any session that changes verified state |
+| `HANDOFF.md` (this file) | What is built, installed, verified, unfinished, and next — **right now** | Any session that changes verified state |
 | `docs/decisions/` | **Why** a consequential choice was made and what it obligates | A decision constrains future work or leaves a known inconsistency |
-| `ROADMAP.md` | Where the product is going, without dates | Scope changes |
 | `CHANGELOG.md` | What shipped, per release | Any user-visible or release-affecting change |
+| `README.md` | Public-facing product, install, and limitation guide | The product's public story changes |
+
+`docs/archive/` holds superseded planning material (`July27plan.md`, the GPT-5 audit report). It is
+gitignored, local-only, and **not instructions**. Read it for history; never treat it as the plan.
 
 Starting a new session: read `CLAUDE.md`, then this file top to bottom, then
 `docs/decisions/README.md`. Re-verify section 2 rather than trusting it — it is a snapshot and it
 goes stale.
 
-Before claiming anything is done, check section 11 ("What is intentionally not complete") and the
-"Required external actions" of any decision record marked incomplete.
+Before claiming anything is done, check section 11 ("What is intentionally not complete"), section
+18 ("Next"), and the "Required external actions" of any decision record marked incomplete.
+
+### Current state in one line
+
+Milo **0.2.0-preview.2**, the first build under the gonggong name: a working local macOS menu bar
+process manager, Apple Development signed, not notarized, no backend, no licensing, no paid users.
 
 ## 1. Mission and current boundary
 
 The immediate product is an interview-ready **Public Preview** of Milo: a local-first macOS menu bar utility that scans for selected background processes and launch items, lets the user terminate chosen targets, reports CPU and memory usage, and exposes reviewed system-tuning actions.
 
-The Public Preview deliberately unlocks the local Pro feature set without accounts, Paddle, Supabase, production licensing, or network updates. It must never be presented as the commercial release. The deferred commercial and public-distribution work is explicit in `ROADMAP.md` and the larger release program in `July27plan.md`.
+The Public Preview deliberately unlocks the local Pro feature set without accounts, Paddle, Supabase, production licensing, or network updates. It must never be presented as the commercial release. The deferred commercial and public-distribution work is explicit in section 18 ("Next") below.
 
 Non-negotiable engineering rules from the project agent directives still apply:
 
@@ -58,17 +67,22 @@ This table was re-verified on 2026-08-04. Confirm it again rather than trusting 
 The Public Preview slice is merged, so there is no open PR to continue. Open a new branch and PR for
 the next slice; do not reopen `#9` or resurrect `fable/milo-test`.
 
-### Company rename in progress
+### Company rename
 
-The company is now **gonggong** on **gonggong.tech**. Bundle identifiers are `com.gonggong.*` and the
-production origin is `https://gonggong.tech` as of the rebrand branch. The rename is complete in this
-repository and verified, but it has **required external actions that are not done** — Apple Developer
-portal App IDs, backend endpoints on the new domain, and GitHub secret/variable renames. Read
-`docs/decisions/0001-rename-monomacaw-to-gonggong.md` before building for production or touching CI.
+The company is now **gonggong** on **gonggong.tech**. Bundle identifiers, the helper mach service and
+launchd plist, Keychain service names, the device-key tag, and the production origin all moved. The
+rename is complete in this repository and verified.
 
-Some `monomacaw` strings survive on purpose: all Keychain service names and key tags, the signed MLP
-golden fixture, the MLP protocol name, GitHub secret names, and historical changelog entries. That
-record lists each one and why. Do not "finish the rename" by grepping and replacing them.
+Two external actions remain and block a **production** build only; the Preview builds and passes
+today without them:
+
+1. Apple Developer portal App IDs for `com.gonggong.milo` (with Sign in with Apple).
+2. MLP endpoints and the appcast served from `gonggong.tech`.
+
+A few `monomacaw` strings survive on purpose: the signed MLP-v1 golden fixture (the string is inside
+signed material), the MLP protocol name, one GitHub secret pending rename, and historical changelog
+entries. `docs/decisions/0001-rename-monomacaw-to-gonggong.md` lists each and why. Do not "finish the
+rename" by grepping and replacing them.
 
 ## 3. Host and toolchain snapshot
 
@@ -109,7 +123,7 @@ The completed preview slice includes:
 - risk-labeled System Tuning with confirmation for consequential actions;
 - broad user-cache deletion hidden until it can be redesigned safely;
 - a reproducible signed preview DMG;
-- a presentation README and timeless roadmap.
+- a presentation README.
 
 The old `sudoers` and AppleScript administrator-prompt paths were removed. There is no credential-prompt fallback.
 
@@ -302,10 +316,9 @@ Apple owns the final Background Items approval. Milo must not simulate, bypass, 
 | `Tools/build-development-preview.sh` | Canonical Preview build, signing, smoke, and DMG pipeline |
 | `App/Milo/Runtime/SharedUI.swift` | Panel geometry constants and sheet window rounding |
 | `README.md` | Public product, install, architecture, and limitation guide |
-| `ROADMAP.md` | Timeless deferred-product roadmap |
 | `Screenshots/` | README imagery |
 
-`July27plan.md`, `build_app.sh`, `rebrand.py`, and `lldb_script.txt` are kept locally but are
+`docs/archive/July27plan.md`, `build_app.sh`, `rebrand.py`, and `lldb_script.txt` are kept locally but are
 no longer tracked; the repository is public.
 
 `project.yml` is canonical for the Xcode project. After changing it, run:
@@ -319,7 +332,30 @@ Commit both `project.yml` and the regenerated `Milo.xcodeproj/project.pbxproj`.
 
 ## 10. Verification completed at this handoff
 
-### Re-verified against `fd6b7d3` on 2026-08-04
+### Verified at `0.2.0-preview.2` on 2026-08-04
+
+The rebrand, the layout tidy, and the documentation consolidation were all verified together on
+macOS 27.0 (`26A5388g`), Xcode 27.0 beta (`27A5228h`), Swift 6.4:
+
+| Gate | Result |
+|---|---|
+| `swiftlint --strict --quiet` | 0 violations |
+| `swift test` (root) | 18 red-team tests, 0 failures |
+| `swift test --package-path Packages/MiloKit` | 29 tests (10 + 7 + 12), 0 failures, including `MLP1GoldenVectorTests` |
+| `xcodebuild ... -scheme MiloPro test` | 18 + 1 + 16, `** TEST SUCCEEDED **` |
+| `Tools/build-development-preview.sh` | Clean build, `6 passed, 0 failed`, DMG created and verified |
+| Signed app identifier | `com.gonggong.milo.preview` |
+| Signed helper identifier | `com.gonggong.milo.helper` |
+| Built bundle version | `0.2.0` (`21`) |
+
+The packaged *Runtime code signature* smoke check passing is the load-bearing evidence for the
+rebrand: it proves the rewritten requirement in `MiloHardening/Integrity.c` matches the newly signed
+identity. A mistake there produces a false compromise state at launch, not a build failure.
+
+Still not verified under the new identifiers: any live launch, helper XPC round trip, or privileged
+action. Section 12 covers how to test those safely.
+
+### Earlier: re-verified against `fd6b7d3` on 2026-08-04
 
 Every result below was produced in this checkout on that date, on macOS 27.0 (`26A5388g`) with
 Xcode 27.0 beta (`27A5228h`) and Swift 6.4:
@@ -413,13 +449,13 @@ Do not report these as implemented:
 - clean-VM destructive system-tuning matrix;
 - independent security, privacy, accessibility, performance, and soak review.
 
-These are in `ROADMAP.md` and `July27plan.md`. The preview DMG is an Apple Development-signed local artifact, not a redistributable public installer.
+These are in section 18 ("Next"). The preview DMG is an Apple Development-signed local artifact, not a redistributable public installer.
 
 ## 12. Highest-value next actions
 
 Unless the user changes direction, resume in this order:
 
-1. Read the active project agent directives, this file, `README.md`, `ROADMAP.md`, and the Public Preview delivery track in `July27plan.md`.
+1. Read the active project agent directives, this file (including section 18), and `docs/decisions/README.md`.
 2. Confirm `git status -sb`, HEAD, the merged-PR/release state in section 2, and CI rather than trusting this snapshot.
 3. Reinstall `/Applications/Milo.app` from a DMG built at current HEAD before any live testing. The installed bundle is still the pre-rename `2.0.0` (`200`) build, so live observations against it say nothing about HEAD, and the registered helper's recorded parent bundle version matches that old bundle.
 4. Launch the reinstalled app and verify the visible Public Preview badge.
@@ -430,7 +466,7 @@ Unless the user changes direction, resume in this order:
 9. Test decline/recovery behavior without repeatedly unregistering or re-registering the helper.
 10. Record actual results in the plan or PR; do not mark an end-to-end path complete based only on static inspection.
 
-If the user instead asks to continue toward commercial release, stop treating the Preview delivery checklist as the active plan and resume the ordered phases and gates in `July27plan.md`. Backend work belongs in the canonical website checkout named there; reconcile the contract before editing either side.
+If the user asks to continue toward commercial release, work from section 18 ("Next"), not from `docs/archive/July27plan.md`. That archived plan predates the gonggong rename and the decision to defer licensing to 1.0; it is history, not a checklist.
 
 ## 13. Safe manual presentation flow
 
@@ -444,7 +480,7 @@ For the interview demonstration:
 6. Show the helper status and explain one-time macOS approval instead of repeated passwords.
 7. Open System Tuning and show risk, SIP, confirmation, and revert affordances without applying unfamiliar system changes.
 8. Switch between menu bar and dedicated-window modes.
-9. Use `README.md` and `ROADMAP.md` to distinguish today's working local product from deferred commercial infrastructure.
+9. Use `README.md` and section 18 to distinguish today's working local product from deferred commercial infrastructure.
 
 Use disposable test processes. Do not kill arbitrary Apple services, disable SIP, or apply unfamiliar tuning during the interview.
 
@@ -491,3 +527,72 @@ The next agent has successfully picked up the work when it has:
 - tested the next unknown with a bounded, disposable fixture;
 - updated documentation and the tracked plan with evidence;
 - avoided claiming public-release readiness from the local Public Preview.
+
+## 18. Next
+
+Direction without dates. Nothing here is implemented. Items move out of this section only when their
+acceptance gate passes and the evidence is recorded in section 10.
+
+The boundary this section exists to keep explicit: **what Milo does today is local process and launch
+item management.** Everything commercial — accounts, payment, licensing, updates, telemetry rules —
+is deferred, and the UI must not imply otherwise.
+
+### Nearest priorities
+
+1. Notarized Developer ID distribution, so first launch does not require a Gatekeeper override.
+2. End-to-end exercise of the privileged helper XPC path against a disposable root-owned fixture.
+3. Disabling a launchd job directly from the process row that reported the restart, as a labelled and
+   confirmed action rather than a side effect of terminating the process.
+4. Clean-VM validation of the System Tuning matrix on every supported macOS release.
+
+### Process-control reliability
+
+- Expand typed per-target results for exited, replaced, protected, denied, timed out, and launchd-respawned processes.
+- Add disposable-VM integration coverage for system launchd services, helper upgrade/version skew, reboot, denial, and uninstall.
+- Version the local rule catalogue and add reviewed compatibility fixtures for supported macOS releases.
+- Add user-visible action history with privacy-preserving, local-only diagnostics and export.
+
+### Safe system tuning
+
+- Replace legacy "debloat" terminology and rules with reviewed, reversible tuning recipes.
+- Add an exact before/after preview and rollback record for every setting.
+- Validate each recipe on clean macOS virtual machines with default SIP and security settings.
+- Remove recipes that cannot be made deterministic, reversible, and supportable.
+- Replace broad user-cache deletion with an explicit, app-scoped preview and per-item rollback-safe result model before restoring it to the UI.
+
+### Distribution and operations
+
+- Produce Universal Developer ID builds with hardened runtime.
+- Automate archive signing, notarization, stapling, DMG verification, SBOM, provenance, and immutable release records.
+- Validate quarantined installation and Gatekeeper behavior on clean default-security Macs.
+- Complete privacy review, threat model, independent security assessment, accessibility audit, performance profiling, and long-running soak tests.
+- Establish support diagnostics, incident response, signing-key rotation, rollback, and vulnerability disclosure procedures.
+
+### Deferred to 1.0: the commercial stack
+
+Licensing is **out of scope until 1.0** (decided 2026-08-04). No backend is deployed, no device is
+enrolled, and there are no paid users. The MLP-v1 client code and its golden fixtures remain in
+MiloKit as dormant, tested code. Treat the whole list below as one coordinated body of work, not as
+individually shippable items:
+
+- browser-approved device enrollment and signed device-key authentication;
+- transactional Supabase migrations, RLS policies, device quota enforcement, revocation, and audit events;
+- Paddle product allowlisting, webhook signature verification, idempotency, ordering, refunds, cancellations, and reconciliation;
+- signed license-envelope verification, offline policy, clock handling, key rotation, and recovery;
+- signed dynamic telemetry rules with anti-rollback, staged rollout, emergency disable, and local cache recovery;
+- authenticated update discovery, signed Sparkle feeds, rollout control, and rollback policy;
+- restoring the cross-repository MLP contract check in CI against whichever repository then owns the contract.
+
+### Milo Lite
+
+- Validate the sandboxed scanner against Mac App Store review constraints.
+- Keep Lite read-only, networkless where practical, and free of Pro helper, updater, payment, and licensing implementation.
+- Add clear capability education and a browser handoff to the Pro product page.
+- Complete App Store privacy, accessibility, metadata, receipt, archive, and review testing.
+
+### Product experience
+
+- Continue macOS-native visual polish for menu bar and dedicated-window modes.
+- Add comprehensive VoiceOver, keyboard, reduced-motion, high-contrast, and localization coverage.
+- Add safe onboarding that adapts to helper status without nagging or permission loops.
+- Add a concise in-app explanation of target confidence, impact, and recovery for every action.

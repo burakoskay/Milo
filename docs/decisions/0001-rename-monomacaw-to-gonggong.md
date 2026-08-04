@@ -48,18 +48,26 @@ These kept the `monomacaw` string on purpose. Renaming any of them is a separate
 
 | Item | Location | Why it stayed |
 |---|---|---|
-| `com.monomacaw.milo.mlp-v1` (Keychain service) | `LicenseService.swift` | Persistent storage key for device registration and pending enrollment. Renaming orphans enrolled devices, which then appear unenrolled with no error. |
-| `com.monomacaw.milo.mlp-v1.device-key` (key tag) | `LicenseService.swift` | Secure Enclave key tag. Renaming orphans the device key and breaks request signing. |
-| `com.monomacaw.milo.license` (Keychain service) | `LicenseService.swift` | Same store as the two above. The blanket rename initially hit only this one, which would have split one logical store across two service names; it was reverted so all three migrate together. |
-| `mlp-v1-device-request-golden.json` | `MiloLicenseTests/Fixtures` | The `monomacaw.invalid` host is **inside signed request material**. Editing it invalidates the golden signature and the cross-repository contract vector. |
+| `mlp-v1-device-request-golden.json` | `MiloLicenseTests/Fixtures` | The `monomacaw.invalid` host is **inside signed request material**. Editing it invalidates the golden signature and the contract vector. |
 | "Monomacaw License Protocol v1" | prose, PR template | Proper name of the unchanged v1 wire format. Rename it when the protocol version changes, not before. |
-| `MONOMACAW_*` secrets and vars | `.github/workflows/` | Names of GitHub secrets and variables that exist in repository settings. Renaming the YAML before renaming the secrets breaks CI immediately. |
-| `burakoskay/monomacaw-website` | `.github/workflows/unit-tests.yml` | Real repository name. Not ours to guess. |
+| `MONOMACAW_INTERNAL_MIRROR_URL` | `.github/workflows/mirror.yml` | Name of a GitHub secret that exists in repository settings. The workflow now reads `GONGGONG_INTERNAL_MIRROR_URL` first and falls back to this one, so the secret can be renamed with no CI downtime. Delete the old secret after a green run. |
 | Historical `CHANGELOG.md` entries | `CHANGELOG.md` | A changelog records what shipped under the name it shipped under. |
 
-Net effect: **all Keychain state stays on the old service names.** That is coherent and safe today,
-and it is a migration debt. When it is paid, it needs read-old/write-new with a fallback, not a
-rename.
+### Amended 2026-08-04: Keychain identifiers were renamed after all
+
+This record originally kept all Keychain service names and the device-key tag on `com.monomacaw.*`,
+to avoid orphaning enrolled devices. That reasoning assumed enrolled devices existed. They do not:
+no backend was ever deployed, no device was enrolled, and there are no paid users.
+
+`com.gonggong.milo.mlp-v1`, its `.device-key` tag, and `com.gonggong.milo.license` therefore moved in
+one step with no migration code. A stale pre-rebrand Keychain item on a developer machine is simply
+never read again.
+
+**This is a one-time free change.** Once real devices are enrolled, renaming a Keychain service
+orphans the item it names, and needs read-old/write-new with a fallback rather than a rename.
+
+The `burakoskay/monomacaw-website` reference is also gone — see decision 0002 for why the
+cross-repository contract check was removed rather than repointed.
 
 ## Consequences
 
@@ -99,10 +107,14 @@ These are outside this repository and block a production build:
 2. **Backend.** `gonggong.tech` must serve the MLP endpoints and `/releases/milo/appcast.xml` before a
    production build validates. `Tools/generate-build-configuration.sh` and `Tools/verify-build.sh` now
    hard-require `https://gonggong.tech` and will fail the build otherwise.
-3. **GitHub.** Rename the `MONOMACAW_*` secrets and variables, rename the website repository, then
-   update `.github/workflows/` in one commit. Doing the YAML first breaks CI.
+3. **GitHub.** One secret left: add `GONGGONG_INTERNAL_MIRROR_URL` with the same value as
+   `MONOMACAW_INTERNAL_MIRROR_URL`, confirm a green `mirror` run, then delete the old secret. The
+   workflow already reads the new name first, so there is no downtime and no YAML change to make.
+   The `MONOMACAW_WEBSITE_REPOSITORY`, `MONOMACAW_CONTRACT_REF`, and `MONOMACAW_CONTRACT_DEPLOY_KEY`
+   variables and secrets are now **unused** and can be deleted — see decision 0002.
 4. **Published artifacts.** Release `v0.2.0-preview.1` and its DMG remain pre-rebrand. They were not
-   rewritten. The next release carries the new identifiers and is not an in-place upgrade of the old.
+   rewritten. `v0.2.0-preview.2` is the first release under the new identifiers and is **not** an
+   in-place upgrade of the old.
 
 ## Verification
 

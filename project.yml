@@ -112,7 +112,7 @@ targets:
           - Milo.entitlements
           - Runtime/Secrets.swift
           - Sparkle
-      - path: Milo/Resources
+      - path: App/Milo/Resources
         buildPhase: resources
         type: group
       - path: Helper/MiloPrivilegedHelper/com.gonggong.milo.helper.plist
