@@ -52,7 +52,7 @@ This table was re-verified on 2026-08-04. Confirm it again rather than trusting 
 
 | Item | Current value |
 |---|---|
-| Repository | `/Volumes/Internal HD/Developer/Pkill` |
+| Repository | `/Volumes/Internal HD/Developer/Milo` |
 | Branch | `refactor/gonggong-rebrand`, branched from `main` |
 | Upstream | `main` is in sync with `origin/main`; the rebrand branch is local only and unpushed |
 | HEAD | `fd6b7d3 feat: rename version scheme from 2.0.0 to 0.2.0 (#25)` |
@@ -175,13 +175,13 @@ pgrep -fal '^/Applications/Milo.app/Contents/MacOS/Milo$'
 The locally packaged artifact is:
 
 ```text
-/Volumes/Internal HD/Developer/Pkill/dist/Milo-Public-Preview.dmg
+/Volumes/Internal HD/Developer/Milo/dist/Milo-Public-Preview.dmg
 ```
 
 Its SHA-256 is recorded beside it, written by the build that produced it:
 
 ```text
-/Volumes/Internal HD/Developer/Pkill/dist/Milo-Public-Preview.dmg.sha256
+/Volumes/Internal HD/Developer/Milo/dist/Milo-Public-Preview.dmg.sha256
 ```
 
 ```bash
@@ -498,6 +498,7 @@ The backup is ad hoc signed, uses the pre-rebrand production bundle identifier `
 ## 15. Known pitfalls
 
 - Running Swift tools without the Xcode beta `DEVELOPER_DIR` produces false SourceKit/XCTest failures.
+- Moving or renaming the checkout invalidates SwiftPM's artifact cache, which stores **absolute** paths. The symptom is `There is no XCFramework found at <old path>/…/Sparkle.xcframework`. Delete `.build`, `Packages/MiloKit/.build`, and `build/` and rebuild; they are gitignored artifacts.
 - Running SwiftLint without excluding `build` can follow the DMG's `/Applications` symlink and lint Xcode/vendor sources. `.swiftlint.yml` now excludes generated artifacts.
 - Host-dependent self-tests are unsuitable as artifact gates. Use `--preview-smoke-test` for deterministic packaging verification.
 - `SMAppService.register()` can report already registered or user denied. Map those results to UI state; do not loop.
