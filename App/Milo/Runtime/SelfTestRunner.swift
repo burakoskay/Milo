@@ -487,7 +487,17 @@ enum SelfTestRunner {
             }
         }
 
-        let widgetsRunning = rawProcesses.contains(".appex/contents/macos/") && rawProcesses.contains("widget")
+        // Both substrings must occur on the *same* process line. Testing them against the
+        // whole `ps` blob asked "is any process an app extension, and does the word 'widget'
+        // appear anywhere on this Mac" — two unrelated questions. Observed live on
+        // 2026-08-04: no widget was running, 32 unrelated `.appex/Contents/MacOS/` processes
+        // were, and an unrelated developer tool carried "widget" in its argv. The test failed
+        // three runs in a row reporting widgets that did not exist.
+        let widgetsRunning = rawProcesses
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .contains { line in
+                line.contains(".appex/contents/macos/") && line.contains("widget")
+            }
         if widgetsRunning {
             let detectedWidgets = scan.bloat.filter { $0.name.localizedCaseInsensitiveContains("widget") }
             if detectedWidgets.isEmpty {

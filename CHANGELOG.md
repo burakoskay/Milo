@@ -13,6 +13,10 @@ series is `0.2.x`, and no 1.x release has shipped.
 - Detection of helper registrations left behind by pre-rename builds. Milo cannot remove these — an app may only unregister its own `SMAppService` records — so it reports them with the exact recovery command and a link to Login Items & Extensions.
 - Self-test coverage for open discovery, including a destructive check that discovers a real background process and terminates it end to end.
 
+### Fixed
+
+- The self-test's widget liveness check no longer reports a failure when no widget extensions are running. It matched `.appex/Contents/MacOS/` and `widget` independently anywhere in the whole system's process listing, so one unrelated app extension plus one unrelated process with "widget" in its command line was enough to trip it. Both substrings must now appear on the same process line.
+
 ### Security
 
 - Visibility and actionability are now separate. Every process is classified from measured evidence — kernel-reported pid and effective uid, the `anchor apple` code requirement, and the owning launchd label — never from a display name, which any process can choose for itself. Milo signals Apple-signed system software only where a reviewed rule names it, and a process running under another account that is Apple-signed or lives on the sealed system volume is never routed to the privileged helper.

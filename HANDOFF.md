@@ -406,11 +406,32 @@ naive "Apple binary is untouchable" rule would have kept it invisible. It is rea
 runs under the user's own account with no `com.apple.` launchd label — a job the user started, which
 their uid could already signal without Milo.
 
-Two self-test failures remain and are **pre-existing**, confirmed by running the same suite on the
-stashed pre-change tree: `simdiskimaged detection` (the daemon runs as root, so `proc_pidpath` is
-unreadable from the user session) and `Widget detection` (its liveness heuristic ANDs two substrings
-across the whole `ps` output, so it can fire when no widget is running at all). Neither involves
-discovery or uninstall.
+One self-test failure remains and is **pre-existing**, confirmed by running the same suite on the
+stashed pre-change tree: `simdiskimaged detection`. The daemon runs as root, so `proc_pidpath` is
+unreadable from the user session and the scan falls back to the truncated `ps` comm column. It does
+not involve discovery or uninstall.
+
+`Widget detection` was the second such failure and is now fixed; see below.
+
+### Widget liveness heuristic, corrected on 2026-08-04
+
+`testScannerCoverage(with:)` decided widgets were live with
+`rawProcesses.contains(".appex/contents/macos/") && rawProcesses.contains("widget")`, where
+`rawProcesses` is the whole system's `ps -Axo command` output. Matching the two substrings
+independently across one blob asks two unrelated questions, so the check fired when *any* process
+was an app extension and *any other* process merely had "widget" somewhere in its argv. It reported
+FAIL on three consecutive runs while zero widget processes were running.
+
+Both substrings must now occur on the same process line. Verified in both directions: SKIP with no
+widget-shaped process running, and PASS against a live fixture at
+`Sample.appex/Contents/MacOS/SampleWidget` (which the run also detected alongside a real
+`WeatherWidget`).
+
+A caveat worth knowing before trusting this test: it still reads `ps` command lines, so a shell
+command whose argv genuinely contains both strings on one line is indistinguishable from a widget.
+That is how the first verification attempt of this very fix produced a false FAIL — the measuring
+command contained both patterns. Capture the self-test to a file and inspect it in a *separate*
+invocation.
 
 ### Verified at `0.2.0-preview.2` on 2026-08-04
 
