@@ -6,27 +6,16 @@ series is `0.2.x`, and no 1.x release has shipped.
 
 ## [Unreleased]
 
-### Added
-
-- **Other Background Processes.** Milo now lists background processes outside its reviewed catalogue, so a job you started yourself — the canonical case being `sleep 600 &` — is visible and can be terminated. Previously Milo listed a process only when a shipped rule named it, which meant most of what runs on a Mac was invisible to it. Includes a name/path filter, an opt-in view of read-only system processes, and a per-process "Always Protect" action. Can be turned off under Settings › Scanning.
-- **Uninstall.** Settings › Uninstall removes the background helper registration, the login item, and Milo's own files, then optionally moves the app to the Trash and quits. This closes a real hazard: deleting `Milo.app` by hand leaves its root helper registered and running, because `SMAppService` records live in macOS's Background Task Management database rather than in the bundle. The helper is unregistered before any file is removed, and the app bundle is never deleted if that unregistration failed.
-- Detection of helper registrations left behind by pre-rename builds. Milo cannot remove these — an app may only unregister its own `SMAppService` records — so it reports them with the exact recovery command and a link to Login Items & Extensions.
-- Self-test coverage for open discovery, including a destructive check that discovers a real background process and terminates it end to end.
-
-### Fixed
-
-- The self-test's widget liveness check no longer reports a failure when no widget extensions are running. It matched `.appex/Contents/MacOS/` and `widget` independently anywhere in the whole system's process listing, so one unrelated app extension plus one unrelated process with "widget" in its command line was enough to trip it. Both substrings must now appear on the same process line.
-
-### Security
-
-- Visibility and actionability are now separate. Every process is classified from measured evidence — kernel-reported pid and effective uid, the `anchor apple` code requirement, and the owning launchd label — never from a display name, which any process can choose for itself. Milo signals Apple-signed system software only where a reviewed rule names it, and a process running under another account that is Apple-signed or lives on the sealed system volume is never routed to the privileged helper.
-- The root helper now independently refuses to signal session-critical executables (`launchd`, `WindowServer`, `loginwindow`, `opendirectoryd`, `configd`, and others), using the same shared policy source as the app rather than a copy. It previously relied entirely on the client having asked correctly.
-- Uninstall deletes against an exact-path allowlist generated from an explicit bundle-identifier table, re-checked immediately before every removal. Unrelated applications that merely share a vendor name are never matched.
+Nothing yet.
 
 ## [0.2.0-preview.2] - 2026-08-04
 
 Second Public Preview, and the first build under the gonggong name. Apple Development signed and
 not notarized; macOS blocks the first launch until the user explicitly allows it.
+
+Two changes make this more than a rename. Milo now lists background processes outside its reviewed
+catalogue, so a job you started yourself is visible and can be terminated; and it can uninstall
+itself, including the root helper that an ordinary drag-to-Trash leaves running.
 
 Verified live on macOS 27.0: the privileged helper launches, authenticates the app over XPC, and
 executes as root under the new `com.gonggong.*` identifiers. That path had never been exercised
@@ -35,20 +24,25 @@ before this release.
 This preview does **not** upgrade an installed `0.2.0-preview.1` in place. Its bundle identifiers
 changed, so macOS treats it as a different application.
 
-**Installing and uninstalling:** disable the helper from inside Milo *before* deleting any earlier
-version. Deleting `Milo.app` first leaves its root helper registered and running, removable only
-through System Settings > General > Login Items & Extensions. (A dedicated uninstall flow landed
-after this release; see Unreleased.)
+**Removing an older version:** use Settings › Uninstall from *inside* the version you want to
+remove, before installing this one. Deleting `Milo.app` by hand leaves its root helper registered
+and running, removable only through System Settings > General > Login Items & Extensions. This
+release can detect such a leftover registration from a pre-rename build, but it cannot remove one —
+an app may only unregister its own `SMAppService` records.
+
+### Added
+
+- **Other Background Processes.** Milo now lists background processes outside its reviewed catalogue, so a job you started yourself — the canonical case being `sleep 600 &` — is visible and can be terminated. Previously Milo listed a process only when a shipped rule named it, which meant most of what runs on a Mac was invisible to it. Includes a name/path filter, an opt-in view of read-only system processes, and a per-process "Always Protect" action. Can be turned off under Settings › Scanning.
+- **Uninstall.** Settings › Uninstall removes the background helper registration, the login item, and Milo's own files, then optionally moves the app to the Trash and quits. This closes a real hazard: deleting `Milo.app` by hand leaves its root helper registered and running, because `SMAppService` records live in macOS's Background Task Management database rather than in the bundle. The helper is unregistered before any file is removed, and the app bundle is never deleted if that unregistration failed.
+- Detection of helper registrations left behind by pre-rename builds. Milo cannot remove these — an app may only unregister its own `SMAppService` records — so it reports them with the exact recovery command and a link to Login Items & Extensions.
+- Self-test coverage for open discovery, including a destructive check that discovers a real background process and terminates it end to end.
+- `docs/decisions/`, a numbered record of consequential decisions, their non-scope, and the external actions they oblige.
 
 ### Changed
 
 - Renamed the company from monomacaw to gonggong. Bundle identifiers move from `com.monomacaw.*` to `com.gonggong.*`, the privileged helper's mach service and launchd plist follow, Keychain service names and the device-key tag move with them, and the production service origin becomes `https://gonggong.tech`. See `docs/decisions/0001-rename-monomacaw-to-gonggong.md` for what deliberately did not move.
 - A rebranded build does not adopt a previous install's registered helper or login item. Unregister the old helper from the old app before installing, or the pre-rebrand Background Item persists alongside the new one.
 - Optimized process scanning performance in `DebloatManager.anyWidgetProcessesRunning` to avoid unnecessary string allocations.
-
-### Added
-
-- `docs/decisions/`, a numbered record of consequential decisions, their non-scope, and the external actions they oblige.
 
 ### Removed
 
@@ -62,9 +56,13 @@ after this release; see Unreleased.)
 ### Fixed
 
 - `Tools/build-development-preview.sh` now writes and re-verifies the `dist/Milo-Public-Preview.dmg.sha256` sidecar in the same run that produces the image. A rebuild previously replaced the DMG while leaving the previous build's checksum file beside it, so the recorded hash no longer described the artifact.
+- The self-test's widget liveness check no longer reports a failure when no widget extensions are running. It matched `.appex/Contents/MacOS/` and `widget` independently anywhere in the whole system's process listing, so one unrelated app extension plus one unrelated process with "widget" in its command line was enough to trip it. Both substrings must now appear on the same process line.
 
 ### Security
 
+- Visibility and actionability are now separate. Every process is classified from measured evidence — kernel-reported pid and effective uid, the `anchor apple` code requirement, and the owning launchd label — never from a display name, which any process can choose for itself. Milo signals Apple-signed system software only where a reviewed rule names it, and a process running under another account that is Apple-signed or lives on the sealed system volume is never routed to the privileged helper.
+- The root helper now independently refuses to signal session-critical executables (`launchd`, `WindowServer`, `loginwindow`, `opendirectoryd`, `configd`, and others), using the same shared policy source as the app rather than a copy. It previously relied entirely on the client having asked correctly.
+- Uninstall deletes against an exact-path allowlist generated from an explicit bundle-identifier table, re-checked immediately before every removal. Unrelated applications that merely share a vendor name are never matched.
 - Reject non-regular or oversized persistence files before decoding stats and whitelist configurations.
 
 ## [0.2.0-preview.1] - 2026-07-27
