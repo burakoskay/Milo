@@ -29,30 +29,28 @@ Before claiming anything is done, check section 11 ("What is intentionally not c
 Milo **0.2.0-preview.2**, the first build under the gonggong name: a working local macOS menu bar
 process manager, Apple Development signed, not notarized, no backend, no licensing, no paid users.
 
-**Where things stand.** The rebrand is merged to `main` (PR #26). `0.2.0-preview.2` is built,
-verified, installed on this host, and tagged **locally** — it is **not published**. The live smoke
-check passed, including the privileged helper path, which had never been exercised before today
-(section 10).
+**Where things stand.** The rebrand (PR #26), the preview.2 verification checkpoint (PR #27), and
+**open process discovery plus the uninstall path (PR #28)** are all merged to `main`. Nothing is in
+review. `0.2.0-preview.2` has **not** been published; `origin` still carries `v0.2.0-preview.1`
+only.
 
-Two items this checkpoint previously listed as open are now **built and verified live** (section 10):
-open process discovery and the uninstall path. They are in review, not on `main`.
+Open discovery and uninstall — the two items earlier checkpoints listed as open — are built and
+verified live; the evidence is in section 10.
 
-| Ref | Contents | State |
-|---|---|---|
-| PR #27, `docs/checkpoint-preview2-live-verification` | The preview.2 live-verification checkpoint | **Merged** 2026-08-04 |
-| [PR #28](https://github.com/burakoskay/Milo/pull/28), `feat/open-discovery-and-uninstall` (`b80b2b1`, `73b6050`) | Open discovery, uninstall, widget-liveness test fix | **Open**, pushed, awaiting review |
+**The release is mid-re-cut.** The original `v0.2.0-preview.2` tag pointed at `08a799a`, which
+predates PR #28, so publishing it would have shipped a build containing neither feature. Decided
+2026-08-04: delete the local tag and re-cut against the merged `main`. That entails two changes made
+alongside this note:
 
-**Immediately actionable, in order:**
+- The changelog's `[Unreleased]` section was folded into `[0.2.0-preview.2]`, because that work is
+  now *in* the release. Its preamble no longer claims uninstall landed afterwards.
+- **The build number moved 21 → 22.** Build 21 was already produced as a DMG and installed on this
+  host, and section 10 records live verification evidence against "0.2.0 (`21`)". Re-using that
+  number for different bits would collide with the installed app and make the audit trail ambiguous.
+  A marketing version may be re-cut before publication; a build number that has been *built* should
+  not be.
 
-1. Land PR #28.
-2. **Re-cut `v0.2.0-preview.2` once #28 lands.** The existing tag is local-only and points at
-   `08a799a`, which predates the discovery and uninstall work — publishing it as it stands would ship
-   a build with neither feature. Decided 2026-08-04: delete the local tag, then re-run
-   `Tools/release.sh 0.2.0-preview.2` against the merged `main` so the release contains what section
-   10 verifies. Nothing else blocks publication.
-
-Re-cutting is safe precisely because the tag was never pushed; `origin` still carries
-`v0.2.0-preview.1` only. Do not rewrite a tag that has been published.
+Re-cutting the tag is safe only because it was never pushed. Do not rewrite a published tag.
 
 **The discovery design question is settled, not open.** Earlier checkpoints recorded it as an
 unhad conversation. `b80b2b1` answered it: visibility and actionability are now separate concerns.
@@ -91,21 +89,20 @@ This table was re-verified on 2026-08-04. Confirm it again rather than trusting 
 | Item | Current value |
 |---|---|
 | Repository | `/Volumes/Internal HD/Developer/Milo` |
-| Branch | `feat/open-discovery-and-uninstall`, pushed and tracking `origin` |
-| Upstream | `main` is `8aacac2` on both sides; the working branch is 2 commits ahead of it |
-| HEAD | `73b6050 fix(test): match widget liveness on one process line` |
+| Branch | `main` |
+| Upstream | `main` in sync with `origin/main` |
+| HEAD | `13586db Merge pull request #28 from burakoskay/feat/open-discovery-and-uninstall` |
 | Main implementation commit | `11e9caf feat: ship Milo Public Preview (#9)` |
 | Preview delivery pull request | `#9 feat: ship Milo Public Preview`, **merged**; branch `fable/milo-test` no longer exists on `origin` |
-| Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0`, `#26` gonggong rebrand and single source of truth, `#27` preview.2 live-verification checkpoint |
-| Open pull request | [`#28` open discovery and uninstall](https://github.com/burakoskay/Milo/pull/28), based on `main` |
-| Published release | `v0.2.0-preview.1` only. `v0.2.0-preview.2` is tagged **locally at `08a799a`** and has NOT been pushed. That commit predates PR #28, so the tag is to be deleted and re-cut after #28 lands — see the checkpoint in section 0 |
+| Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0`, `#26` gonggong rebrand and single source of truth, `#27` preview.2 live-verification checkpoint, `#28` open discovery and uninstall |
+| Open pull request | None. `#27` and `#28` merged on 2026-08-04 |
+| Published release | `v0.2.0-preview.1` only. `v0.2.0-preview.2` is **being re-cut** against merged `main` at build `22`; the superseded local tag at `08a799a` (build `21`) was never pushed — see the checkpoint in section 0 |
 | Remotes | `origin` → `https://github.com/burakoskay/Milo.git`, the only remote. The `gitlab` mirror and its scheduled `--mirror` workflow were retired on 2026-08-04 (decision 0004); there is no off-GitHub copy |
 | Tags | `origin` carries `v0.2.0-preview.1` only. The local-only `v2.0.0-preview.1` was deleted on 2026-08-04: it recorded build `200` under the discarded numbering scheme, which would have permanently blocked the build-number check in `Tools/release.sh` |
 | Repository visibility | Public |
 | Release process | `Tools/release.sh`, section 19. Branch and PR for every change; never commit to `main` directly |
 
-PR #28 is open and carries the current work. Open a new branch and PR for the next slice; never commit
-to `main` directly.
+No PR is open. Open a new branch and PR for the next slice; never commit to `main` directly.
 
 ### Company rename
 
@@ -591,9 +588,9 @@ Unless the user changes direction, resume in this order:
    section 18), and `docs/decisions/README.md`.
 2. Confirm `git status -sb`, HEAD, and the release state in section 2 rather than trusting this
    snapshot.
-3. Land [PR #28](https://github.com/burakoskay/Milo/pull/28).
-4. Delete the local `v0.2.0-preview.2` tag and re-cut it against the merged `main`, then publish. The
-   tag currently points at a commit that predates #28; see the checkpoint in section 0.
+3. Finish the `v0.2.0-preview.2` re-cut: run `Tools/release.sh 0.2.0-preview.2` on `main`, run the
+   live smoke check in section 19 against the resulting DMG, then publish with the commands the
+   script prints. See the checkpoint in section 0 for why the tag and build number moved.
 5. To work on which processes Milo surfaces and how it handles them, start from
    `Packages/MiloKit/Sources/MiloDomain/ProcessSafetyPolicy.swift` (the classification policy, shared
    with the root helper), then `BackgroundProcessScanner.swift` (open discovery) and
