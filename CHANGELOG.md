@@ -57,6 +57,7 @@ an app may only unregister its own `SMAppService` records.
 
 - `Tools/build-development-preview.sh` now writes and re-verifies the `dist/Milo-Public-Preview.dmg.sha256` sidecar in the same run that produces the image. A rebuild previously replaced the DMG while leaving the previous build's checksum file beside it, so the recorded hash no longer described the artifact.
 - The self-test's widget liveness check no longer reports a failure when no widget extensions are running. It matched `.appex/Contents/MacOS/` and `widget` independently anywhere in the whole system's process listing, so one unrelated app extension plus one unrelated process with "widget" in its command line was enough to trip it. Both substrings must now appear on the same process line.
+- `Tools/release.sh` no longer blocks a release when the packaged smoke suite *gains* checks. It demanded an exact "6 passed, 0 failed" and so refused the release the moment open discovery added six more, reporting a coverage increase as a failure. It now requires zero failures and at least a stated minimum number of passing checks, which still catches a check that disappears instead of failing.
 
 ### Security
 

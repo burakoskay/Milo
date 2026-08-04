@@ -136,8 +136,27 @@ step "Building and packaging"
 Tools/build-development-preview.sh > "${DIST_DIRECTORY}/build.log" 2>&1 \
     || { tail -40 "${DIST_DIRECTORY}/build.log" >&2; fail "the preview build failed. Full log: ${DIST_DIRECTORY}/build.log"; }
 
-grep -q "^Summary: 6 passed, 0 failed$" "${DIST_DIRECTORY}/build.log" \
-    || fail "the packaged smoke suite did not report 6 passed, 0 failed. Log: ${DIST_DIRECTORY}/build.log"
+# The packaged smoke suite must pass completely and must not have silently shrunk.
+#
+# This gate used to demand an exact "6 passed, 0 failed", which blocked the release the moment open
+# discovery added six checks to the suite — a coverage increase reported as a release failure. The
+# asymmetry that actually matters is: gaining checks is fine, losing them is not. Raise the minimum
+# when the suite grows, so a check that quietly disappears still fails the release.
+MINIMUM_SMOKE_CHECKS=12
+
+SMOKE_SUMMARY=$(grep -m1 -E '^Summary: [0-9]+ passed, [0-9]+ failed$' "${DIST_DIRECTORY}/build.log") \
+    || fail "the packaged smoke suite printed no summary line. Log: ${DIST_DIRECTORY}/build.log"
+
+SMOKE_PASSED=$(print -r -- "${SMOKE_SUMMARY}" | /usr/bin/awk '{ print $2 }')
+SMOKE_FAILED=$(print -r -- "${SMOKE_SUMMARY}" | /usr/bin/awk '{ print $4 }')
+
+(( SMOKE_FAILED == 0 )) \
+    || fail "the packaged smoke suite reported ${SMOKE_FAILED} failed. Log: ${DIST_DIRECTORY}/build.log"
+
+(( SMOKE_PASSED >= MINIMUM_SMOKE_CHECKS )) \
+    || fail "the packaged smoke suite reported only ${SMOKE_PASSED} passing checks, fewer than the ${MINIMUM_SMOKE_CHECKS} expected. A check disappeared rather than failed. Log: ${DIST_DIRECTORY}/build.log"
+
+print -- "   packaged smoke suite: ${SMOKE_PASSED} passed, 0 failed (minimum ${MINIMUM_SMOKE_CHECKS})"
 
 [[ -f "${DMG_PATH}" && -f "${DMG_CHECKSUM_PATH}" ]] || fail "the DMG or its checksum sidecar is missing."
 
