@@ -12,7 +12,7 @@
 #   DEVELOPER_ID             – e.g. "Developer ID Application: Your Name (8N738727QB)"
 #   NOTARY_KEYCHAIN_PROFILE  – notarytool profile, defaults to "milo-notary"
 #   SPARKLE_PUBLIC_ED_KEY     – public Sparkle verification key
-#   MILO_SERVICE_BASE_URL    – public MLP service root (`https://monomacaw.com`)
+#   MILO_SERVICE_BASE_URL    – public MLP service root (`https://gonggong.tech`)
 #   MILO_LICENSE_PUBLIC_KEY  – public MLP Ed25519 verification key (unpadded base64url)
 #   MILO_BUILD_OUTPUT_DIR    – isolated output directory, defaults to repository root
 # ─────────────────────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ read_xcconfig_value() {
 
 TEAM_ID=$(read_xcconfig_value MILO_TEAM_ID Configurations/Shared.xcconfig)
 BUNDLE_ID=$(read_xcconfig_value MILO_BUNDLE_ID Configurations/MiloPro.Release.xcconfig)
-if [[ ! "$TEAM_ID" =~ ^[A-Z0-9]{10}$ || "$BUNDLE_ID" != "com.monomacaw.milo" ]]; then
+if [[ ! "$TEAM_ID" =~ ^[A-Z0-9]{10}$ || "$BUNDLE_ID" != "com.gonggong.milo" ]]; then
     echo "✘  Tracked Milo identity configuration is invalid."
     exit 78
 fi
@@ -124,7 +124,7 @@ trap cleanup_configuration EXIT
 
 if [[ "$BUILD_MODE" == "release" ]]; then
     export MILO_CONFIGURATION_ENVIRONMENT="production"
-    export MILO_SERVICE_BASE_URL="${MILO_SERVICE_BASE_URL:-https://monomacaw.com}"
+    export MILO_SERVICE_BASE_URL="${MILO_SERVICE_BASE_URL:-https://gonggong.tech}"
     export MILO_LICENSE_PUBLIC_KEY="${MILO_LICENSE_PUBLIC_KEY:-}"
 else
     export MILO_CONFIGURATION_ENVIRONMENT="development"

@@ -27,6 +27,7 @@
 		48B3522D1209E1AC392CFF3F /* Exit173RegressionTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36E9B3C1CFD0CAAF1A64B1FA /* Exit173RegressionTest.swift */; };
 		4A3413D316451560A521B150 /* LegacyDesktopAuthRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 610EA18BD33FC14436005470 /* LegacyDesktopAuthRegressionTests.swift */; };
 		50596FC747AB1BE82959EB89 /* ProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87109E14469C3B6DEB254F2A /* ProcessManager.swift */; };
+		507CE87AF3BB8B0225EC284D /* com.gonggong.milo.helper.plist in CopyFiles */ = {isa = PBXBuildFile; fileRef = DF78F9E6FD6F5C183A7D2651 /* com.gonggong.milo.helper.plist */; };
 		516759BA04F01F2B820A7375 /* LicenseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E21C651770AC194093A3181E /* LicenseManager.swift */; };
 		534395FFDE2BB8AD7631F098 /* CloudSignatureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB76234D338FE431A2576429 /* CloudSignatureManager.swift */; };
 		55B4043C67A1E2448A5599FC /* IconManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 990BDEBBB734F36E772AB8BC /* IconManager.swift */; };
@@ -63,7 +64,6 @@
 		CE9CD868FFBA57518C7AFDFC /* MiloDomain in Frameworks */ = {isa = PBXBuildFile; productRef = 0FB861DBA5212D7C509435F9 /* MiloDomain */; };
 		D3BE2D85ACFEA1DBC46CF8E7 /* LoggingPrivacyRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4585186309DEBF93461D50FB /* LoggingPrivacyRegressionTests.swift */; };
 		D48B33B4F8DBCED154E772C9 /* MenuBarAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A07FB9C7D380E9934A7E7D9 /* MenuBarAppDelegate.swift */; };
-		D7AB690D3CDF25305EC7DFD1 /* com.monomacaw.milo.helper.plist in CopyFiles */ = {isa = PBXBuildFile; fileRef = F7DB5C51451F853E05CB1F5B /* com.monomacaw.milo.helper.plist */; };
 		E2FD74BFE06D6573F84D402C /* MenuBarIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 23F8C46FDFBB45EC4DEF1E80 /* MenuBarIcon.png */; };
 		E76F16913145067348586806 /* milo_white.png in Resources */ = {isa = PBXBuildFile; fileRef = AB3FB3677B226DA246E131EA /* milo_white.png */; };
 		EFCD639B4306ABAEB37614CB /* MiloHardening in Frameworks */ = {isa = PBXBuildFile; productRef = 43B4FE58B29C55055BB580BA /* MiloHardening */; };
@@ -107,7 +107,7 @@
 			dstPath = Contents/Library/LaunchDaemons;
 			dstSubfolderSpec = 1;
 			files = (
-				D7AB690D3CDF25305EC7DFD1 /* com.monomacaw.milo.helper.plist in CopyFiles */,
+				507CE87AF3BB8B0225EC284D /* com.gonggong.milo.helper.plist in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -174,6 +174,7 @@
 		D609CA1F11AF52D1BD7367A5 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		DB069A06FE539CBE383C44CE /* BackendConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendConfiguration.swift; sourceTree = "<group>"; };
 		DBD7F9EE8B4FF5AFDABAEE6D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		DF78F9E6FD6F5C183A7D2651 /* com.gonggong.milo.helper.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = com.gonggong.milo.helper.plist; sourceTree = "<group>"; };
 		E21C651770AC194093A3181E /* LicenseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseManager.swift; sourceTree = "<group>"; };
 		EB76234D338FE431A2576429 /* CloudSignatureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSignatureManager.swift; sourceTree = "<group>"; };
 		EE4F88FC7999FD043335C5D3 /* TargetBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetBoundaryTests.swift; sourceTree = "<group>"; };
@@ -181,7 +182,6 @@
 		F07A37CB0632A845240D8030 /* MiloIntegrationTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MiloIntegrationTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F49B9CAD0A4076A2CB01B5E1 /* MiloPro.Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = MiloPro.Release.xcconfig; sourceTree = "<group>"; };
 		F76DD69DDD9B08A1DA8B275C /* MiloClientConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloClientConfiguration.swift; sourceTree = "<group>"; };
-		F7DB5C51451F853E05CB1F5B /* com.monomacaw.milo.helper.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = com.monomacaw.milo.helper.plist; sourceTree = "<group>"; };
 		FA5A52A5354F42BFA597FB1A /* MiloApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloApp.swift; sourceTree = "<group>"; };
 		FB6F1DA02B918F3CCC8A6049 /* Milo_black.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Milo_black.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -393,7 +393,7 @@
 		EFD18530ADB3A2A336C46A8A /* MiloPrivilegedHelper */ = {
 			isa = PBXGroup;
 			children = (
-				F7DB5C51451F853E05CB1F5B /* com.monomacaw.milo.helper.plist */,
+				DF78F9E6FD6F5C183A7D2651 /* com.gonggong.milo.helper.plist */,
 				D609CA1F11AF52D1BD7367A5 /* main.swift */,
 			);
 			path = MiloPrivilegedHelper;
@@ -850,7 +850,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.unit-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.unit-tests";
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -918,7 +918,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.unit-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.unit-tests";
 				SDKROOT = macosx;
 			};
 			name = Preview;
@@ -1003,7 +1003,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.integration-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.integration-tests";
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -1021,7 +1021,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.redteam-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.redteam-tests";
 				SDKROOT = macosx;
 			};
 			name = Preview;
@@ -1038,7 +1038,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.lite.ui-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.lite.ui-tests";
 				SDKROOT = macosx;
 				TEST_TARGET_NAME = MiloLite;
 			};
@@ -1078,7 +1078,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.integration-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.integration-tests";
 				SDKROOT = macosx;
 			};
 			name = Preview;
@@ -1232,7 +1232,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.lite.ui-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.lite.ui-tests";
 				SDKROOT = macosx;
 				TEST_TARGET_NAME = MiloLite;
 			};
@@ -1250,7 +1250,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.lite.ui-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.lite.ui-tests";
 				SDKROOT = macosx;
 				TEST_TARGET_NAME = MiloLite;
 			};
@@ -1294,7 +1294,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.integration-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.integration-tests";
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -1312,7 +1312,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.redteam-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.redteam-tests";
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -1375,7 +1375,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.redteam-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.redteam-tests";
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -1393,7 +1393,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.monomacaw.milo.unit-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gonggong.milo.unit-tests";
 				SDKROOT = macosx;
 			};
 			name = Release;

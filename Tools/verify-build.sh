@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_PATH="${1:-}"
-EXPECTED_BUNDLE_ID="${EXPECTED_BUNDLE_ID:-com.monomacaw.milo}"
+EXPECTED_BUNDLE_ID="${EXPECTED_BUNDLE_ID:-com.gonggong.milo}"
 EXPECTED_TEAM_ID="${EXPECTED_TEAM_ID:-8N738727QB}"
 EXPECTED_VERSION="${EXPECTED_VERSION:-0.2.0}"
 EXPECTED_BUILD="${EXPECTED_BUILD:-20}"
@@ -51,7 +51,7 @@ if [[ "$CONFIGURATION_ENVIRONMENT" != "production" ]]; then
 fi
 
 SERVICE_BASE_URL=$(/usr/bin/plutil -extract MiloServiceBaseURL raw "$APP_PATH/Contents/Info.plist")
-if [[ "$SERVICE_BASE_URL" != "https://monomacaw.com" ]]; then
+if [[ "$SERVICE_BASE_URL" != "https://gonggong.tech" ]]; then
   echo "distribution app service origin is not the canonical production origin" >&2
   exit 1
 fi

@@ -115,7 +115,7 @@ targets:
       - path: Milo/Resources
         buildPhase: resources
         type: group
-      - path: Helper/MiloPrivilegedHelper/com.monomacaw.milo.helper.plist
+      - path: Helper/MiloPrivilegedHelper/com.gonggong.milo.helper.plist
         buildPhase:
           copyFiles:
             destination: wrapper
@@ -203,7 +203,7 @@ targets:
     sources:
       - path: Helper/MiloPrivilegedHelper
         excludes:
-          - com.monomacaw.milo.helper.plist
+          - com.gonggong.milo.helper.plist
     dependencies:
       - package: MiloKit
         product: MiloDomain
@@ -227,7 +227,7 @@ targets:
       base:
         CODE_SIGNING_ALLOWED: NO
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo.redteam-tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.gonggong.milo.redteam-tests
 
   MiloUnitTests:
     type: bundle.unit-test
@@ -242,7 +242,7 @@ targets:
       base:
         CODE_SIGNING_ALLOWED: NO
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo.unit-tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.gonggong.milo.unit-tests
 
   MiloIntegrationTests:
     type: bundle.unit-test
@@ -254,7 +254,7 @@ targets:
       base:
         CODE_SIGNING_ALLOWED: NO
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo.integration-tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.gonggong.milo.integration-tests
 
   MiloLiteUITests:
     type: bundle.ui-testing
@@ -267,7 +267,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.monomacaw.milo.lite.ui-tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.gonggong.milo.lite.ui-tests
 
 schemes:
   MiloPro:

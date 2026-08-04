@@ -8,8 +8,8 @@ an explicit product/security review and revision here before implementation.
 
 | Property | Milo Pro | Milo Lite |
 |---|---|---|
-| Public identity | Milo by monomacaw | Milo Lite by monomacaw |
-| Bundle ID | `com.monomacaw.milo` | `com.monomacaw.milo.lite` |
+| Public identity | Milo by gonggong | Milo Lite by gonggong |
+| Bundle ID | `com.gonggong.milo` | `com.gonggong.milo.lite` |
 | Ecosystem app ID | `milo` | none |
 | Distribution | Website, Developer ID, notarized | Mac App Store |
 | Runtime form | `LSUIElement` menu-bar app | Sandboxed app target |

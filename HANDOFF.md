@@ -2,6 +2,24 @@
 
 This document is the operational handoff for the next agent working in this checkout. Read it before changing code or exercising privileged actions.
 
+## 0. Document map
+
+Four documents carry state between sessions. Keep them separate; do not merge them.
+
+| Document | Answers | Update when |
+|---|---|---|
+| `HANDOFF.md` (this file) | What is built, installed, verified, and unfinished **right now** | Any session that changes verified state |
+| `docs/decisions/` | **Why** a consequential choice was made and what it obligates | A decision constrains future work or leaves a known inconsistency |
+| `ROADMAP.md` | Where the product is going, without dates | Scope changes |
+| `CHANGELOG.md` | What shipped, per release | Any user-visible or release-affecting change |
+
+Starting a new session: read `CLAUDE.md`, then this file top to bottom, then
+`docs/decisions/README.md`. Re-verify section 2 rather than trusting it — it is a snapshot and it
+goes stale.
+
+Before claiming anything is done, check section 11 ("What is intentionally not complete") and the
+"Required external actions" of any decision record marked incomplete.
+
 ## 1. Mission and current boundary
 
 The immediate product is an interview-ready **Public Preview** of Milo: a local-first macOS menu bar utility that scans for selected background processes and launch items, lets the user terminate chosen targets, reports CPU and memory usage, and exposes reviewed system-tuning actions.
@@ -21,23 +39,36 @@ Non-negotiable engineering rules from the project agent directives still apply:
 
 ## 2. Exact repository and remote state
 
+This table was re-verified on 2026-08-04. Confirm it again rather than trusting it.
+
 | Item | Current value |
 |---|---|
 | Repository | `/Volumes/Internal HD/Developer/Pkill` |
-| Branch | `fable/milo-test` |
-| Upstream | `origin/fable/milo-test` |
-| Verified implementation baseline | `2cc15c7 fix: correct surface lifecycle, CPU measurement, and kill reporting` |
+| Branch | `refactor/gonggong-rebrand`, branched from `main` |
+| Upstream | `main` is in sync with `origin/main`; the rebrand branch is local only and unpushed |
+| HEAD | `fd6b7d3 feat: rename version scheme from 2.0.0 to 0.2.0 (#25)` |
 | Main implementation commit | `11e9caf feat: ship Milo Public Preview (#9)` |
-| Handoff commit | The commit containing this document; confirm current HEAD with `git log -1 --oneline` |
-| Pull request | `#9 feat: ship Milo Public Preview` |
-| PR URL | `https://github.com/burakoskay/Milo/pull/9` |
-| PR base/head | `main` ← `fable/milo-test` |
-| PR state | Draft, merge state clean |
-| Remote checks | `unit-tests`, `conventional-commits`, and `changelog-check` all passing |
-| Expected working tree after handoff publication | Clean |
+| Preview delivery pull request | `#9 feat: ship Milo Public Preview`, **merged**; branch `fable/milo-test` no longer exists on `origin` |
+| Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0` |
+| Published release | `v0.2.0-preview.1`, GitHub pre-release at `fd6b7d3`, DMG asset SHA-256 `c4742debfb7dee4f4991fcb04698454bf15ff08b46516f91d171cb4b6c473eee` |
+| Remotes | `origin` → `https://github.com/burakoskay/Milo.git`; `gitlab` → `git@gitlab.com:burakoskay-group/burakoskay-project.git` |
+| Stale local tag | `v2.0.0-preview.1` exists locally only; `origin` carries only `v0.2.0-preview.1`. Delete or push it deliberately, do not assume it is published |
 | Repository visibility | Public |
 
-Do not create a replacement PR or a parallel branch without user direction. Continue PR #9 if the next work belongs to this preview slice.
+The Public Preview slice is merged, so there is no open PR to continue. Open a new branch and PR for
+the next slice; do not reopen `#9` or resurrect `fable/milo-test`.
+
+### Company rename in progress
+
+The company is now **gonggong** on **gonggong.tech**. Bundle identifiers are `com.gonggong.*` and the
+production origin is `https://gonggong.tech` as of the rebrand branch. The rename is complete in this
+repository and verified, but it has **required external actions that are not done** — Apple Developer
+portal App IDs, backend endpoints on the new domain, and GitHub secret/variable renames. Read
+`docs/decisions/0001-rename-monomacaw-to-gonggong.md` before building for production or touching CI.
+
+Some `monomacaw` strings survive on purpose: all Keychain service names and key tags, the signed MLP
+golden fixture, the MLP protocol name, GitHub secret names, and historical changelog entries. That
+record lists each one and why. Do not "finish the rename" by grepping and replacing them.
 
 ## 3. Host and toolchain snapshot
 
@@ -65,7 +96,7 @@ Xcode 27 beta can emit an internal `DVTAssertions` warning about `IDELaunchSessi
 The completed preview slice includes:
 
 - a distinct `Preview` Xcode configuration;
-- bundle identifier `com.monomacaw.milo.preview`;
+- bundle identifier `com.gonggong.milo.preview`;
 - visible **Public Preview** labeling;
 - local Pro access with no backend, payment, or account gate;
 - preview update checks disabled;
@@ -90,15 +121,22 @@ The verified preview is installed at:
 /Applications/Milo.app
 ```
 
-Installed identity:
+Installed identity as measured on 2026-08-04:
 
-- version `0.2.0` (`20`);
-- bundle `com.monomacaw.milo.preview`;
+- version `2.0.0` (`200`);
+- bundle `com.monomacaw.milo.preview` — the **pre-rebrand** identifier;
 - thin Apple-silicon binary;
 - Apple Development signed;
 - Team ID `8N738727QB`;
 - hardened runtime enabled;
 - runtime built against macOS 27.
+
+The installed bundle therefore **predates the `0.2.0` version rename in `fd6b7d3`**; it is not the
+build the current source produces. `launchctl` also reports the registered helper's parent bundle
+version as `200`, matching this installed bundle rather than HEAD. Reinstall from a freshly built
+DMG before treating anything observed in `/Applications/Milo.app` as evidence about HEAD.
+Its signature was re-verified on 2026-08-04: valid on disk, satisfies its designated requirement,
+and the embedded helper satisfies the exact helper identifier and Team ID requirement.
 
 The previous ad-hoc production-ID build was preserved, not deleted:
 
@@ -126,11 +164,24 @@ The locally packaged artifact is:
 /Volumes/Internal HD/Developer/Pkill/dist/Milo-Public-Preview.dmg
 ```
 
-SHA-256:
+Its SHA-256 is recorded beside it, written by the build that produced it:
 
 ```text
-dcfc7f30fed731bec8e68d3fc70ac6f24eac3599d02c11997f2f132f866e7adf
+/Volumes/Internal HD/Developer/Pkill/dist/Milo-Public-Preview.dmg.sha256
 ```
+
+```bash
+shasum -a 256 -c dist/Milo-Public-Preview.dmg.sha256
+```
+
+No DMG hash is transcribed into this document, because none of them survive a rebuild. Two builds
+of `fd6b7d3` on 2026-08-04 produced `86972f70…` and `44ac31be…`, and the published
+`v0.2.0-preview.1` asset from the same commit is `c4742deb…`. Signing is not byte-reproducible
+here, so a DMG hash identifies one specific build and never a commit. Verify a downloaded artifact
+against the hash published with that artifact.
+
+`dist/Milo-Development-Preview.dmg` is an abandoned pre-rename artifact from 2026-07-27 and is not
+produced by any current script; ignore it or delete it.
 
 `build/` and `dist/` are local artifact directories and are intentionally not committed. Rebuild the artifact rather than assuming it still corresponds to HEAD after any source change.
 
@@ -140,7 +191,11 @@ The canonical command is:
 Tools/build-development-preview.sh
 ```
 
-That script performs a clean Preview build, checks app/helper signatures and exact identifiers, runs the six-check deterministic packaged-app smoke suite, creates the DMG with the nondeprecated macOS 27 `diskutil image create` path, and verifies the image checksum.
+That script performs a clean Preview build, checks app/helper signatures and exact identifiers, runs the six-check deterministic packaged-app smoke suite, creates the DMG with the nondeprecated macOS 27 `diskutil image create` path, verifies the image checksum, and then writes and re-verifies the `dist/Milo-Public-Preview.dmg.sha256` sidecar for the image it just produced.
+
+Until 2026-08-04 the script rewrote the DMG without rewriting that sidecar, so a rebuild left a
+checksum file asserting the previous build's hash. Keep the sidecar generated by the same run that
+produced the image.
 
 ## 7. Architecture and security boundaries
 
@@ -173,7 +228,7 @@ The app revalidates that identity immediately before TERM and again before KILL.
 Key properties:
 
 - registered as an embedded `SMAppService.daemon`;
-- service identifier `com.monomacaw.milo.helper`;
+- service identifier `com.gonggong.milo.helper`;
 - exact Team ID and signing-identifier checks in both directions;
 - client must be the signed preview/production Milo app and must not be root;
 - helper commands use direct argv execution, never a shell;
@@ -184,7 +239,8 @@ Key properties:
 - no recurring AppleScript/sudo password fallback;
 - UI distinguishes not registered, approval required, enabled, and unavailable.
 
-Current Service Management evidence:
+Service Management evidence measured on this host on 2026-08-04. Every identifier below is the
+**pre-rebrand** one, because the registered helper came from the installed pre-rebrand build:
 
 - `launchctl` reports `system/com.monomacaw.milo.helper` submitted by Service Management;
 - parent bundle is `com.monomacaw.milo.preview`, version `200`;
@@ -194,12 +250,17 @@ Current Service Management evidence:
 
 Registration is therefore confirmed, but a real post-install XPC request has not yet proved helper launch and the privileged execution path. That is the highest-value next test.
 
+After the `com.gonggong.*` rebrand this registration is **stale and orphaned**: a rebranded build
+registers `system/com.gonggong.milo.helper` as a separate Background Item, and the `com.monomacaw`
+entry survives independently. See `docs/decisions/0001-rename-monomacaw-to-gonggong.md` for the
+required unregister-then-reinstall order.
+
 ### Runtime integrity
 
 The previous self-referential executable hash was removed because it could not be embedded without changing the file being hashed and caused false compromise state. Runtime integrity now relies on Apple's code-signature validation against:
 
 - Team ID `8N738727QB`; and
-- bundle identifier `com.monomacaw.milo` or `com.monomacaw.milo.preview`.
+- bundle identifier `com.gonggong.milo` or `com.gonggong.milo.preview`.
 
 The deterministic packaged-app smoke suite exercises the positive runtime-signature path. Public release work still needs a deliberate negative tamper test plus Developer ID/notarization validation.
 
@@ -258,6 +319,31 @@ Commit both `project.yml` and the regenerated `Milo.xcodeproj/project.pbxproj`.
 
 ## 10. Verification completed at this handoff
 
+### Re-verified against `fd6b7d3` on 2026-08-04
+
+Every result below was produced in this checkout on that date, on macOS 27.0 (`26A5388g`) with
+Xcode 27.0 beta (`27A5228h`) and Swift 6.4:
+
+| Gate | Result |
+|---|---|
+| `swiftlint --strict --quiet` | 0 violations |
+| `swift test` (root) | 18 red-team tests, 0 failures |
+| `swift test --package-path Packages/MiloKit` | 29 tests across three suites (10 + 7 + 12), 0 failures |
+| `xcodebuild ... -scheme MiloPro test` | `MiloRedTeamTests` 18, `MiloUnitTests` 1, `MiloIntegrationTests` 16; `** TEST SUCCEEDED **` |
+| `Tools/build-development-preview.sh` | Clean Preview build, both designated-requirement checks, `6 passed, 0 failed` smoke suite, DMG created and `hdiutil verify` valid |
+| Installed-bundle signature checks | `/Applications/Milo.app` valid on disk and satisfies its designated requirement; embedded helper satisfies the exact helper requirement |
+
+`MiloUnitTests` legitimately contains a single test, so a full-run log prints `Executed 1 test`
+(singular). A grep for `Executed [0-9]+ tests` misses that line and makes the target look empty.
+
+Xcode 27 beta emitted its `DVTAssertions`/`IDELaunchSession` warning three times during the Xcode
+test run. That is the documented beta diagnostic, not a Milo failure; the run still succeeded.
+
+What was **not** re-verified on 2026-08-04: any live launch of the app, any helper XPC round trip,
+and any process termination. Those remain untested at HEAD.
+
+### Original Preview delivery evidence
+
 The final Preview delivery passed:
 
 - clean Preview Xcode build with compiler warnings fatal;
@@ -298,11 +384,11 @@ Installed-path verification:
 codesign --verify --deep --strict --verbose=2 /Applications/Milo.app
 
 codesign --verify --strict \
-  -R='anchor apple generic and identifier "com.monomacaw.milo.preview" and certificate leaf[subject.OU] = "8N738727QB"' \
+  -R='anchor apple generic and identifier "com.gonggong.milo.preview" and certificate leaf[subject.OU] = "8N738727QB"' \
   /Applications/Milo.app
 
 codesign --verify --strict \
-  -R='anchor apple generic and identifier "com.monomacaw.milo.helper" and certificate leaf[subject.OU] = "8N738727QB"' \
+  -R='anchor apple generic and identifier "com.gonggong.milo.helper" and certificate leaf[subject.OU] = "8N738727QB"' \
   /Applications/Milo.app/Contents/Resources/MiloPrivilegedHelper
 
 LLVM_PROFILE_FILE='/tmp/MiloInstalledPreview-%p.profraw' \
@@ -334,14 +420,15 @@ These are in `ROADMAP.md` and `July27plan.md`. The preview DMG is an Apple Devel
 Unless the user changes direction, resume in this order:
 
 1. Read the active project agent directives, this file, `README.md`, `ROADMAP.md`, and the Public Preview delivery track in `July27plan.md`.
-2. Confirm `git status -sb`, HEAD, PR #9, and CI rather than trusting this snapshot.
-3. Launch `/Applications/Milo.app` and verify the visible Public Preview badge.
-4. Confirm the helper banner reports the actual Service Management state.
-5. Exercise the helper health/XPC path with one nonmutating allowlisted request. Confirm the helper launches, authenticates the app, returns within its deadline, and becomes idle afterward.
-6. Test a user-level termination only against a disposable synthetic process. Never use a real system or user application as the first target.
-7. If a privileged termination test is necessary, construct a disposable root-owned fixture in a controlled environment and verify PID/path/start-time rejection cases. Do not improvise on the live host.
-8. Test decline/recovery behavior without repeatedly unregistering or re-registering the helper.
-9. Record actual results in the plan or PR; do not mark an end-to-end path complete based only on static inspection.
+2. Confirm `git status -sb`, HEAD, the merged-PR/release state in section 2, and CI rather than trusting this snapshot.
+3. Reinstall `/Applications/Milo.app` from a DMG built at current HEAD before any live testing. The installed bundle is still the pre-rename `2.0.0` (`200`) build, so live observations against it say nothing about HEAD, and the registered helper's recorded parent bundle version matches that old bundle.
+4. Launch the reinstalled app and verify the visible Public Preview badge.
+5. Confirm the helper banner reports the actual Service Management state.
+6. Exercise the helper health/XPC path with one nonmutating allowlisted request. Confirm the helper launches, authenticates the app, returns within its deadline, and becomes idle afterward.
+7. Test a user-level termination only against a disposable synthetic process. Never use a real system or user application as the first target.
+8. If a privileged termination test is necessary, construct a disposable root-owned fixture in a controlled environment and verify PID/path/start-time rejection cases. Do not improvise on the live host.
+9. Test decline/recovery behavior without repeatedly unregistering or re-registering the helper.
+10. Record actual results in the plan or PR; do not mark an end-to-end path complete based only on static inspection.
 
 If the user instead asks to continue toward commercial release, stop treating the Preview delivery checklist as the active plan and resume the ordered phases and gates in `July27plan.md`. Backend work belongs in the canonical website checkout named there; reconcile the contract before editing either side.
 
@@ -370,7 +457,7 @@ If the installed Preview must be rolled back:
 3. Preserve the Preview bundle until diagnostics are captured.
 4. Restore `/Applications/Milo-legacy-backup-2026-07-26.app` to `/Applications/Milo.app` only after confirming the target paths.
 
-The backup is ad hoc signed, uses production bundle identifier `com.monomacaw.milo`, and is not release evidence. Restoration is only a local rollback.
+The backup is ad hoc signed, uses the pre-rebrand production bundle identifier `com.monomacaw.milo`, and is not release evidence. Restoration is only a local rollback.
 
 ## 15. Known pitfalls
 

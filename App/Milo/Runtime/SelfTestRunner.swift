@@ -672,7 +672,7 @@ enum SelfTestRunner {
     private static func testCacheClearingInTemporaryDirectory() -> SelfTestResult {
         let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("milo-selftest-\(UUID().uuidString)", isDirectory: true)
-        let keep = root.appendingPathComponent("com.monomacaw.milo")
+        let keep = root.appendingPathComponent("com.gonggong.milo")
         let remove = root.appendingPathComponent("com.example.Cache")
 
         do {
@@ -788,7 +788,7 @@ enum SelfTestRunner {
     private static func testDebloatTweaks(includeDestructive: Bool) -> [SelfTestResult] {
         var results: [SelfTestResult] = []
 
-        let syntheticDomain = "com.monomacaw.milo.SelfTest"
+        let syntheticDomain = "com.gonggong.milo.SelfTest"
         let syntheticKey = "DebloatEnabled"
         let syntheticTweak = DebloatTweak(
             id: "selftest.defaults",

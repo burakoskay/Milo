@@ -22,7 +22,7 @@ final class TargetBoundaryTests: XCTestCase {
         let liteConfiguration = try readText(
             at: repositoryRoot.appendingPathComponent("Configurations/MiloLite.Release.xcconfig")
         )
-        XCTAssertTrue(liteConfiguration.contains("MILO_BUNDLE_ID = com.monomacaw.milo.lite"))
+        XCTAssertTrue(liteConfiguration.contains("MILO_BUNDLE_ID = com.gonggong.milo.lite"))
         XCTAssertFalse(liteSection.contains("MiloLicense"))
         XCTAssertFalse(liteSection.contains("MiloSparkle"))
         XCTAssertFalse(liteSection.contains("MiloPrivilegedHelper"))
@@ -37,11 +37,11 @@ final class TargetBoundaryTests: XCTestCase {
     func testHelperBundleLayoutAndAuthenticatedPolicyAreFrozen() throws {
         let helperPlist = try readPropertyListDictionary(
             at: repositoryRoot.appendingPathComponent(
-                "Helper/MiloPrivilegedHelper/com.monomacaw.milo.helper.plist"
+                "Helper/MiloPrivilegedHelper/com.gonggong.milo.helper.plist"
             )
         )
 
-        XCTAssertEqual(helperPlist["Label"] as? String, "com.monomacaw.milo.helper")
+        XCTAssertEqual(helperPlist["Label"] as? String, "com.gonggong.milo.helper")
         XCTAssertEqual(
             helperPlist["BundleProgram"] as? String,
             "Contents/Resources/MiloPrivilegedHelper"
@@ -50,7 +50,7 @@ final class TargetBoundaryTests: XCTestCase {
             XCTFail("MachServices must be a dictionary")
             return
         }
-        XCTAssertEqual(machServices["com.monomacaw.milo.helper"] as? Bool, true)
+        XCTAssertEqual(machServices["com.gonggong.milo.helper"] as? Bool, true)
         XCTAssertNil(helperPlist["Program"])
         XCTAssertNil(helperPlist["ProgramArguments"])
         XCTAssertNil(helperPlist["RunAtLoad"])
@@ -89,7 +89,7 @@ final class TargetBoundaryTests: XCTestCase {
 
         XCTAssertTrue(projectSpec.contains("Preview: release"))
         XCTAssertTrue(projectSpec.contains("MILO_DEVELOPMENT_PREVIEW"))
-        XCTAssertTrue(previewConfiguration.contains("com.monomacaw.milo.preview"))
+        XCTAssertTrue(previewConfiguration.contains("com.gonggong.milo.preview"))
         XCTAssertTrue(previewConfiguration.contains("MILO_CONFIGURATION_ENVIRONMENT = development-preview"))
         XCTAssertTrue(previewEntitlements.isEmpty)
         XCTAssertTrue(licenseManager.contains("MiloBuildMode.isDevelopmentPreview"))

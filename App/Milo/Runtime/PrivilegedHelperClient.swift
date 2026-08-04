@@ -5,10 +5,10 @@ import Foundation
 }
 
 enum MiloPrivilegedHelperIdentity {
-    static let machServiceName = "com.monomacaw.milo.helper"
-    static let plistName = "com.monomacaw.milo.helper.plist"
-    static let helperRequirement = "anchor apple generic and identifier \"com.monomacaw.milo.helper\" and certificate leaf[subject.OU] = \"8N738727QB\""
-    static let clientRequirement = "anchor apple generic and (identifier \"com.monomacaw.milo\" or identifier \"com.monomacaw.milo.preview\") and certificate leaf[subject.OU] = \"8N738727QB\""
+    static let machServiceName = "com.gonggong.milo.helper"
+    static let plistName = "com.gonggong.milo.helper.plist"
+    static let helperRequirement = "anchor apple generic and identifier \"com.gonggong.milo.helper\" and certificate leaf[subject.OU] = \"8N738727QB\""
+    static let clientRequirement = "anchor apple generic and (identifier \"com.gonggong.milo\" or identifier \"com.gonggong.milo.preview\") and certificate leaf[subject.OU] = \"8N738727QB\""
 }
 
 /// Synchronous boundary used only from Milo's existing background command workers.

@@ -1,10 +1,19 @@
 # Changelog
 
 All notable changes to Milo are documented here. Format: Keep a Changelog 1.1.0.
-This project adheres to Semantic Versioning 2.0.0 from version 2.0.0 onward;
-version 1.x predates this regime.
+This project adheres to Semantic Versioning 2.0.0. Milo is pre-1.0: the public preview
+series is `0.2.x`, and no 1.x release has shipped.
 
 ## [Unreleased]
+
+### Changed
+
+- Renamed the company from monomacaw to gonggong. Bundle identifiers move from `com.monomacaw.*` to `com.gonggong.*`, the privileged helper's mach service and launchd plist follow, and the production service origin becomes `https://gonggong.tech`. Keychain service names, the signed MLP-v1 golden fixture, and the Monomacaw License Protocol name are deliberately unchanged; see `docs/decisions/0001-rename-monomacaw-to-gonggong.md`.
+- A rebranded build does not adopt a previous install's registered helper or login item. Unregister the old helper from the old app before installing, or the pre-rebrand Background Item persists alongside the new one.
+
+### Added
+
+- `docs/decisions/`, a numbered record of consequential decisions, their non-scope, and the external actions they oblige.
 
 ### Performance
 
@@ -13,6 +22,10 @@ version 1.x predates this regime.
 ### Changed
 
 - Optimized process scanning performance in `DebloatManager.anyWidgetProcessesRunning` to avoid unnecessary string allocations.
+
+### Fixed
+
+- `Tools/build-development-preview.sh` now writes and re-verifies the `dist/Milo-Public-Preview.dmg.sha256` sidecar in the same run that produces the image. A rebuild previously replaced the DMG while leaving the previous build's checksum file beside it, so the recorded hash no longer described the artifact.
 
 ### Security
 
