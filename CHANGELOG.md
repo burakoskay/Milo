@@ -11,9 +11,17 @@ series is `0.2.x`, and no 1.x release has shipped.
 Second Public Preview, and the first build under the gonggong name. Apple Development signed and
 not notarized; macOS blocks the first launch until the user explicitly allows it.
 
+Verified live on macOS 27.0: the privileged helper launches, authenticates the app over XPC, and
+executes as root under the new `com.gonggong.*` identifiers. That path had never been exercised
+before this release.
+
 This preview does **not** upgrade an installed `0.2.0-preview.1` in place. Its bundle identifiers
-changed, so macOS treats it as a different application. Unregister the old helper from the old app
-before installing — see the install notes in `README.md`.
+changed, so macOS treats it as a different application.
+
+**Installing and uninstalling:** disable the helper from inside Milo *before* deleting any earlier
+version. Deleting `Milo.app` first leaves its root helper registered and running, removable only
+through System Settings > General > Login Items & Extensions. A dedicated uninstall flow is
+planned.
 
 ### Changed
 
