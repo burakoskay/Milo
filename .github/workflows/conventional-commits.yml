@@ -48,10 +48,19 @@ jobs:
       - name: Validate commits on main
         if: github.event_name == 'push'
         run: |
+          pattern='^(feat|fix|perf|refactor|security|build|docs|test|ci|chore)(\([a-z0-9._-]+\))?!?: .+'
           base="$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)"
-          git log --format=%s "$base"..HEAD | while read -r subject; do
-            echo "$subject" | grep -Eq '^(feat|fix|perf|refactor|security|build|docs|test|ci|chore)(\([a-z0-9._-]+\))?!?: .+' || {
+
+          # `--no-merges` is load-bearing. Every change reaches main through a pull request, so
+          # every push to main carries a "Merge pull request #N from ..." subject that no
+          # conventional-commit pattern can match. Without this the job failed on every merge,
+          # which it did unnoticed from #29 to #37 -- a gate that is always red teaches everyone
+          # to ignore it, so a real failure would have been ignored too.
+          status=0
+          while IFS= read -r subject; do
+            printf '%s\n' "$subject" | grep -Eq "$pattern" || {
               echo "Non-conventional commit: $subject"
-              exit 1
+              status=1
             }
-          done
+          done < <(git log --no-merges --format=%s "$base"..HEAD)
+          exit "$status"
