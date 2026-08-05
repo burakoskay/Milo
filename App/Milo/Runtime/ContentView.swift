@@ -390,6 +390,9 @@ struct ContentView: View {
                             memoryCard
                         }
                         processCards
+                        // Above discovery: it is about what the user just did, and it is the
+                        // only card here that is answering a question they already have.
+                        RespawningJobsCard(appState: appState)
                         if appState.showsDiscovery {
                             DiscoveredProcessesCard(appState: appState, rowLimit: 12)
                         }
@@ -486,6 +489,7 @@ struct ContentView: View {
         } message: {
             Text(discoveryConfirmationMessage)
         }
+        .launchdDisableConfirmation(appState: appState)
         .alert("Clear User Caches?", isPresented: $appState.showingCacheConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Clear Caches", role: .destructive) {

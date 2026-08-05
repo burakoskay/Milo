@@ -396,7 +396,9 @@ Apple owns the final Background Items approval. Milo must not simulate, bypass, 
 | `App/Milo/Runtime/HelperFreshnessInspector.swift` | Code-identity evidence for the freshness verdict |
 | `Helper/MiloPrivilegedHelper/main.swift` | Root helper authentication and command policy |
 | `App/Milo/Runtime/CommandRunner.swift` | Direct user/helper command routing with no sudo fallback |
-| `App/Milo/Runtime/ProcessManager.swift` | Scanning and PID-reuse-safe termination |
+| `App/Milo/Runtime/ProcessManager.swift` | Scanning, PID-reuse-safe termination, and the `disable`+`bootout` launchd stop |
+| `Packages/MiloKit/Sources/MiloDomain/LaunchdDisablePolicy.swift` | Pure verdict on which launchd jobs may be offered for disabling, with a reason for every refusal |
+| `App/Milo/Runtime/RespawningJobsView.swift` | The respawn card and its confirmation, shared by both surfaces |
 | `Packages/MiloKit/Sources/MiloDomain/ProcessSafetyPolicy.swift` | Pure classification policy; shared source with the root helper |
 | `App/Milo/Runtime/ProcessSafetyInspector.swift` | Code-signature, ancestry, and foreground-app evidence |
 | `App/Milo/Runtime/BackgroundProcessScanner.swift` | Open discovery over the full process table |
@@ -428,6 +430,43 @@ git diff --check
 Commit both `project.yml` and the regenerated `Milo.xcodeproj/project.pbxproj`.
 
 ## 10. Verification completed at this handoff
+
+### Disabling a respawning launchd job, measured on 2026-08-05
+
+Gates: `swiftlint --strict --quiet` 0 violations; `swift test` (root) **37** tests, 0 failures;
+`swift test --package-path Packages/MiloKit` **62** tests, 0 failures;
+`xcodebuild -scheme MiloPro test` `** TEST SUCCEEDED **`.
+
+Section 18's second nearest priority, built against a disposable `KeepAlive` LaunchAgent
+(`tech.gonggong.milotestfixture`, running `/bin/sleep 1200`) in `~/Library/LaunchAgents`. The
+fixture was booted out, re-enabled, and its plist deleted afterwards.
+
+| Claim | Evidence |
+|---|---|
+| The respawn condition the feature targets is real | Killed pid `44384`; launchd returned it as pid `44419` within 3s |
+| **`launchctl disable` alone does not stop a respawn** | `disable` exited `0`, `print-disabled` reported the job disabled — and the killed process came back as pid `44455`. The disable applies at the next bootstrap, not immediately |
+| `disable` then `bootout` does | `bootout` exited `0`, the job left the domain, no `sleep 1200` remained, and `print-disabled` still reported it disabled — so it also survives a restart |
+| The documented undo works | `launchctl enable` flipped the override back to `enabled`, and re-bootstrapping returned the job as pid `44529` |
+
+**The finding is the second row, and it would have shipped.** The first implementation ran
+`disable` only, and its confirmation told the user "It will not start again". `disable` returns
+success, the job is genuinely recorded as disabled, and the process is back within seconds — the
+button would have reported success while the user watched it fail. Only running it caught this;
+no gate would have. The copy and the implementation were both corrected, and
+`testDisablingALaunchdJobAlsoStopsTheRunningInstance` pins the ordering.
+
+`disable` runs first so an interrupted sequence leaves the persistent guarantee in place; the
+reverse order would leave a job that looks fixed until the next login. A `bootout` that fails
+after a successful `disable` is reported as its own outcome rather than as success or failure.
+
+**Not proven here:** the `system` domain path, which needs the root helper and a system daemon
+that respawns. The fixture was a user agent in `gui/<uid>`, so the privileged branch is exercised
+only by the shared code path, not by measurement. That belongs with the other disposable-VM work
+in section 18.
+
+One piece of residue: the fixture's label remains in `launchctl print-disabled gui/<uid>` as
+`=> enabled`. launchd has no verb to delete an override record, and `enabled` is the default
+state, so this is inert.
 
 ### Critical-label refusal in the launchctl grammar, 2026-08-05
 
@@ -854,6 +893,7 @@ The backup is ad hoc signed, uses the pre-rebrand production bundle identifier `
 - Installing over an existing build leaves the **previously running** root helper alive and serving requests from the old binary, while `launchctl print` still reports `state = running`. Observed live on 2026-08-05, section 10. **Milo now detects this itself** — it compares the code identity of the helper answering it against the helper in its own bundle, and offers Restart Helper. The manual check (comparing the helper's process start time against the bundle's install time) is now a fallback, not the only route. Note that a **Debug build will correctly report stale** whenever a Preview-installed helper is the registered one; that is a real mismatch, not a false positive.
 - A failed runtime signature check does not stop the app. It sets `Milo.integrity.compromised` and logs; nothing reads the key. Do not cite binary hardening as protection against a cracked build until section 18 item 4 is decided. Measured 2026-08-05, section 10.
 - When tampering with a Mach-O to test a signature check, confirm which segment the offset lands in. A byte flipped in `__LINKEDIT` is reported modified by `codesign --verify` but passes the *dynamic* `SecCodeCheckValidity`, which reads as a detector gap and is really a badly chosen offset.
+- `launchctl disable <domain-target>` exits `0` and records the job as disabled **without stopping the running instance**, which respawns immediately under `KeepAlive`. Measured 2026-08-05, section 10. Pair it with `bootout`, `disable` first. Any code or copy claiming a disable stops something now is wrong.
 - This host's security configuration is not a public Gatekeeper/notarization oracle.
 - Do not inspect or print `App/Milo/Runtime/Secrets.swift`; it is ignored and outside Preview needs.
 
@@ -891,14 +931,12 @@ is deferred, and the UI must not imply otherwise.
 ### Nearest priorities
 
 1. Notarized Developer ID distribution, so first launch does not require a Gatekeeper override.
-2. Disabling a launchd job directly from the process row that reported the restart, as a labelled and
-   confirmed action rather than a side effect of terminating the process. **The privileged-boundary
-   prerequisite is now done** — the helper refuses `disable`/`bootout` for session-critical labels
-   (section 7), which this feature would otherwise have made reachable with an arbitrary label. What
-   remains is the feature itself: surfacing the action on a `wasRespawned` row, the confirmation, the
-   typed result, and a decision about whether a *non*-critical Apple-managed label may be disabled at
-   all — the answer today is that `classify` already marks those rows `.protected(.appleManagedAgent)`,
-   so the feature must not quietly widen that.
+2. ~~Disabling a launchd job directly from the process row that reported the restart~~ — **done**,
+   section 10. The privileged-boundary prerequisite (the helper's critical-label refusal) and the
+   feature both landed. Apple-managed labels are refused rather than widened, consistent with
+   `classify` marking those rows `.protected(.appleManagedAgent)`. What is **not** measured is the
+   `system`-domain branch, which needs the root helper and a respawning system daemon; the fixture
+   was a user agent. Prove it with the disposable-VM work below.
 3. Clean-VM validation of the System Tuning matrix on every supported macOS release.
 4. **Decide what a failed runtime signature check should do.** The negative tamper test is done
    (section 10) and it showed the check detects tampering and then does nothing about it. The

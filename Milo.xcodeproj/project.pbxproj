@@ -37,6 +37,7 @@
 		60E587F42A6243022CBE76B8 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8A43163CB7BD3FB2D2F0E3DC /* AppKit.framework */; };
 		6466232190F766F954D4EE10 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FE820EC792E62DC3AB78557 /* AppState.swift */; };
 		660C4E985CEB16EA8821DC41 /* PrivilegeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7B9DED93ED882D43993CE6 /* PrivilegeManager.swift */; };
+		6B369994F5BFBF618378B575 /* RespawningJobsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B2E8124853FD5D5D031D9B7 /* RespawningJobsView.swift */; };
 		714E9624EC886EB0172DEC92 /* MiloUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9FF24FD37D04267E168624 /* MiloUpdateManager.swift */; };
 		71C4EC6E22B7BF8844E8B4B1 /* ProcessSafetyInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E903D9C351F3AE288BE1D9C8 /* ProcessSafetyInspector.swift */; };
 		760FAAC65E26489B2EC1C035 /* ProcessData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447310230900239EFAB48C54 /* ProcessData.swift */; };
@@ -162,6 +163,7 @@
 		7E9CE830B493535A7BC040F3 /* DevelopmentPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevelopmentPreview.swift; sourceTree = "<group>"; };
 		87109E14469C3B6DEB254F2A /* ProcessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessManager.swift; sourceTree = "<group>"; };
 		8A43163CB7BD3FB2D2F0E3DC /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
+		8B2E8124853FD5D5D031D9B7 /* RespawningJobsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RespawningJobsView.swift; sourceTree = "<group>"; };
 		90D33C7B35A68BE887B46C07 /* MiloLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloLog.swift; sourceTree = "<group>"; };
 		93995A5A5E31BD673343989D /* MiloPrivilegedHelper.Preview.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = MiloPrivilegedHelper.Preview.xcconfig; sourceTree = "<group>"; };
 		990BDEBBB734F36E772AB8BC /* IconManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconManager.swift; sourceTree = "<group>"; };
@@ -300,6 +302,7 @@
 				447310230900239EFAB48C54 /* ProcessData.swift */,
 				87109E14469C3B6DEB254F2A /* ProcessManager.swift */,
 				E903D9C351F3AE288BE1D9C8 /* ProcessSafetyInspector.swift */,
+				8B2E8124853FD5D5D031D9B7 /* RespawningJobsView.swift */,
 				BDF03A696C418F6D71850967 /* SelfTestRunner.swift */,
 				4DA017ACB4B4814FE0CE3F3B /* SettingsManager.swift */,
 				C652DF2F309F4EE2503A4CFC /* SettingsView.swift */,
@@ -760,6 +763,7 @@
 				760FAAC65E26489B2EC1C035 /* ProcessData.swift in Sources */,
 				50596FC747AB1BE82959EB89 /* ProcessManager.swift in Sources */,
 				71C4EC6E22B7BF8844E8B4B1 /* ProcessSafetyInspector.swift in Sources */,
+				6B369994F5BFBF618378B575 /* RespawningJobsView.swift in Sources */,
 				8504F7D339E6640D083DAF6B /* SIPChecker.swift in Sources */,
 				04D5A8012599D1B6B468EBFC /* SelfTestRunner.swift in Sources */,
 				A629914202018CF265B4EF79 /* SettingsManager.swift in Sources */,

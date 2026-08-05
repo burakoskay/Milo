@@ -58,6 +58,7 @@ let package = Package(
                 "Runtime/PrivilegedHelperClient.swift",
                 "Runtime/ProcessData.swift",
                 "Runtime/ProcessManager.swift",
+                "Runtime/RespawningJobsView.swift",
                 "Runtime/ProcessSafetyInspector.swift",
                 "Runtime/SIPChecker.swift",
                 "Runtime/SelfTestRunner.swift",
