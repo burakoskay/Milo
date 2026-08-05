@@ -37,6 +37,12 @@ the release-gate fix (#30) are all merged. Nothing is in review.
 
 Open discovery and uninstall — the two items earlier checkpoints listed as open — are shipped.
 
+**In flight since publication:** stale-helper detection, on branch
+`feat/detect-stale-privileged-helper`. Milo now measures whether the helper answering it is the
+helper in its own bundle, and offers a password-free Restart Helper when it is not. This closes the
+automated-detection gap the preview.2 release opened by observation. Measured evidence and the one
+path still unproven (Restart Helper's recovery, which needs a disposable VM) are in section 10.
+
 **Three things this release taught, all recorded because they will recur:**
 
 1. **A prepared tag is not a correct tag.** The original `v0.2.0-preview.2` pointed at `08a799a`,
@@ -363,7 +369,9 @@ Apple owns the final Background Items approval. Milo must not simulate, bypass, 
 | `App/Milo/Runtime/LicenseManager.swift` | Local preview license snapshot and production licensing boundary |
 | `App/Milo/Runtime/MiloUpdateManager.swift` | Preview update disablement |
 | `App/Milo/Runtime/PrivilegeManager.swift` | `SMAppService` registration/status state machine |
-| `App/Milo/Runtime/PrivilegedHelperClient.swift` | Authenticated, bounded XPC client |
+| `App/Milo/Runtime/PrivilegedHelperClient.swift` | Authenticated, bounded XPC client; also the helper freshness probe |
+| `Packages/MiloKit/Sources/MiloDomain/HelperFreshnessPolicy.swift` | Pure freshness verdict from a code-validation status |
+| `App/Milo/Runtime/HelperFreshnessInspector.swift` | Code-identity evidence for the freshness verdict |
 | `Helper/MiloPrivilegedHelper/main.swift` | Root helper authentication and command policy |
 | `App/Milo/Runtime/CommandRunner.swift` | Direct user/helper command routing with no sudo fallback |
 | `App/Milo/Runtime/ProcessManager.swift` | Scanning and PID-reuse-safe termination |
@@ -398,6 +406,47 @@ git diff --check
 Commit both `project.yml` and the regenerated `Milo.xcodeproj/project.pbxproj`.
 
 ## 10. Verification completed at this handoff
+
+### Stale-helper detection, measured on 2026-08-05
+
+Gates: `swiftlint --quiet` 0 violations; `swift test` (root) 29 tests, 0 failures; `swift test
+--package-path Packages/MiloKit` 49 tests, 0 failures (was 41); `xcodebuild -scheme MiloPro test`
+`** TEST SUCCEEDED **`, including the 5 new `HelperFreshnessStatusPinningTests`.
+
+**What Milo compares.** The code identity of the helper process actually answering the XPC
+connection, against the helper binary installed in Milo's own bundle. Not a version string the
+helper could report wrongly, and not a timestamp that copying preserves. The pid comes from
+`NSXPCConnection.processIdentifier` on the established connection that just answered, so the
+verdict describes the helper that served the request.
+
+**This is a correctness signal, not a security control.** A stale helper is genuinely signed Milo
+helper code and satisfies the connection's code-signing requirement exactly as a current one does.
+That requirement is still the security boundary. This answers a different question — *which build*
+is answering — and it matters because the helper carries its own refusal of session-critical
+executables, so an older helper enforces the policy it was compiled with.
+
+| Claim | Evidence |
+|---|---|
+| An unprivileged app can read a running **root** helper's code identity | `cdhash H"…"` requirement built from `/Applications/Milo.app/…/MiloPrivilegedHelper` evaluated against running helper pid `14800`: **SATISFIED**. This is the `.current` path, proven against the real root helper |
+| A deliberately wrong hash is rejected | Control requirement returned `-67050` (`errSecCSReqFailed`), proving the check can fail |
+| Replacing a binary under a running process is detected | Disposable ad-hoc-signed fixture: SATISFIED before replacement, `-67034` (`errSecCSStaticCodeChanged`, *"the code on disk does not match what is running"*) after `mv`-ing a different binary over its path, while the process kept running the original. Fixture terminated; the real helper was never touched |
+| The detector works end to end inside Milo | Debug build's self-test against the registered build-`22` Preview helper: `[FAIL] Privileged helper freshness: Helper does not match this copy of Milo`, with the password-free recovery. A genuine mismatch, and it proves `processIdentifier` resolved a real peer — a zero pid would have produced a skip, not a verdict |
+| A failure to measure is never reported as staleness | Unrecognised statuses sweep to `undetermined` across the Code Signing range; `errSecCSSignatureFailed` stays undetermined |
+| The hand-written OSStatus literals still mean what they say | `HelperFreshnessStatusPinningTests` asserts them equal `errSecSuccess`, `errSecCSStaticCodeChanged`, `errSecCSReqFailed` from the SDK |
+
+**Not yet proven, and deliberately not attempted on this host:** that **Restart Helper** recovers a
+stale helper end to end. Exercising it means unregistering the user's working helper and
+re-registering, including the `requiresApproval` branch. That belongs on a disposable VM — see
+section 18.
+
+**A design correction this measurement forced.** The freshness check was first added to
+`--preview-smoke-test` and had to be removed. That suite is the deterministic artifact gate
+`Tools/release.sh` counts, and freshness is a property of the host: during a release the freshly
+built bundle is never the one the running helper was registered from, so the check would have
+failed **every** release cut on a machine with Milo installed. `MINIMUM_SMOKE_CHECKS` stays `12`
+and the smoke suite still reports `12 passed, 0 failed`. This is the same trap as the exact-pass-count
+gate in the section 0 checkpoint, reached from the other direction: section 15's rule that
+host-dependent self-tests are unsuitable as artifact gates is the one that decides it.
 
 ### `0.2.0-preview.2` published on 2026-08-05
 
@@ -695,7 +744,7 @@ The backup is ad hoc signed, uses the pre-rebrand production bundle identifier `
 - `SMAppService.register()` can report already registered or user denied. Map those results to UI state; do not loop.
 - A submitted launchd job does not prove that XPC peer authentication or a privileged command succeeded.
 - A PID is not a process identity. Never remove executable-path and start-time checks.
-- Installing over an existing build leaves the **previously running** root helper alive and serving requests from the old binary, while `launchctl print` still reports `state = running`. Compare the helper's process start time against the bundle's install time; if the helper is older, disable and re-enable it in Milo before trusting anything it reports. Observed live on 2026-08-05, section 10.
+- Installing over an existing build leaves the **previously running** root helper alive and serving requests from the old binary, while `launchctl print` still reports `state = running`. Observed live on 2026-08-05, section 10. **Milo now detects this itself** — it compares the code identity of the helper answering it against the helper in its own bundle, and offers Restart Helper. The manual check (comparing the helper's process start time against the bundle's install time) is now a fallback, not the only route. Note that a **Debug build will correctly report stale** whenever a Preview-installed helper is the registered one; that is a real mismatch, not a false positive.
 - This host's security configuration is not a public Gatekeeper/notarization oracle.
 - Do not inspect or print `App/Milo/Runtime/Secrets.swift`; it is ignored and outside Preview needs.
 
@@ -747,7 +796,7 @@ is deferred, and the UI must not imply otherwise.
   releases; a path that no longer exists silently stops contributing its second gate. (The
   primary gate — Apple signature plus effective uid — does not depend on the path list.)
 - Expand typed per-target results for exited, replaced, protected, denied, timed out, and launchd-respawned processes.
-- Add disposable-VM integration coverage for system launchd services, reboot, denial, and uninstall. Helper upgrade/version skew is **no longer hypothetical** — it was observed on 2026-08-05 from an ordinary reinstall (section 10). What is still missing is automated detection: Milo should notice that the helper answering it is older than its own bundle, and say so, rather than leaving the operator to compare timestamps by hand.
+- Add disposable-VM integration coverage for system launchd services, reboot, denial, and uninstall. Helper upgrade/version skew is **no longer hypothetical** — it was observed on 2026-08-05 from an ordinary reinstall (section 10) — and automated detection now ships; see section 10 for the measured evidence. What remains for a VM is the part this host cannot prove: that **Restart Helper** recovers a genuinely stale helper end to end, including the `requiresApproval` branch, without repeatedly unregistering and re-registering on a working machine.
 - Version the local rule catalogue and add reviewed compatibility fixtures for supported macOS releases.
 - Add user-visible action history with privacy-preserving, local-only diagnostics and export.
 
@@ -839,6 +888,13 @@ build, sign, lint, and test cleanly, then fail on first real use.
 3. Confirm the helper banner reports the real Service Management state, not a stale one.
 4. Enable the helper once, then exercise **one non-mutating** allowlisted request. Confirm the helper
    launches, authenticates the app, returns within its deadline, and goes idle.
+
+   Then confirm **no stale-helper banner is showing**. Installing over a running Milo leaves the
+   previous helper alive, and Milo now measures that directly, so this is the step that replaces
+   comparing process start times by hand. If the banner appears, use **Restart Helper** and confirm
+   it clears — a banner that survives the restart is a real finding, not noise. This is also the
+   only place freshness is gated: it is deliberately absent from `--preview-smoke-test`, which
+   must stay host-independent.
 5. Terminate one **low-consequence catalogued target** and confirm Milo reports a typed result
    rather than failing silently. A widget extension is the right choice: macOS respawns it on
    demand and no data is lost.

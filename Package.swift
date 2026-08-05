@@ -45,6 +45,7 @@ let package = Package(
                 "Runtime/DedicatedWindowView.swift",
                 "Runtime/DevelopmentPreview.swift",
                 "Runtime/DiscoveredProcessesView.swift",
+                "Runtime/HelperFreshnessInspector.swift",
                 "Runtime/IconManager.swift",
                 "Runtime/LicenseManager.swift",
                 "Runtime/MemoryManager.swift",

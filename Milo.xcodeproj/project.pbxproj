@@ -41,6 +41,7 @@
 		71C4EC6E22B7BF8844E8B4B1 /* ProcessSafetyInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E903D9C351F3AE288BE1D9C8 /* ProcessSafetyInspector.swift */; };
 		760FAAC65E26489B2EC1C035 /* ProcessData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447310230900239EFAB48C54 /* ProcessData.swift */; };
 		7B708A5E3E03648ABF19531B /* DebloatCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A642611C951B0255771A681 /* DebloatCommand.swift */; };
+		7B8ABB8A6B4D3457B86814DB /* HelperFreshnessInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D8D72910BA84AD1B9A0A72C /* HelperFreshnessInspector.swift */; };
 		7E779493C9E7AB1B6389A518 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 24B36AA49C51B70DCDD4481E /* SwiftUI.framework */; };
 		8504F7D339E6640D083DAF6B /* SIPChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC92D5F118672152814C87F /* SIPChecker.swift */; };
 		87893A52C529FE48786922F7 /* BackgroundProcessScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F005BC0787285F257EBE2AA2 /* BackgroundProcessScanner.swift */; };
@@ -66,6 +67,7 @@
 		C12F8A91E96D1885BEFC8BE0 /* BuildConfigurationRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78C0BA198C3D430DA0B373E /* BuildConfigurationRegressionTests.swift */; };
 		C65B151A1580F8F990675CCF /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D609CA1F11AF52D1BD7367A5 /* main.swift */; };
 		C72076D31C12BCD6E6B651FD /* DebloatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A80F4A7B5A94ADAF57DB2F1 /* DebloatManager.swift */; };
+		CC28DFF65E52CA08018AC5B9 /* HelperFreshnessStatusPinningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9642DBD782D8518071DAD4B /* HelperFreshnessStatusPinningTests.swift */; };
 		CE9CD868FFBA57518C7AFDFC /* MiloDomain in Frameworks */ = {isa = PBXBuildFile; productRef = 0FB861DBA5212D7C509435F9 /* MiloDomain */; };
 		D343438167D1656A1A9D42BC /* UninstallManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A19312BA1CA302E1936E788 /* UninstallManager.swift */; };
 		D3BE2D85ACFEA1DBC46CF8E7 /* LoggingPrivacyRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4585186309DEBF93461D50FB /* LoggingPrivacyRegressionTests.swift */; };
@@ -123,6 +125,7 @@
 		055C9214AA094CE28193B63B /* WhitelistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistView.swift; sourceTree = "<group>"; };
 		05E052912DA4D4681FC8FB18 /* MiloLiteContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloLiteContentView.swift; sourceTree = "<group>"; };
 		0A07FB9C7D380E9934A7E7D9 /* MenuBarAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarAppDelegate.swift; sourceTree = "<group>"; };
+		0D8D72910BA84AD1B9A0A72C /* HelperFreshnessInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperFreshnessInspector.swift; sourceTree = "<group>"; };
 		0F7B9DED93ED882D43993CE6 /* PrivilegeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivilegeManager.swift; sourceTree = "<group>"; };
 		1461095C6D30FC08F634F479 /* MiloLiteUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloLiteUITests.swift; sourceTree = "<group>"; };
 		1584D263654FE2C84A1F2251 /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
@@ -166,6 +169,7 @@
 		A5C41C5C2663DBD52795D97E /* MiloLiteUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MiloLiteUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A7DA3D7FB4B8575E047034B1 /* DebloatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebloatView.swift; sourceTree = "<group>"; };
 		A8DE6AE29A96B109D4A01BA9 /* WhitelistManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhitelistManager.swift; sourceTree = "<group>"; };
+		A9642DBD782D8518071DAD4B /* HelperFreshnessStatusPinningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperFreshnessStatusPinningTests.swift; sourceTree = "<group>"; };
 		AAC6BB69824A8F657BA27776 /* MiloLiteApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloLiteApp.swift; sourceTree = "<group>"; };
 		AB694BF69591A47395FA88E1 /* SharedUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedUI.swift; sourceTree = "<group>"; };
 		AB9FF24FD37D04267E168624 /* MiloUpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiloUpdateManager.swift; sourceTree = "<group>"; };
@@ -282,6 +286,7 @@
 				685DD83F10A4A33B7338F0E6 /* DedicatedWindowView.swift */,
 				7E9CE830B493535A7BC040F3 /* DevelopmentPreview.swift */,
 				47AD89A0BEDD41022EA7A402 /* DiscoveredProcessesView.swift */,
+				0D8D72910BA84AD1B9A0A72C /* HelperFreshnessInspector.swift */,
 				990BDEBBB734F36E772AB8BC /* IconManager.swift */,
 				E21C651770AC194093A3181E /* LicenseManager.swift */,
 				731F9AD6F5FF57D42A450F0E /* MemoryManager.swift */,
@@ -369,6 +374,7 @@
 		A91C624B49CF07D9EB1EE742 /* unit */ = {
 			isa = PBXGroup;
 			children = (
+				A9642DBD782D8518071DAD4B /* HelperFreshnessStatusPinningTests.swift */,
 				2B8FC69F88245B402FFCEE50 /* LicenseSnapshotTests.swift */,
 			);
 			path = unit;
@@ -702,6 +708,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CC28DFF65E52CA08018AC5B9 /* HelperFreshnessStatusPinningTests.swift in Sources */,
 				3601A4E1DF5FBD2AD3E2BE85 /* LicenseSnapshotTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -738,6 +745,7 @@
 				8E7ABDEFE4F7375F50198A22 /* DedicatedWindowView.swift in Sources */,
 				29303913F70F5E6997B17195 /* DevelopmentPreview.swift in Sources */,
 				B58DBE38FB3F27C448C4D2EB /* DiscoveredProcessesView.swift in Sources */,
+				7B8ABB8A6B4D3457B86814DB /* HelperFreshnessInspector.swift in Sources */,
 				55B4043C67A1E2448A5599FC /* IconManager.swift in Sources */,
 				516759BA04F01F2B820A7375 /* LicenseManager.swift in Sources */,
 				B22585DC1E05132CB47100A1 /* MemoryManager.swift in Sources */,

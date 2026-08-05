@@ -6,7 +6,15 @@ series is `0.2.x`, and no 1.x release has shipped.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Milo detects a background helper left over from a previous install.** Installing a new version leaves the *running* root helper alive and serving requests from the previous version's code, while macOS still reports the registration as healthy. Milo now measures this instead of leaving the operator to compare timestamps by hand: it compares the code identity of the helper actually answering it against the helper binary installed in its own bundle. On a mismatch it says so and offers **Restart Helper**, which turns the registration off and on again so macOS stops the old process and starts the installed one. No password is required, and the alternative — `sudo launchctl kickstart` — is no longer the only route.
+
+  This matters because the helper carries its **own** independent refusal of session-critical executables. A helper from an earlier build enforces the policy it was compiled with, while the app enforces the policy the user installed.
+
+  The comparison is code identity, not a version number the helper could report wrongly and not a timestamp a copy can preserve. A verdict Milo cannot measure is reported as undetermined and shown to nobody — a failed measurement is never presented as a problem with the user's helper.
+
+- Self-test coverage for helper freshness, in the host-dependent suite. It is deliberately absent from the packaged smoke suite, which is the deterministic artifact gate: during a release the freshly built bundle is never the one the running helper was registered from, so a freshness check there would fail every release cut on a machine that has Milo installed.
 
 ## [0.2.0-preview.2] - 2026-08-04
 

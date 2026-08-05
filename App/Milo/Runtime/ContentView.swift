@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import MiloDomain
 
 private enum ContentSheet: String, Identifiable {
     case stats
@@ -210,6 +211,47 @@ struct BackgroundHelperBanner: View {
     }
 }
 
+/// Shown when Milo has measured that the helper answering it is not the helper it installed.
+///
+/// Only a positive measurement reaches here. An undetermined verdict shows nothing at all,
+/// because warning someone about their helper on the strength of a measurement Milo could not
+/// make is worse than staying quiet.
+struct StaleHelperBanner: View {
+    let reason: MiloHelperStalenessReason
+    let isRestarting: Bool
+    let restart: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(reason.summary)
+                    .font(.caption.weight(.semibold))
+                Text(reason.explanation)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button(isRestarting ? "Restarting…" : "Restart Helper") {
+                restart()
+            }
+            .controlSize(.small)
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .disabled(isRestarting)
+            .help(MiloHelperFreshnessPolicy.recoveryInstruction)
+        }
+        .padding(10)
+        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.red.opacity(0.2))
+        }
+    }
+}
+
 private struct ResultsToast: View {
     let results: [KillResult]
     let isSIPEnabled: Bool
@@ -310,6 +352,28 @@ struct ContentView: View {
         }
     }
 
+    /// Extracted from `body` so the two conditions stay inside the type checker's budget.
+    @ViewBuilder
+    private var helperBanners: some View {
+        if MiloBuildMode.isDevelopmentPreview, !appState.helperStatus.isEnabled {
+            BackgroundHelperBanner(
+                status: appState.helperStatus,
+                enable: appState.setupPrivileges,
+                openSettings: appState.openHelperApprovalSettings
+            )
+        }
+
+        // Not gated on the Preview build: a helper left over from a previous install is a real
+        // condition in any build, not a preview affordance.
+        if case .stale(let reason) = appState.helperFreshness {
+            StaleHelperBanner(
+                reason: reason,
+                isRestarting: appState.isRestartingHelper,
+                restart: appState.restartHelper
+            )
+        }
+    }
+
     var body: some View {
         ZStack {
             VisualEffectBlur()
@@ -318,13 +382,7 @@ struct ContentView: View {
             VStack(spacing: 12) {
                 header
 
-                if MiloBuildMode.isDevelopmentPreview, !appState.helperStatus.isEnabled {
-                    BackgroundHelperBanner(
-                        status: appState.helperStatus,
-                        enable: appState.setupPrivileges,
-                        openSettings: appState.openHelperApprovalSettings
-                    )
-                }
+                helperBanners
 
                 ScrollView {
                     VStack(spacing: 12) {

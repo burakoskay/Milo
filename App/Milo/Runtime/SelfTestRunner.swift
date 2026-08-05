@@ -120,6 +120,7 @@ enum SelfTestRunner {
         results.append(contentsOf: testOpenDiscoverySafety())
         results.append(testDiscoveredProcessTermination(includeDestructive: includeDestructive))
         results.append(testDirectCommandArgumentsDoNotInvokeShell())
+        results.append(testPrivilegedHelperFreshness())
 
         let appState = AppState()
         _ = waitUntil(timeout: 8) { !appState.isScanning }
@@ -209,6 +210,12 @@ enum SelfTestRunner {
                     : "The helper executable is missing from the app bundle"
             )
         )
+        // Helper freshness is deliberately *not* checked here. This suite is the deterministic
+        // packaging gate `Tools/release.sh` counts, and freshness is a property of the host:
+        // during a release the freshly built bundle is never the one the running helper was
+        // registered from, so the check would fail every release cut on a machine that has Milo
+        // installed. It lives in the host-dependent `run()` suite instead, and the live smoke
+        // check in HANDOFF section 19 covers it against the installed build.
         let signatureIsTrusted = MiloIntegrity.check(.launch)
         results.append(
             SelfTestResult(
@@ -230,6 +237,46 @@ enum SelfTestRunner {
     }
 
     // MARK: - Feature Tests
+
+    /// The helper answering a packaged build must be the helper inside that bundle.
+    ///
+    /// This is the check that was missing on 2026-08-05, when installing build `22` over build
+    /// `21` left the build `21` helper serving requests while `launchctl` still reported the
+    /// registration as running. Verifying a helper observation by hand — comparing the process
+    /// start time against the bundle's install time — is exactly what this replaces.
+    ///
+    /// A helper that is not registered is a `skip`, not a failure: there is nothing to compare.
+    /// A verdict Milo could not measure is also a `skip`, because a failed measurement is not
+    /// evidence of a stale helper.
+    private static func testPrivilegedHelperFreshness() -> SelfTestResult {
+        let name = "Privileged helper freshness"
+        switch MiloPrivilegedHelperClient.shared.freshness() {
+        case .current:
+            return SelfTestResult(
+                name: name,
+                status: .pass,
+                detail: "The helper answering Milo is the binary installed in this bundle"
+            )
+        case .stale(let reason):
+            return SelfTestResult(
+                name: name,
+                status: .fail,
+                detail: "\(reason.summary) — \(MiloHelperFreshnessPolicy.recoveryInstruction)"
+            )
+        case .undetermined(.helperNotAnswering):
+            return SelfTestResult(
+                name: name,
+                status: .skip,
+                detail: "No background helper is answering, so there is nothing to compare"
+            )
+        case .undetermined(let reason):
+            return SelfTestResult(
+                name: name,
+                status: .skip,
+                detail: "Milo could not measure the running helper (\(reason.diagnosticDetail))"
+            )
+        }
+    }
 
     private static func testSearchBoxRemoval() -> SelfTestResult {
         let root = FileManager.default.currentDirectoryPath

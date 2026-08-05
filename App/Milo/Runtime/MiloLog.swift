@@ -50,6 +50,8 @@ enum MiloLog {
         case privilegeTemporaryFileWriteFailed = "privilege.temporary-file-write-failed"
         case privilegeTemporaryFileCleanupFailed = "privilege.temporary-file-cleanup-failed"
         case privilegeConfigurationFailed = "privilege.configuration-failed"
+        case privilegedHelperStale = "privilege.helper-stale"
+        case privilegedHelperFreshnessUnknown = "privilege.helper-freshness-unknown"
         case commandPolicyRejected = "security.command-policy-rejected"
         case privilegedCommandPolicyRejected = "security.privileged-command-policy-rejected"
         case mainActorDelayFailed = "runtime.main-actor-delay-failed"

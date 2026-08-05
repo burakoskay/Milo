@@ -1,4 +1,5 @@
 import Foundation
+import MiloDomain
 
 @objc protocol MiloPrivilegedHelperProtocol {
     func execute(_ commands: NSArray, withReply reply: @escaping (NSDictionary) -> Void)
@@ -38,6 +39,16 @@ final class MiloPrivilegedHelperClient: @unchecked Sendable {
 
     private init() {}
 
+    /// A helper reply, paired with the pid of the peer that produced it.
+    ///
+    /// The pid travels with the reply because it is only meaningful once the connection is
+    /// established — launchd starts the helper on demand, so a pid read before the first round
+    /// trip identifies nothing.
+    private struct HelperResponse {
+        let result: CommandResult
+        let peerProcessIdentifier: pid_t
+    }
+
     func run(commands: [(executable: String, arguments: [String])]) -> CommandResult {
         guard !commands.isEmpty, commands.count <= 128 else {
             return failure("The privileged request was empty or too large.", termination: .policyRejected)
@@ -49,7 +60,7 @@ final class MiloPrivilegedHelperClient: @unchecked Sendable {
                 "arguments": command.arguments
             ] as NSDictionary
         } as NSArray
-        return run(encodedCommands: encodedCommands)
+        return run(encodedCommands: encodedCommands).result
     }
 
     func terminate(identities: Set<ProcessIdentity>) -> CommandResult {
@@ -64,7 +75,7 @@ final class MiloPrivilegedHelperClient: @unchecked Sendable {
             "arguments": ["1"]
         ] as NSDictionary)
         encodedCommands.append(contentsOf: sortedIdentities.map { encodedSignal("-KILL", identity: $0) })
-        return run(encodedCommands: encodedCommands as NSArray)
+        return run(encodedCommands: encodedCommands as NSArray).result
     }
 
     private func encodedSignal(_ signal: String, identity: ProcessIdentity) -> NSDictionary {
@@ -77,7 +88,7 @@ final class MiloPrivilegedHelperClient: @unchecked Sendable {
         ] as NSDictionary
     }
 
-    private func run(encodedCommands: NSArray) -> CommandResult {
+    private func run(encodedCommands: NSArray) -> HelperResponse {
 
         let connection = NSXPCConnection(
             machServiceName: MiloPrivilegedHelperIdentity.machServiceName,
@@ -100,7 +111,10 @@ final class MiloPrivilegedHelperClient: @unchecked Sendable {
             completion.signal()
         }) as? MiloPrivilegedHelperProtocol else {
             connection.invalidate()
-            return failure("Milo could not connect to its background helper.", termination: .launchFailed(0))
+            return HelperResponse(
+                result: failure("Milo could not connect to its background helper.", termination: .launchFailed(0)),
+                peerProcessIdentifier: 0
+            )
         }
 
         proxy.execute(encodedCommands) { reply in
@@ -109,23 +123,68 @@ final class MiloPrivilegedHelperClient: @unchecked Sendable {
         }
 
         let waitResult = completion.wait(timeout: .now() + 30)
+        // Read before invalidating: an invalidated connection has no peer to report.
+        let peerProcessIdentifier = connection.processIdentifier
         connection.invalidate()
         guard waitResult == .success, let reply = lockedReply.load() else {
-            return failure("The Milo background helper did not respond in time.", termination: .timedOut)
+            return HelperResponse(
+                result: failure("The Milo background helper did not respond in time.", termination: .timedOut),
+                peerProcessIdentifier: peerProcessIdentifier
+            )
         }
 
         guard let statusNumber = reply["status"] as? NSNumber,
               let stdout = reply["stdout"] as? String,
               let stderr = reply["stderr"] as? String else {
-            return failure("The Milo background helper returned an invalid response.", termination: .invalidOutputEncoding)
+            return HelperResponse(
+                result: failure(
+                    "The Milo background helper returned an invalid response.",
+                    termination: .invalidOutputEncoding
+                ),
+                peerProcessIdentifier: peerProcessIdentifier
+            )
         }
 
         let status = statusNumber.int32Value
-        return CommandResult(status: status, stdout: stdout, stderr: stderr)
+        return HelperResponse(
+            result: CommandResult(status: status, stdout: stdout, stderr: stderr),
+            peerProcessIdentifier: peerProcessIdentifier
+        )
+    }
+
+    /// The existing allowlisted, non-mutating round trip. Reaching the helper at all is the
+    /// health check; it is also what establishes the connection the freshness probe needs.
+    ///
+    /// Built per call rather than stored: `NSArray` is not `Sendable`, and one shared instance
+    /// handed to concurrent requests is exactly the shared mutable state this client avoids.
+    private func healthCheckCommands() -> NSArray {
+        [
+            [
+                "executable": "/bin/echo",
+                "arguments": ["milo-helper-ready"]
+            ] as NSDictionary
+        ] as NSArray
     }
 
     func healthCheck() -> Bool {
-        run(commands: [("/bin/echo", ["milo-helper-ready"])]).succeeded
+        run(encodedCommands: healthCheckCommands()).result.succeeded
+    }
+
+    /// Whether the helper answering Milo is running the code installed in this bundle.
+    ///
+    /// One round trip serves both purposes: the reply proves a helper is answering, and the pid
+    /// of the peer that produced it identifies the process to inspect. A helper that fails the
+    /// health check is not reported as stale — that it is unreachable is
+    /// `MiloHelperStatus`'s question, and answering it here would turn "Milo could not ask" into
+    /// "your helper is wrong".
+    func freshness() -> MiloHelperFreshness {
+        let response = run(encodedCommands: healthCheckCommands())
+        guard response.result.succeeded else {
+            return .undetermined(.helperNotAnswering)
+        }
+        return HelperFreshnessInspector.freshness(
+            ofHelperWithProcessIdentifier: response.peerProcessIdentifier
+        )
     }
 
     private func failure(_ message: String, termination: CommandTermination) -> CommandResult {
