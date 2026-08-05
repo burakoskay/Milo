@@ -133,6 +133,72 @@ final class ProcessDiscoverySafetyRegressionTests: XCTestCase {
         XCTAssertFalse(inspector.contains("SecRequirementCreateWithString(\"anchor apple generic\""))
     }
 
+    // MARK: - Disabling a launchd job
+
+    func testDisablingALaunchdJobRechecksThePolicyBelowTheUI() throws {
+        let processManager = try source("App/Milo/Runtime/ProcessManager.swift")
+
+        // Disabling a launch item rewrites macOS configuration and outlives the click, so the
+        // verdict cannot live only in the view that drew the button.
+        XCTAssertTrue(processManager.contains("MiloLaunchdDisablePolicy.refusal(forLabel: job.label)"))
+        XCTAssertTrue(processManager.contains("launchdDisableRefused"))
+    }
+
+    func testDisablingALaunchdJobIsAlwaysConfirmedFirst() throws {
+        let appState = try source("App/Milo/Runtime/AppState.swift")
+
+        // `requestLaunchdDisable` may only stage the job; the command runs from
+        // `confirmLaunchdDisable`. A termination click must never rewrite launchd config.
+        guard let requestRange = appState.range(of: "func requestLaunchdDisable("),
+              let confirmRange = appState.range(of: "func confirmLaunchdDisable(") else {
+            return XCTFail("The launchd disable flow could not be located")
+        }
+        let requestBody = String(appState[requestRange.lowerBound..<confirmRange.lowerBound])
+        XCTAssertFalse(
+            requestBody.contains("ProcessManager.shared.disableLaunchdJob"),
+            "Requesting a disable must only stage it for confirmation, never run it"
+        )
+        XCTAssertTrue(appState.contains("pendingLaunchdDisable = job"))
+
+        let confirmBody = String(appState[confirmRange.lowerBound...])
+        XCTAssertTrue(confirmBody.contains("ProcessManager.shared.disableLaunchdJob"))
+    }
+
+    func testTheDisableOfferOnlyExistsForAProcessThatCameBack() throws {
+        let appState = try source("App/Milo/Runtime/AppState.swift")
+
+        // The offer is derived from results, so it must be gated on the respawn flag. Offering
+        // to disable a launch item whose process stayed dead would be acting on nothing.
+        XCTAssertTrue(appState.contains("for result in results where result.wasRespawned"))
+    }
+
+    func testTheDisableTargetIsBuiltFromTheLabelNotADisplayName() throws {
+        let processManager = try source("App/Milo/Runtime/ProcessManager.swift")
+
+        XCTAssertTrue(processManager.contains("\"system/\\(job.label)\""))
+        XCTAssertTrue(processManager.contains("\"gui/\\(getuid())/\\(job.label)\""))
+        XCTAssertTrue(processManager.contains("arguments: [action, target]"))
+    }
+
+    func testDisablingALaunchdJobAlsoStopsTheRunningInstance() throws {
+        let processManager = try source("App/Milo/Runtime/ProcessManager.swift")
+
+        // Measured on macOS 27.0: `launchctl disable` succeeds, reports the job disabled, and
+        // the job keeps respawning, because the disable only applies at the next bootstrap.
+        // `disable` alone would ship a button that claims success while the user watches the
+        // process return. Both commands are required, and `disable` must come first so an
+        // interruption leaves the persistent guarantee in place rather than the reverse.
+        guard let disableIndex = processManager.range(of: "run(\"disable\")")?.lowerBound,
+              let bootoutIndex = processManager.range(of: "run(\"bootout\")")?.lowerBound else {
+            return XCTFail("The disable/bootout sequence could not be located")
+        }
+        XCTAssertLessThan(
+            disableIndex,
+            bootoutIndex,
+            "disable must precede bootout, so an interrupted sequence still survives a restart"
+        )
+    }
+
     // MARK: - Uninstall containment
 
     func testUninstallChecksContainmentImmediatelyBeforeEveryRemoval() throws {

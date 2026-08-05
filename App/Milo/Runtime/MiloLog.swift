@@ -41,6 +41,7 @@ enum MiloLog {
         case plistReadFailed = "process.plist-read-failed"
         case appleCodeRequirementUnavailable = "security.apple-code-requirement-unavailable"
         case protectedProcessTerminationRefused = "process.protected-termination-refused"
+        case launchdDisableRefused = "process.launchd-disable-refused"
         case backgroundProcessSignalFailed = "process.background-signal-failed"
         case uninstallItemRejected = "uninstall.item-rejected"
         case uninstallItemRemoveFailed = "uninstall.item-remove-failed"
