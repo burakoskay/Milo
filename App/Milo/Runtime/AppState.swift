@@ -49,18 +49,149 @@ struct KillResult: Identifiable, Sendable {
     /// failure told the user their action did not work when in fact it did.
     let wasRespawned: Bool
 
+    /// The launchd job that owns the process, when launchd reported one.
+    ///
+    /// Carried on the result rather than looked up again later because the label is evidence
+    /// gathered at the moment of the action. Re-resolving it from a name afterwards would be
+    /// exactly the display-name matching the discovery policy exists to avoid.
+    let launchdLabel: String?
+
+    /// Whether the owning job lives in the system domain, and so needs the root helper.
+    let launchdDomain: TelemetryLaunchdDomain?
+
     init(
         name: String,
         success: Bool,
         isLaunchdManaged: Bool = false,
         requiresSIPDisabled: Bool = false,
-        wasRespawned: Bool = false
+        wasRespawned: Bool = false,
+        launchdLabel: String? = nil,
+        launchdDomain: TelemetryLaunchdDomain? = nil
     ) {
         self.name = name
         self.success = success
         self.isLaunchdManaged = isLaunchdManaged
         self.requiresSIPDisabled = requiresSIPDisabled
         self.wasRespawned = wasRespawned
+        self.launchdLabel = launchdLabel
+        self.launchdDomain = launchdDomain
+    }
+}
+
+/// What happened when Milo tried to stop a launchd job from restarting a process.
+///
+/// Every case is a defined, user-facing state. There is deliberately no "unknown" outcome: a
+/// command that neither succeeded nor was refused is a failure with a reason attached.
+enum LaunchdDisableOutcome: Equatable, Sendable {
+    /// The job is disabled and the running instance is gone. `target` is the exact domain
+    /// target passed to `launchctl`, which is also what the user needs to undo it by hand.
+    case disabled(target: String)
+
+    /// The job is disabled — so it will not return after a restart — but the instance running
+    /// now could not be stopped.
+    ///
+    /// This case exists because it is genuinely reachable: disabling and stopping are two
+    /// commands, and the second can fail on its own. Collapsing it into either success or
+    /// failure would misdescribe what the user's Mac is actually doing.
+    case disabledButStillRunning(target: String, message: String)
+
+    /// Milo declined before running anything.
+    case refused(MiloLaunchdDisableRefusal)
+
+    /// `launchctl` ran and did not succeed.
+    case failed(status: Int32, message: String)
+
+    var succeeded: Bool {
+        if case .disabled = self { return true }
+        return false
+    }
+
+    /// Whether the job is now disabled, whether or not the running instance was stopped.
+    ///
+    /// This is what decides that the offer disappears: the persistent change has landed, so
+    /// running the same two commands again would achieve nothing.
+    var isDisabled: Bool {
+        switch self {
+        case .disabled, .disabledButStillRunning:
+            return true
+        case .refused, .failed:
+            return false
+        }
+    }
+
+    /// What to tell the user. Never empty in any case.
+    var explanation: String {
+        switch self {
+        case let .disabled(target):
+            return "Disabled \(target) and stopped it. It will not start again. To undo this, "
+                + "run: launchctl enable \(target)"
+        case let .disabledButStillRunning(target, message):
+            return "Disabled \(target), so it will not come back after a restart — but the copy "
+                + "running now could not be stopped: \(message)"
+        case let .refused(refusal):
+            return refusal.explanation
+        case let .failed(status, message):
+            return "macOS did not disable the launch item (status \(status)). \(message)"
+        }
+    }
+}
+
+/// A launchd job that restarted a process the user just terminated, and which Milo is willing
+/// to offer to disable.
+///
+/// Constructed only from a `KillResult` that actually reported a respawn, so the offer can
+/// never appear for a process that did not come back.
+struct RespawningLaunchdJob: Identifiable, Hashable, Sendable {
+    var id: String { label }
+    let label: String
+    let processName: String
+    let domain: TelemetryLaunchdDomain
+
+    /// Whether stopping this job needs the root helper.
+    var requiresPrivilegedHelper: Bool {
+        domain != .gui
+    }
+
+    /// Derives the offers for one batch of results, deduplicated by label.
+    ///
+    /// A refused label yields no offer. The refusal is still worth surfacing, which is why
+    /// `refusals(in:)` exists alongside this: silently dropping the action would leave the
+    /// user with the toast's advice to "disable the launch item" and no way to act on it.
+    static func offers(in results: [KillResult]) -> [RespawningLaunchdJob] {
+        var seen: Set<String> = []
+        var offers: [RespawningLaunchdJob] = []
+        for result in results where result.wasRespawned {
+            guard let label = result.launchdLabel,
+                  MiloLaunchdDisablePolicy.canDisable(label: label),
+                  !seen.contains(label) else {
+                continue
+            }
+            seen.insert(label)
+            offers.append(
+                RespawningLaunchdJob(
+                    label: label,
+                    processName: result.name,
+                    domain: result.launchdDomain ?? .gui
+                )
+            )
+        }
+        return offers
+    }
+
+    /// The reasons Milo declined to offer an action, one per respawned process it refused.
+    static func refusals(in results: [KillResult]) -> [(name: String, refusal: MiloLaunchdDisableRefusal)] {
+        var seen: Set<String> = []
+        var refusals: [(name: String, refusal: MiloLaunchdDisableRefusal)] = []
+        for result in results where result.wasRespawned {
+            guard let refusal = MiloLaunchdDisablePolicy.refusal(forLabel: result.launchdLabel) else {
+                continue
+            }
+            let key = result.launchdLabel ?? result.name
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            refusals.append((name: result.name, refusal: refusal))
+        }
+        return refusals
     }
 }
 
@@ -90,6 +221,21 @@ final class AppState: ObservableObject {
     @Published var showingDiscoveryKillConfirmation: Bool = false
     @Published var lastKillResults: [KillResult] = []
     @Published var showingResults: Bool = false
+
+    // Stopping a launchd job that restarted a terminated process.
+    @Published var pendingLaunchdDisable: RespawningLaunchdJob?
+    @Published private(set) var disablingLaunchdLabels: Set<String> = []
+    @Published var lastLaunchdDisableOutcome: LaunchdDisableOutcome?
+
+    /// The respawn offers derived from the most recent termination, if any.
+    var respawningLaunchdJobs: [RespawningLaunchdJob] {
+        RespawningLaunchdJob.offers(in: lastKillResults)
+    }
+
+    /// Respawned processes Milo will not offer to disable, with the reason for each.
+    var refusedLaunchdJobs: [(name: String, refusal: MiloLaunchdDisableRefusal)] {
+        RespawningLaunchdJob.refusals(in: lastKillResults)
+    }
 
     // Scanning state
     @Published private(set) var scanState = MiloOperationState<ProcessScanSnapshot>.idle
@@ -620,6 +766,70 @@ final class AppState: ObservableObject {
 
     func postCurrentBloatCount() {
         NotificationCenter.default.post(name: .miloBloatCountChanged, object: totalBloatCount)
+    }
+
+    // MARK: - Stopping a launchd job that keeps restarting a process
+
+    /// Asks for confirmation before disabling a launchd job.
+    ///
+    /// Deliberately a separate, labelled step rather than something termination does on the
+    /// user's behalf. Terminating a process is transient and the user can simply do it again;
+    /// disabling its launch item persists across reboots and changes how the Mac starts up.
+    /// Folding the second into the first would mean a click labelled "Kill" quietly rewrote
+    /// launchd configuration.
+    func requestLaunchdDisable(_ job: RespawningLaunchdJob) {
+        guard MiloLaunchdDisablePolicy.canDisable(label: job.label) else {
+            lastLaunchdDisableOutcome = .refused(
+                MiloLaunchdDisablePolicy.refusal(forLabel: job.label) ?? .malformedLabel
+            )
+            return
+        }
+        if job.requiresPrivilegedHelper, !helperStatus.isEnabled {
+            showingHelperRequiredAlert = true
+            return
+        }
+        pendingLaunchdDisable = job
+    }
+
+    func cancelLaunchdDisable() {
+        pendingLaunchdDisable = nil
+    }
+
+    func confirmLaunchdDisable() {
+        guard let job = pendingLaunchdDisable else {
+            return
+        }
+        pendingLaunchdDisable = nil
+        guard !disablingLaunchdLabels.contains(job.label) else {
+            return
+        }
+        disablingLaunchdLabels.insert(job.label)
+        lastLaunchdDisableOutcome = nil
+
+        ProcessManager.shared.disableLaunchdJob(job) { [weak self] outcome in
+            Self.runOnMain {
+                guard let appState = self else { return }
+                appState.disablingLaunchdLabels.remove(job.label)
+                appState.lastLaunchdDisableOutcome = outcome
+
+                guard outcome.isDisabled else {
+                    return
+                }
+                // The offer is derived from the last results, so clearing the label's respawn
+                // marker is what removes the button. Leaving it would invite a second disable
+                // of a job that is already disabled.
+                appState.lastKillResults = appState.lastKillResults.map { result in
+                    guard result.launchdLabel == job.label else { return result }
+                    return KillResult(
+                        name: result.name,
+                        success: result.success,
+                        isLaunchdManaged: result.isLaunchdManaged,
+                        requiresSIPDisabled: result.requiresSIPDisabled,
+                        wasRespawned: false
+                    )
+                }
+            }
+        }
     }
 
     func confirmKill() {

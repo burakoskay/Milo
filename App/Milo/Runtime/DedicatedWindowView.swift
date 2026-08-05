@@ -141,6 +141,7 @@ struct DedicatedWindowView: View {
         } message: {
             Text(discoveryConfirmationMessage)
         }
+        .launchdDisableConfirmation(appState: appState)
         .alert("Clear User Caches?", isPresented: $appState.showingCacheConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Clear Caches", role: .destructive) {
@@ -657,6 +658,8 @@ struct DedicatedWindowView: View {
                     }
                 }
             }
+
+            RespawningJobsCard(appState: appState)
 
             if appState.showsDiscovery {
                 DiscoveredProcessesCard(appState: appState, rowLimit: 40)

@@ -8,6 +8,14 @@ series is `0.2.x`, and no 1.x release has shipped.
 
 ### Added
 
+- **Milo can stop a launch item that keeps restarting a process you terminated.** When a terminated process comes back, Milo has always said so — and then left you to find the launch item yourself. It now names the launchd job responsible and offers to disable it, as a separate, labelled, confirmed action. Terminating a process stays transient and repeatable; disabling its launch item persists across restarts, so it is never something a **Kill** click does on your behalf.
+
+  The confirmation shows the exact job that will be disabled and the exact command to undo it, before you agree rather than after. The job is named by its launchd label, never by a display name any process can choose for itself.
+
+  Milo declines to offer this for session-critical jobs, for Apple's own services, and for Milo's own launch items — including its root helper, which is removed through Settings › Uninstall so the registration is unregistered rather than stranded. Each refusal explains itself in place of the button, because an action that is silently missing reads as a bug.
+
+  Disabling runs two commands, not one: `launchctl disable` records the job as disabled but does not stop the copy already running, so on its own it would report success while the process came straight back. Milo disables and then boots out, and reports the partial state honestly if the second step fails.
+
 - **Milo detects a background helper left over from a previous install.** Installing a new version leaves the *running* root helper alive and serving requests from the previous version's code, while macOS still reports the registration as healthy. Milo now measures this instead of leaving the operator to compare timestamps by hand: it compares the code identity of the helper actually answering it against the helper binary installed in its own bundle. On a mismatch it says so and offers **Restart Helper**, which turns the registration off and on again so macOS stops the old process and starts the installed one. No password is required, and the alternative — `sudo launchctl kickstart` — is no longer the only route.
 
   This matters because the helper carries its **own** independent refusal of session-critical executables. A helper from an earlier build enforces the policy it was compiled with, while the app enforces the policy the user installed.

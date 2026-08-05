@@ -836,7 +836,13 @@ final class ProcessManager: Sendable {
                         success: result.success && (!stillRunning || respawned),
                         isLaunchdManaged: result.item.isLaunchdManaged || respawned,
                         requiresSIPDisabled: false,
-                        wasRespawned: respawned
+                        wasRespawned: respawned,
+                        // The catalogued lane is the one that may act on Apple system software,
+                        // so most labels arriving here are refused by the disable policy as
+                        // Apple-managed. That is the intended outcome: reviewed Apple changes
+                        // belong in System Tuning, which carries a revert step.
+                        launchdLabel: respawned ? result.item.launchdLabel : nil,
+                        launchdDomain: respawned ? result.item.launchdDomain : nil
                     )
                 )
             }
@@ -845,6 +851,111 @@ final class ProcessManager: Sendable {
                 completion(results)
             }
         }
+    }
+
+    /// Disables a launchd job so it stops restarting a process the user terminated.
+    ///
+    /// This changes macOS configuration rather than a process, and it outlives the click, so
+    /// three things are true of it that are not true of a kill:
+    ///
+    /// - the policy verdict is re-checked here, below the UI, because a refusal that lives only
+    ///   in a view is one a future call site can bypass by accident;
+    /// - the job is named by its label, never by a display name;
+    /// - it is reversible, and `enable` is deliberately still permitted by both the client and
+    ///   the root helper so it can be undone.
+    ///
+    /// **Two commands are required, and this was established by measurement rather than from
+    /// the documentation.** `launchctl disable` returns success and the job is genuinely
+    /// recorded as disabled — and it keeps respawning, because the disable takes effect at the
+    /// next bootstrap, not immediately. Measured on macOS 27.0: a `KeepAlive` agent was
+    /// disabled, its process killed, and it was back within three seconds while
+    /// `print-disabled` reported it disabled the whole time.
+    ///
+    /// So `disable` alone would have shipped a button that reports success while the user
+    /// watches the process return. `bootout` alone is the opposite failure: it stops the
+    /// running job but leaves it enabled, so it comes back at the next login.
+    ///
+    /// `disable` runs first. If the sequence is interrupted between the two, the persistent
+    /// guarantee is already in place and only the current session is stale — the reverse order
+    /// would leave a job that looks fixed until the next login.
+    func disableLaunchdJob(
+        _ job: RespawningLaunchdJob,
+        completion: @escaping @Sendable (LaunchdDisableOutcome) -> Void
+    ) {
+        guard let refusal = MiloLaunchdDisablePolicy.refusal(forLabel: job.label) else {
+            performLaunchdDisable(job, completion: completion)
+            return
+        }
+        MiloLog.warning(
+            .launchdDisableRefused,
+            category: .security,
+            detail: "reason=\(refusal.rawValue)"
+        )
+        completion(.refused(refusal))
+    }
+
+    private func performLaunchdDisable(
+        _ job: RespawningLaunchdJob,
+        completion: @escaping @Sendable (LaunchdDisableOutcome) -> Void
+    ) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let isPrivileged = job.requiresPrivilegedHelper
+            let target = isPrivileged ? "system/\(job.label)" : "gui/\(getuid())/\(job.label)"
+            let run: (String) -> CommandResult = { action in
+                isPrivileged
+                    ? CommandRunner.runPrivileged("/bin/launchctl", arguments: [action, target])
+                    : CommandRunner.run("/bin/launchctl", arguments: [action, target])
+            }
+
+            let outcome: LaunchdDisableOutcome
+            let disableResult = run("disable")
+            if disableResult.succeeded {
+                // Now stop the instance the disable did not touch.
+                let bootoutResult = run("bootout")
+                if bootoutResult.succeeded {
+                    outcome = .disabled(target: target)
+                } else {
+                    // Honest partial state. The persistent part worked, so saying it failed
+                    // would be as wrong as claiming it fully succeeded.
+                    outcome = .disabledButStillRunning(
+                        target: target,
+                        message: Self.disableFailureMessage(bootoutResult)
+                    )
+                }
+            } else if disableResult.termination == .policyRejected {
+                // The command policy refused it after the disable policy allowed it. That is a
+                // disagreement between two gates, not a launchd failure, and it must not be
+                // reported to the user as "macOS refused".
+                outcome = .refused(.malformedLabel)
+            } else {
+                outcome = .failed(
+                    status: disableResult.status,
+                    message: Self.disableFailureMessage(disableResult)
+                )
+            }
+
+            DispatchQueue.main.async {
+                completion(outcome)
+            }
+        }
+    }
+
+    private static func disableFailureMessage(_ result: CommandResult) -> String {
+        let trimmed = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return "launchctl exited with status \(result.status)."
+        }
+        return trimmed
+    }
+
+    /// Which launchd domain owns a discovered process's job.
+    ///
+    /// Decided from the kernel-reported effective uid, the same evidence the safety policy
+    /// classifies on. A job running under the user's own account lives in `gui/<uid>`; anything
+    /// else is in the `system` domain and needs the root helper to touch. Guessing this from
+    /// the label would be a display-name decision in disguise.
+    private func launchdDomain(for candidate: DiscoveredProcess) -> TelemetryLaunchdDomain {
+        candidate.effectiveUserID == UInt32(getuid()) ? .gui : .system
     }
 
     // MARK: - Discovered process termination
@@ -916,7 +1027,12 @@ final class ProcessManager: Sendable {
                     success: exited,
                     isLaunchdManaged: candidate.isLaunchdManaged,
                     requiresSIPDisabled: false,
-                    wasRespawned: respawned
+                    wasRespawned: respawned,
+                    // Only carried when the process actually came back. A label on a result
+                    // that did not respawn would let a future caller offer to disable a job
+                    // that is behaving correctly.
+                    launchdLabel: respawned ? candidate.launchdLabel : nil,
+                    launchdDomain: respawned ? launchdDomain(for: candidate) : nil
                 )
             }
 
