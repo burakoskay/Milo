@@ -169,7 +169,15 @@ private enum HelperPolicy {
             return false
         }
         if ["disable", "enable", "bootout"].contains(action), arguments.count == 2 {
-            return isSafeDomainTarget(arguments[1], clientUserID: clientUserID)
+            // `enable` is deliberately exempt from the critical-label refusal below: it is the
+            // recovery verb. Refusing it would mean that if a session-critical job were ever
+            // disabled by any other means, Milo could not help put it back.
+            let isStopVerb = action == "disable" || action == "bootout"
+            return isSafeDomainTarget(
+                arguments[1],
+                clientUserID: clientUserID,
+                refusingCriticalLabels: isStopVerb
+            )
         }
         if action == "print-disabled", arguments == ["print-disabled", "system"] {
             return true
@@ -191,17 +199,32 @@ private enum HelperPolicy {
         return value == "gui/\(clientUserID)"
     }
 
-    private static func isSafeDomainTarget(_ value: String, clientUserID: uid_t) -> Bool {
+    private static func isSafeDomainTarget(
+        _ value: String,
+        clientUserID: uid_t,
+        refusingCriticalLabels: Bool
+    ) -> Bool {
         let parts = value.split(separator: "/").map(String.init)
+        let label: String
         if parts.count == 2, parts[0] == "system" {
-            return isSafeLabel(parts[1])
-        }
-        guard parts.count == 3,
-              parts[0] == "gui",
-              UInt32(parts[1]) == clientUserID else {
+            label = parts[1]
+        } else if parts.count == 3, parts[0] == "gui", UInt32(parts[1]) == clientUserID {
+            label = parts[2]
+        } else {
             return false
         }
-        return isSafeLabel(parts[2])
+
+        guard isSafeLabel(label) else {
+            return false
+        }
+
+        // The root helper enforces this itself rather than trusting the app to have filtered
+        // the label, for the same reason it revalidates process identity before every signal:
+        // a refusal that lives only on the client is one a future client change can delete.
+        if refusingCriticalLabels, MiloProcessSafetyPolicy.isCriticalLaunchdLabel(label) {
+            return false
+        }
+        return true
     }
 
     private static func isSafeLabel(_ value: String) -> Bool {

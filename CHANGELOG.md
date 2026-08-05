@@ -16,6 +16,14 @@ series is `0.2.x`, and no 1.x release has shipped.
 
 - Self-test coverage for helper freshness, in the host-dependent suite. It is deliberately absent from the packaged smoke suite, which is the deterministic artifact gate: during a release the freshly built bundle is never the one the running helper was registered from, so a freshness check there would fail every release cut on a machine that has Milo installed.
 
+### Security
+
+- **The root helper now refuses to disable or boot out a session-critical launchd job.** Milo's privileged `kill` grammar has always been gated on a reviewed list of session-critical executables, but its `launchctl` grammar was gated only on a character-set check, because a `disable`/`bootout` request carries a *label* and not an executable path — so the path-keyed list could not reach it. A label-keyed list now closes that gap, enforced independently inside the root helper as well as on the client.
+
+  This was not reachable in shipping Milo, which only ever sent labels from its own reviewed recipes. It is a prerequisite: the next planned feature disables a launchd job named by an arbitrary discovered process row, which would have made it reachable.
+
+  Every label was read from the `Label` key of the owning system plist rather than derived from the executable name, because the two do not correspond — `syspolicyd` is owned by `com.apple.security.syspolicy` and `amfid` by `com.apple.MobileFileIntegrity`. `enable` is deliberately still permitted, so a critical job disabled by any other means can still be recovered through Milo.
+
 ## [0.2.0-preview.2] - 2026-08-04
 
 Second Public Preview, and the first build under the gonggong name. Apple Development signed and

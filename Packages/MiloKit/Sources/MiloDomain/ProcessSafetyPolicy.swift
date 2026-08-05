@@ -203,6 +203,42 @@ public enum MiloProcessSafetyPolicy {
         "/usr/sbin/cfprefsd"
     ]
 
+    /// The launchd labels that own the executables in `criticalExecutablePaths`.
+    ///
+    /// This list exists because the two privileged verbs carry different evidence. A kill
+    /// request carries an absolute executable path, so the helper gates it with
+    /// `isCriticalSystemExecutable`. A `launchctl disable` or `bootout` request carries only a
+    /// *label* — there is no path to check — so that gate cannot reach it, and without this
+    /// list the helper's launchctl grammar would accept `disable system/com.apple.WindowServer`
+    /// on nothing but a character-set check.
+    ///
+    /// Every entry was read from the `Label` key of the `LaunchDaemons`/`LaunchAgents` plist
+    /// whose `Program` or `ProgramArguments[0]` is the corresponding critical path, on macOS
+    /// 27.0. They are **not** derivable from the executable name: `syspolicyd` is owned by
+    /// `com.apple.security.syspolicy` and `amfid` by `com.apple.MobileFileIntegrity`. Do not
+    /// extend this list by pattern; re-read the plists.
+    ///
+    /// `launchd` itself has no label — it is pid 1 and is refused by pid, not by name.
+    public static let criticalLaunchdLabels: Set<String> = [
+        "com.apple.WindowServer",
+        "com.apple.loginwindow",
+        "com.apple.opendirectoryd",
+        "com.apple.configd",
+        "com.apple.diskarbitrationd",
+        "com.apple.security.syspolicy",
+        "com.apple.MobileFileIntegrity",
+        "com.apple.trustd",
+        "com.apple.trustd.agent",
+        "com.apple.secinitd",
+        "com.apple.kernelmanagerd",
+        "com.apple.notifyd",
+        "com.apple.distnoted.xpc.daemon",
+        "com.apple.distnoted.xpc.agent",
+        "com.apple.securityd",
+        "com.apple.cfprefsd.xpc.daemon",
+        "com.apple.cfprefsd.xpc.agent"
+    ]
+
     /// Prefix of every launchd label that belongs to Apple's own service graph.
     ///
     /// Note that a running application carries a label of the form
@@ -222,6 +258,20 @@ public enum MiloProcessSafetyPolicy {
     /// Whether the executable is one whose loss wedges the login session.
     public static func isCriticalSystemExecutable(_ path: String) -> Bool {
         criticalExecutablePaths.contains(standardizedPath(path))
+    }
+
+    /// Whether disabling or booting out this launchd label would wedge the login session.
+    ///
+    /// The comparison is case-insensitive. `launchctl` itself matches labels exactly, so a
+    /// differently-cased label would not in fact stop the service — but a refusal list that
+    /// can be stepped around by changing one character is not a refusal list, and being
+    /// stricter than `launchctl` costs nothing here.
+    public static func isCriticalLaunchdLabel(_ label: String?) -> Bool {
+        guard let label else {
+            return false
+        }
+        let normalized = label.lowercased()
+        return criticalLaunchdLabels.contains { $0.lowercased() == normalized }
     }
 
     /// Whether the launchd label belongs to Apple's own service graph rather than to an
