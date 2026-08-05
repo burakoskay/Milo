@@ -2,23 +2,32 @@ import Cocoa
 import MiloHardening
 import SwiftUI
 
-// MARK: - Binary Hardening (Zero Technical Debt)
+// MARK: - Runtime code-signature check
 
-private enum RuntimeIntegrityState {
-    private static let compromisedKey = "Milo.integrity.compromised"
-
-    static func markCompromised(reason: String) {
-        UserDefaults.standard.set(true, forKey: compromisedKey)
-        MiloLog.warning(.runtimeIntegrityFailed, category: .security, detail: reason)
-    }
-}
-
+/// Records which build is running. **This is detection, not enforcement**, and deliberately so —
+/// see `docs/decisions/0005-defer-tamper-enforcement-to-1.0.md`.
+///
+/// A failure means the running code does not carry gonggong's signing identity: the binary was
+/// modified, or re-signed by somebody else. Milo logs that and carries on. It does not refuse to
+/// run, degrade, or disable anything, because there is nothing to pirate — licensing is deferred
+/// to 1.0 by decision 0002, and an enforcement response designed before the thing it protects
+/// exists is a guess.
+///
+/// What the check *does* earn is real: the packaged smoke suite asserts the same requirement, and
+/// that assertion is what proved the gonggong rename had not broken the requirement string in
+/// `Integrity.c`. A mistake there produces a false compromise verdict at launch rather than a
+/// build failure, so the positive path is worth checking on every start.
+///
+/// Until 2026-08-05 this also set a `Milo.integrity.compromised` user default that **nothing ever
+/// read**. A flag no code consults is worse than no flag: it reads as a control when it is only a
+/// note to nobody. Removed. If enforcement is ever wanted, add the response and its UI together,
+/// deliberately — not by discovering this key and wiring something to it.
 @discardableResult
 private func performRuntimeSignatureCheck() -> Bool {
     MiloHardeningPrimitives.retain()
     let passed = MiloIntegrity.check(.launch)
     if passed == false {
-        RuntimeIntegrityState.markCompromised(reason: "integrity-launch")
+        MiloLog.warning(.runtimeIntegrityFailed, category: .security, detail: "integrity-launch")
         return false
     }
     return true

@@ -27,6 +27,7 @@ Set **Status** to `Accepted`, `Superseded by NNNN`, or `Reverted`. Never delete 
 | [0002](0002-defer-licensing-and-consolidate-docs.md) | Defer licensing to 1.0, HANDOFF.md is the single source of truth | Accepted | 2026-08-04 |
 | [0003](0003-release-and-development-process.md) | Release and development process | Accepted | 2026-08-04 |
 | [0004](0004-retire-the-secondary-git-mirror.md) | Retire the secondary git mirror | Accepted | 2026-08-04 |
+| [0005](0005-defer-tamper-enforcement-to-1.0.md) | The runtime signature check detects; enforcement is deferred to 1.0 | Accepted | 2026-08-05 |
 
 ## Related documents
 

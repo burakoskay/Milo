@@ -367,10 +367,20 @@ The previous self-referential executable hash was removed because it could not b
 
 The deterministic packaged-app smoke suite exercises the positive runtime-signature path, and the
 negative path was measured on 2026-08-05 (section 10): the check correctly rejects an ad-hoc
-re-signed bundle and a `__TEXT` modification. **It has no consequence** — the failure is recorded to
-`UserDefaults` and the log, and the app continues. Treat it as a correctness signal about which
-identity is running, not as an anti-tamper control. Public release work still needs the enforcement
-decision (section 18) plus Developer ID/notarization validation.
+re-signed bundle and a `__TEXT` modification.
+
+**This is detection, not enforcement, and that is now a decision rather than an oversight** —
+`docs/decisions/0005-defer-tamper-enforcement-to-1.0.md`. A failure is logged as
+`runtime.integrity-failed` and the app continues. It answers *which build is running*; it does not
+stop a cracked one, and Milo must never be described as if it does. The write-only
+`Milo.integrity.compromised` default was removed on 2026-08-05, and
+`Tests/redteam/DetectionOnlyIntegrityTests.swift` fails the build if enforcement or the flag
+returns without superseding that record.
+
+The check still earns its place: the smoke suite's *Runtime code signature* line is what proved the
+gonggong rename had not broken the requirement string in `Integrity.c`, where a mistake produces a
+false compromise verdict at launch rather than a build failure. Public release work still needs
+Developer ID/notarization validation.
 
 ## 8. Permission behavior the user cares about
 
@@ -959,16 +969,13 @@ is deferred, and the UI must not imply otherwise.
    `system`-domain branch, which needs the root helper and a respawning system daemon; the fixture
    was a user agent. Prove it with the disposable-VM work below.
 3. Clean-VM validation of the System Tuning matrix on every supported macOS release.
-4. **Decide what a failed runtime signature check should do.** The negative tamper test is done
-   (section 10) and it showed the check detects tampering and then does nothing about it. The
-   options are not equivalent and the choice is the user's: refuse to run; run with a persistent
-   non-dismissible banner and privileged actions disabled; or keep detection-only and stop
-   describing it as hardening. **"Refuse to run" is not a free choice** —
-   `Tests/redteam/Exit173RegressionTest.swift` forbids the `exit(173)` literal outright, so
-   somebody previously decided against exactly that and guarded it. Find out why before
-   overruling it. Whichever is chosen, the check should move earlier than
-   `applicationDidFinishLaunching` and be paired with a static check of the on-disk bundle, since
-   the dynamic check missed a `__LINKEDIT` modification that `codesign --verify` caught.
+4. ~~Decide what a failed runtime signature check should do~~ — **decided 2026-08-05**,
+   `docs/decisions/0005-defer-tamper-enforcement-to-1.0.md`: detection only, enforcement deferred
+   to 1.0 and revisited as part of the licensing work, because what a failed check should mean
+   depends on whether there is a license to check. The write-only flag is gone and
+   `DetectionOnlyIntegrityTests` pins it. When it is revisited, pair the response with a static
+   check of the on-disk bundle — the dynamic check missed a `__LINKEDIT` modification that
+   `codesign --verify` caught.
 5. Rejection cases for the helper's PID/path/start-time revalidation against a disposable
    root-owned fixture. The positive path is proven; these rejection paths are not.
 

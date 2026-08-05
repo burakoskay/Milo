@@ -26,6 +26,11 @@ series is `0.2.x`, and no 1.x release has shipped.
 
 ### Security
 
+- **The runtime code-signature check is documented as detection, not protection, and a write-only flag was removed.** Milo checks at launch that the running code carries gonggong's signing identity. It has always logged a failure and carried on — but it also wrote a `Milo.integrity.compromised` user default that nothing in the project ever read. A flag no code consults reads as a control when it is a note to nobody, so it is gone.
+
+  This is now a recorded decision rather than an accident: enforcement is deferred to 1.0 and will be designed alongside licensing, because what a failed check should mean depends on whether there is a license to check. Milo is not, and must not be described as, protected against a modified build. See `docs/decisions/0005-defer-tamper-enforcement-to-1.0.md`.
+
+
 - **The root helper now refuses to disable or boot out a session-critical launchd job.** Milo's privileged `kill` grammar has always been gated on a reviewed list of session-critical executables, but its `launchctl` grammar was gated only on a character-set check, because a `disable`/`bootout` request carries a *label* and not an executable path — so the path-keyed list could not reach it. A label-keyed list now closes that gap, enforced independently inside the root helper as well as on the client.
 
   This was not reachable in shipping Milo, which only ever sent labels from its own reviewed recipes. It is a prerequisite: the next planned feature disables a launchd job named by an arbitrary discovered process row, which would have made it reachable.
