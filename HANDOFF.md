@@ -449,8 +449,14 @@ gate, no termination. A tampered Milo runs.
 
 **Three documented claims about this path were false and are corrected in this commit:**
 
-1. There is **no `exit(173)`** anywhere in the repository. `CLAUDE.md` stated the app "instantly
-   crashes (`exit(173)`)" if a cracker modifies the binary; it does not.
+1. There is **no `exit(173)`** anywhere in the repository — and its absence is *enforced*.
+   `Tests/redteam/Exit173RegressionTest.swift` fails the build if the literal appears anywhere
+   under `App`, `Packages`, `Tools`, or `Tests`. `CLAUDE.md` stated the app "instantly crashes
+   (`exit(173)`)" if a cracker modifies the binary, while a red-team test actively forbids that
+   behaviour from returning. The directive did not merely describe code that was absent; it
+   described code the test suite exists to keep out. Anyone choosing the enforcement policy in
+   section 18 item 4 must reckon with that test first — it is a deliberate prior decision, and
+   the reasoning behind it is not recorded anywhere else.
 2. The check is **not at the entry point**. `MiloApp.init()` handles only the two test flags; the
    check runs in `applicationDidFinishLaunching`, after `LicenseManager` and `DebloatManager` have
    already been constructed.
@@ -855,7 +861,10 @@ is deferred, and the UI must not imply otherwise.
    (section 10) and it showed the check detects tampering and then does nothing about it. The
    options are not equivalent and the choice is the user's: refuse to run; run with a persistent
    non-dismissible banner and privileged actions disabled; or keep detection-only and stop
-   describing it as hardening. Whichever is chosen, the check should move earlier than
+   describing it as hardening. **"Refuse to run" is not a free choice** —
+   `Tests/redteam/Exit173RegressionTest.swift` forbids the `exit(173)` literal outright, so
+   somebody previously decided against exactly that and guarded it. Find out why before
+   overruling it. Whichever is chosen, the check should move earlier than
    `applicationDidFinishLaunching` and be paired with a static check of the on-disk bundle, since
    the dynamic check missed a `__LINKEDIT` modification that `codesign --verify` caught.
 5. Rejection cases for the helper's PID/path/start-time revalidation against a disposable
