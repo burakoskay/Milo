@@ -315,7 +315,17 @@ enum CommandRunner {
         }
 
         if ["disable", "enable", "bootout"].contains(action), arguments.count == 2 {
-            return isSafeLaunchctlDomainTarget(arguments[1])
+            guard isSafeLaunchctlDomainTarget(arguments[1]) else {
+                return false
+            }
+            // `enable` is the recovery verb and stays exempt. The stop verbs are refused for
+            // session-critical labels here as well as in the root helper — the helper is the
+            // boundary, but a request that should never be made should not be made.
+            guard action == "disable" || action == "bootout" else {
+                return true
+            }
+            let label = arguments[1].split(separator: "/").map(String.init).last
+            return !MiloProcessSafetyPolicy.isCriticalLaunchdLabel(label)
         }
 
         if action == "bootstrap", arguments.count == 3 {

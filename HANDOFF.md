@@ -304,6 +304,11 @@ Key properties:
 - client must be the signed preview/production Milo app and must not be root;
 - helper commands use direct argv execution, never a shell;
 - fixed executable and argument grammar;
+- session-critical targets are refused twice, on the two different kinds of evidence a request
+  can carry: `kill` requests are gated on the executable path (`criticalExecutablePaths`), and
+  `launchctl disable`/`bootout` requests are gated on the launchd label
+  (`criticalLaunchdLabels`), because a label request carries no path. `enable` is exempt so a
+  critical job can always be recovered;
 - bounded request size, output, deadline, and cleanup;
 - registration is initiated only by the user's **Enable** action;
 - no automatic registration loop;
@@ -423,6 +428,38 @@ git diff --check
 Commit both `project.yml` and the regenerated `Milo.xcodeproj/project.pbxproj`.
 
 ## 10. Verification completed at this handoff
+
+### Critical-label refusal in the launchctl grammar, 2026-08-05
+
+Gates: `swiftlint --strict --quiet` 0 violations; `swift test` (root) **32** tests, 0 failures (was
+29); `swift test --package-path Packages/MiloKit` **53** tests, 0 failures (was 49);
+`xcodebuild -scheme MiloPro test` `** TEST SUCCEEDED **`.
+
+**What was wrong.** `isAllowedLaunchctl` in the root helper accepted `disable system/<label>` and
+`bootout system/<label>` for any label passing a character-set check. Its sibling `isAllowedKill`
+has always consulted `MiloProcessSafetyPolicy.isCriticalSystemExecutable`. The asymmetry is not an
+oversight so much as an unnoticed consequence of the evidence each verb carries: a kill request
+carries an absolute executable path, a launchctl request carries only a label, and the reviewed
+list was keyed on paths.
+
+**Reachability, stated honestly.** Not reachable in shipping Milo. The helper only accepts
+connections from signed Milo, and Milo only ever sent labels from its own reviewed recipes. This is
+a prerequisite, not an incident — section 18 item 2 proposes feeding *arbitrary discovered rows*
+into this exact path, which is what would have made it live.
+
+**The labels were measured, not guessed.** Each was read from the `Label` key of the
+`LaunchDaemons`/`LaunchAgents` plist whose `Program`/`ProgramArguments[0]` is the corresponding
+entry in `criticalExecutablePaths`, on macOS 27.0. Two do not follow from the executable name at
+all — `syspolicyd` is owned by `com.apple.security.syspolicy`, `amfid` by
+`com.apple.MobileFileIntegrity` — so a list built by appending the daemon name would have left both
+disableable. Four entries have distinct daemon *and* agent labels (`trustd`, `cfprefsd`,
+`distnoted`, `secinitd`); both are listed. `launchd` has no label and is refused by pid.
+
+`enable` is exempt by design. It is the recovery verb, and refusing it would mean a critical job
+disabled by any other means could never be put back through Milo.
+
+Re-derive the list on each new macOS release rather than trusting it — it has the same staleness
+exposure as `criticalExecutablePaths`, already noted in section 18.
 
 ### Negative tamper test, measured on 2026-08-05
 
@@ -855,7 +892,13 @@ is deferred, and the UI must not imply otherwise.
 
 1. Notarized Developer ID distribution, so first launch does not require a Gatekeeper override.
 2. Disabling a launchd job directly from the process row that reported the restart, as a labelled and
-   confirmed action rather than a side effect of terminating the process.
+   confirmed action rather than a side effect of terminating the process. **The privileged-boundary
+   prerequisite is now done** — the helper refuses `disable`/`bootout` for session-critical labels
+   (section 7), which this feature would otherwise have made reachable with an arbitrary label. What
+   remains is the feature itself: surfacing the action on a `wasRespawned` row, the confirmation, the
+   typed result, and a decision about whether a *non*-critical Apple-managed label may be disabled at
+   all — the answer today is that `classify` already marks those rows `.protected(.appleManagedAgent)`,
+   so the feature must not quietly widen that.
 3. Clean-VM validation of the System Tuning matrix on every supported macOS release.
 4. **Decide what a failed runtime signature check should do.** The negative tamper test is done
    (section 10) and it showed the check detects tampering and then does nothing about it. The

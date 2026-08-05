@@ -36,6 +36,45 @@ final class ProcessDiscoverySafetyRegressionTests: XCTestCase {
         XCTAssertTrue(helper.contains("import MiloDomain"))
     }
 
+    func testHelperIndependentlyRefusesDisablingCriticalLaunchdJobs() throws {
+        let helper = try source("Helper/MiloPrivilegedHelper/main.swift")
+
+        // A kill request carries an executable path, so `isCriticalSystemExecutable` gates it.
+        // A `launchctl disable` request carries only a label, so it needs its own gate — and
+        // without one, the launchctl grammar accepts `disable system/com.apple.WindowServer`
+        // on nothing but a character-set check.
+        XCTAssertTrue(
+            helper.contains("MiloProcessSafetyPolicy.isCriticalLaunchdLabel"),
+            "The root helper must refuse to disable session-critical launchd jobs independently"
+        )
+        XCTAssertTrue(
+            helper.contains("refusingCriticalLabels"),
+            "The stop verbs must pass the refusal through to the domain-target check"
+        )
+    }
+
+    func testTheClientAlsoRefusesDisablingCriticalLaunchdJobs() throws {
+        let runner = try source("App/Milo/Runtime/CommandRunner.swift")
+
+        XCTAssertTrue(runner.contains("MiloProcessSafetyPolicy.isCriticalLaunchdLabel"))
+        XCTAssertTrue(runner.contains("import MiloDomain"))
+    }
+
+    func testRecoveringACriticalLaunchdJobIsStillPossible() throws {
+        let helper = try source("Helper/MiloPrivilegedHelper/main.swift")
+        let runner = try source("App/Milo/Runtime/CommandRunner.swift")
+
+        // `enable` is the recovery verb. Refusing it too would mean that a session-critical
+        // job disabled by any other means could never be put back through Milo. Both sides
+        // must scope the refusal to the stop verbs only.
+        for source in [helper, runner] {
+            XCTAssertTrue(
+                source.contains("action == \"disable\" || action == \"bootout\""),
+                "The critical-label refusal must be scoped to the stop verbs, leaving enable available"
+            )
+        }
+    }
+
     func testHelperRequiresAnExpectedIdentityForEverySignal() throws {
         let helper = try source("Helper/MiloPrivilegedHelper/main.swift")
 

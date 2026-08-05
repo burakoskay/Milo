@@ -182,6 +182,49 @@ struct ProcessSafetyPolicyTests {
         #expect(!MiloProcessSafetyPolicy.isAppleManagedLaunchdLabel(nil))
     }
 
+    // MARK: - Critical launchd labels
+
+    @Test("session-critical launchd labels are refused")
+    func criticalLabelsAreRefused() {
+        #expect(MiloProcessSafetyPolicy.isCriticalLaunchdLabel("com.apple.WindowServer"))
+        #expect(MiloProcessSafetyPolicy.isCriticalLaunchdLabel("com.apple.loginwindow"))
+        #expect(MiloProcessSafetyPolicy.isCriticalLaunchdLabel("com.apple.opendirectoryd"))
+        // The two whose labels do not follow from the executable name. A list built by
+        // guessing `com.apple.syspolicyd` and `com.apple.amfid` would leave both reachable.
+        #expect(MiloProcessSafetyPolicy.isCriticalLaunchdLabel("com.apple.security.syspolicy"))
+        #expect(MiloProcessSafetyPolicy.isCriticalLaunchdLabel("com.apple.MobileFileIntegrity"))
+    }
+
+    @Test("the refusal cannot be stepped around by changing case")
+    func criticalLabelRefusalIsCaseInsensitive() {
+        #expect(MiloProcessSafetyPolicy.isCriticalLaunchdLabel("com.apple.windowserver"))
+        #expect(MiloProcessSafetyPolicy.isCriticalLaunchdLabel("COM.APPLE.WINDOWSERVER"))
+        #expect(MiloProcessSafetyPolicy.isCriticalLaunchdLabel("com.apple.MobileFileIntegRity"))
+    }
+
+    @Test("ordinary labels are not refused")
+    func ordinaryLabelsAreNotRefused() {
+        #expect(!MiloProcessSafetyPolicy.isCriticalLaunchdLabel("com.adobe.AdobeUpdater"))
+        #expect(!MiloProcessSafetyPolicy.isCriticalLaunchdLabel("com.apple.Siri.agent"))
+        #expect(!MiloProcessSafetyPolicy.isCriticalLaunchdLabel("com.apple.tipsd"))
+        #expect(!MiloProcessSafetyPolicy.isCriticalLaunchdLabel(nil))
+        // A near-miss must not be refused by prefix: the list is exact, not a pattern.
+        #expect(!MiloProcessSafetyPolicy.isCriticalLaunchdLabel("com.apple.WindowServer.helper"))
+    }
+
+    @Test("every critical executable that launchd owns has its label refused")
+    func criticalPathsAndLabelsAgree() {
+        // The two lists gate the same guarantee through different evidence, so they must not
+        // drift apart. `launchd` is refused by pid, not by label, and has no plist.
+        let launchdItself: Set<String> = ["/sbin/launchd", "/usr/libexec/launchd"]
+        let labelled = MiloProcessSafetyPolicy.criticalExecutablePaths.subtracting(launchdItself)
+        #expect(!labelled.isEmpty)
+        #expect(MiloProcessSafetyPolicy.criticalLaunchdLabels.count >= labelled.count)
+        for label in MiloProcessSafetyPolicy.criticalLaunchdLabels {
+            #expect(label.hasPrefix(MiloProcessSafetyPolicy.appleLaunchdLabelPrefix))
+        }
+    }
+
     // MARK: - Invariant
 
     @Test("the root helper is never asked to signal Apple system software")
