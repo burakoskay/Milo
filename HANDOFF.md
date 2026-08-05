@@ -37,11 +37,15 @@ the release-gate fix (#30) are all merged. Nothing is in review.
 
 Open discovery and uninstall — the two items earlier checkpoints listed as open — are shipped.
 
-**In flight since publication:** stale-helper detection, on branch
-`feat/detect-stale-privileged-helper`. Milo now measures whether the helper answering it is the
-helper in its own bundle, and offers a password-free Restart Helper when it is not. This closes the
-automated-detection gap the preview.2 release opened by observation. Measured evidence and the one
-path still unproven (Restart Helper's recovery, which needs a disposable VM) are in section 10.
+**Merged since publication:** stale-helper detection (#32). Milo now measures whether the helper
+answering it is the helper in its own bundle, and offers a password-free Restart Helper when it is
+not. This closes the automated-detection gap the preview.2 release opened by observation. Measured
+evidence, and the one path still unproven (Restart Helper's recovery, which needs a disposable VM),
+are in section 10.
+
+**Unreleased.** This is in `main`, not in any published build. The installed `/Applications/Milo.app`
+is build `22` and predates it, so the feature cannot be demonstrated from the installed app — build
+from `main`, or cut the next preview, before trying to see it work.
 
 **Three things this release taught, all recorded because they will recur:**
 
@@ -99,11 +103,11 @@ This table was re-verified on 2026-08-05. Confirm it again rather than trusting 
 | Repository | `/Volumes/Internal HD/Developer/Milo` |
 | Branch | `main` |
 | Upstream | `main` in sync with `origin/main` |
-| HEAD | `f2706e7` at publication — the commit tagged `v0.2.0-preview.2`. This documentation update merged on top of it, so HEAD is now ahead of the tag by design |
+| HEAD | `32a23fd`, the stale-helper detection merge. The published tag `v0.2.0-preview.2` is at `f2706e7`; HEAD is ahead of it by design, and **the installed `/Applications/Milo.app` (build `22`) predates stale-helper detection** — it cannot exercise the feature |
 | Main implementation commit | `11e9caf feat: ship Milo Public Preview (#9)` |
 | Preview delivery pull request | `#9 feat: ship Milo Public Preview`, **merged**; branch `fable/milo-test` no longer exists on `origin` |
-| Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0`, `#26` gonggong rebrand and single source of truth, `#27` preview.2 live-verification checkpoint, `#28` open discovery and uninstall, `#29` the preview.2 re-cut, `#30` release smoke-gate fix |
-| Open pull request | None. `#27` and `#28` merged 2026-08-04; `#29` and `#30` merged 2026-08-05 |
+| Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0`, `#26` gonggong rebrand and single source of truth, `#27` preview.2 live-verification checkpoint, `#28` open discovery and uninstall, `#29` the preview.2 re-cut, `#30` release smoke-gate fix, `#31` the published-preview.2 record, `#32` stale-helper detection |
+| Open pull request | None. `#27` and `#28` merged 2026-08-04; `#29`, `#30`, `#31` and `#32` merged 2026-08-05 |
 | Published release | **`v0.2.0-preview.2`, published 2026-08-05** as a prerelease at `f2706e7`, build `22`, DMG SHA-256 `7d3e9dd9…88e6e91`. `v0.2.0-preview.1` remains published. The superseded preview.2 tag at `08a799a` (build `21`) was re-cut before publication and never pushed |
 | Remotes | `origin` → `https://github.com/burakoskay/Milo.git`, the only remote. The `gitlab` mirror and its scheduled `--mirror` workflow were retired on 2026-08-04 (decision 0004); there is no off-GitHub copy |
 | Tags | `origin` carries `v0.2.0-preview.1` and `v0.2.0-preview.2`. The local-only `v2.0.0-preview.1` was deleted on 2026-08-04: it recorded build `200` under the discarded numbering scheme, which would have permanently blocked the build-number check in `Tools/release.sh` |
