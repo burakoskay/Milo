@@ -47,6 +47,14 @@ are in section 10.
 is build `22` and predates it, so the feature cannot be demonstrated from the installed app — build
 from `main`, or cut the next preview, before trying to see it work.
 
+**Measured since, no code change:** the negative tamper test section 18 asked for. The runtime
+signature check correctly rejects an ad-hoc re-signed bundle and a `__TEXT` modification — **and
+then lets the app run**, because the only thing it does on failure is set a `UserDefaults` key that
+nothing reads. Milo's binary hardening is a detection signal, not an anti-piracy control, and this
+file and `CLAUDE.md` both described it wrongly (an `exit(173)` at the entry point that has never
+existed in this codebase). Both are corrected. **What the consequence should be is now an open
+decision for the user, section 18 item 4** — nothing was changed in the app.
+
 **Three things this release taught, all recorded because they will recur:**
 
 1. **A prepared tag is not a correct tag.** The original `v0.2.0-preview.2` pointed at `08a799a`,
@@ -103,7 +111,7 @@ This table was re-verified on 2026-08-05. Confirm it again rather than trusting 
 | Repository | `/Volumes/Internal HD/Developer/Milo` |
 | Branch | `main` |
 | Upstream | `main` in sync with `origin/main` |
-| HEAD | `32a23fd`, the stale-helper detection merge. The published tag `v0.2.0-preview.2` is at `f2706e7`; HEAD is ahead of it by design, and **the installed `/Applications/Milo.app` (build `22`) predates stale-helper detection** — it cannot exercise the feature |
+| HEAD | `a990ca5` at the start of this session, the checkpoint-correction merge; `32a23fd` beneath it is the stale-helper detection merge. The published tag `v0.2.0-preview.2` is at `f2706e7`; HEAD is ahead of it by design, and **the installed `/Applications/Milo.app` (build `22`) predates stale-helper detection** — it cannot exercise the feature |
 | Main implementation commit | `11e9caf feat: ship Milo Public Preview (#9)` |
 | Preview delivery pull request | `#9 feat: ship Milo Public Preview`, **merged**; branch `fable/milo-test` no longer exists on `origin` |
 | Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0`, `#26` gonggong rebrand and single source of truth, `#27` preview.2 live-verification checkpoint, `#28` open discovery and uninstall, `#29` the preview.2 re-cut, `#30` release smoke-gate fix, `#31` the published-preview.2 record, `#32` stale-helper detection |
@@ -347,7 +355,12 @@ The previous self-referential executable hash was removed because it could not b
 - Team ID `8N738727QB`; and
 - bundle identifier `com.gonggong.milo` or `com.gonggong.milo.preview`.
 
-The deterministic packaged-app smoke suite exercises the positive runtime-signature path. Public release work still needs a deliberate negative tamper test plus Developer ID/notarization validation.
+The deterministic packaged-app smoke suite exercises the positive runtime-signature path, and the
+negative path was measured on 2026-08-05 (section 10): the check correctly rejects an ad-hoc
+re-signed bundle and a `__TEXT` modification. **It has no consequence** — the failure is recorded to
+`UserDefaults` and the log, and the app continues. Treat it as a correctness signal about which
+identity is running, not as an anti-tamper control. Public release work still needs the enforcement
+decision (section 18) plus Developer ID/notarization validation.
 
 ## 8. Permission behavior the user cares about
 
@@ -411,6 +424,52 @@ Commit both `project.yml` and the regenerated `Milo.xcodeproj/project.pbxproj`.
 
 ## 10. Verification completed at this handoff
 
+### Negative tamper test, measured on 2026-08-05
+
+Section 18's fourth nearest priority asked for a deliberate negative test of the runtime signature
+check. It was run against disposable copies of the installed build `22`, in `/private/tmp`;
+`/Applications/Milo.app` was never modified. Every fixture was destroyed afterwards.
+
+**The detector fires correctly. Nothing happens when it does.** Those are two separate results and
+the second is the finding.
+
+| Case | Result |
+|---|---|
+| Control: unmodified copy outside `/Applications` | Valid on disk, satisfies its Designated Requirement, `--preview-smoke-test` **12 passed, 0 failed** — the check is path-independent |
+| **Ad-hoc re-signed** (`codesign -f --deep -s -`), the realistic crack | Signature valid so the kernel runs it, but Milo's Team ID requirement fails: `[FAIL] Runtime code signature`, **11 passed, 1 failed**, exit 1 |
+| **Byte flipped inside `__TEXT`** (offset 1000000, no re-sign) | `[FAIL] Runtime code signature`, 11 passed, 1 failed. The kernel did **not** `SIGKILL` it |
+| Byte flipped inside `__LINKEDIT` (offset 4108432) | `codesign --verify` reports the bundle modified, but the runtime check **passes**, 12 passed, 0 failed |
+| Launching the ad-hoc-signed bundle for real | Ran indefinitely, fully functional, menu bar and all. Only observable effect: `Milo.integrity.compromised` set to `1` |
+
+**The failure has no consequence.** `performRuntimeSignatureCheck()`
+(`App/Milo/Runtime/MenuBarAppDelegate.swift:17`) writes `Milo.integrity.compromised` to
+`UserDefaults` and logs `runtime.integrity-failed`. Grepping `App`, `Helper`, `Packages` and
+`Tests` finds exactly one reference to that key — the write. Nothing reads it: no UI, no feature
+gate, no termination. A tampered Milo runs.
+
+**Three documented claims about this path were false and are corrected in this commit:**
+
+1. There is **no `exit(173)`** anywhere in the repository. `CLAUDE.md` stated the app "instantly
+   crashes (`exit(173)`)" if a cracker modifies the binary; it does not.
+2. The check is **not at the entry point**. `MiloApp.init()` handles only the two test flags; the
+   check runs in `applicationDidFinishLaunching`, after `LicenseManager` and `DebloatManager` have
+   already been constructed.
+3. It is **`SecCodeCheckValidity` on `SecCodeCopySelf`**, not `SecStaticCodeCheckValidity`. That is
+   why the `__LINKEDIT` case passes: dynamic validation reflects the kernel's opinion of pages as
+   they are faulted in, so a modification in a region that is never mapped is never seen. A
+   static check of the on-disk bundle would catch it, as `codesign --verify` did.
+
+**What this does and does not mean.** The check is honest evidence that the *running* code carries
+gonggong's signing identity, and the packaged smoke suite's *Runtime code signature* line is a real
+gate — it is what proved the rebrand had not broken the requirement string. What it is not is an
+anti-piracy control, because detection with no consequence is not enforcement. Deciding the
+consequence is a product decision, not a cleanup, and is listed in section 18.
+
+An unhardened observation worth keeping: the first `__LINKEDIT` offset was chosen as "half the
+file" and landed outside executable code, which produced a pass that looked like a detector gap
+until the Mach-O layout was checked. Verify which segment an offset falls in before drawing a
+conclusion from it.
+
 ### Stale-helper detection, measured on 2026-08-05
 
 Gates: `swiftlint --quiet` 0 violations; `swift test` (root) 29 tests, 0 failures; `swift test
@@ -463,7 +522,7 @@ the first release to clear it end to end. Measured parts:
 | Step | Result |
 |---|---|
 | Install from DMG | `0.2.0` (`22`), signature valid, satisfies its Designated Requirement |
-| Launch | Survived `SecStaticCodeCheckValidity`; no `exit(173)` |
+| Launch | Passed the runtime signature check and started normally |
 | Packaged smoke suite, run from `/Applications` | 12 passed, 0 failed, including *Runtime code signature* against the newly signed identity |
 | Discovery lane | Discovered `milo-discovery-fixture` (pid 12809) as `userOwned` and terminated it **without the helper**; 307 classified, 112 actionable |
 | Collateral damage | An unrelated `sleep 600` (pid 12778) running throughout was never touched |
@@ -703,7 +762,8 @@ Unless the user changes direction, resume in this order:
 The install-and-live-verify steps that used to sit here are done; their results are in section 10.
 The remaining runtime unknowns are the **rejection** paths, not the happy path:
 
-- a negative tamper test for the runtime signature check;
+- ~~a negative tamper test for the runtime signature check~~ — done 2026-08-05, section 10. It
+  detects and does not enforce; the enforcement decision is section 18 item 4;
 - helper PID/path/start-time rejection against a disposable root-owned fixture, built in a controlled
   environment rather than improvised on this host;
 - helper decline and recovery behaviour, tested without repeatedly unregistering and re-registering.
@@ -749,6 +809,8 @@ The backup is ad hoc signed, uses the pre-rebrand production bundle identifier `
 - A submitted launchd job does not prove that XPC peer authentication or a privileged command succeeded.
 - A PID is not a process identity. Never remove executable-path and start-time checks.
 - Installing over an existing build leaves the **previously running** root helper alive and serving requests from the old binary, while `launchctl print` still reports `state = running`. Observed live on 2026-08-05, section 10. **Milo now detects this itself** — it compares the code identity of the helper answering it against the helper in its own bundle, and offers Restart Helper. The manual check (comparing the helper's process start time against the bundle's install time) is now a fallback, not the only route. Note that a **Debug build will correctly report stale** whenever a Preview-installed helper is the registered one; that is a real mismatch, not a false positive.
+- A failed runtime signature check does not stop the app. It sets `Milo.integrity.compromised` and logs; nothing reads the key. Do not cite binary hardening as protection against a cracked build until section 18 item 4 is decided. Measured 2026-08-05, section 10.
+- When tampering with a Mach-O to test a signature check, confirm which segment the offset lands in. A byte flipped in `__LINKEDIT` is reported modified by `codesign --verify` but passes the *dynamic* `SecCodeCheckValidity`, which reads as a detector gap and is really a badly chosen offset.
 - This host's security configuration is not a public Gatekeeper/notarization oracle.
 - Do not inspect or print `App/Milo/Runtime/Secrets.swift`; it is ignored and outside Preview needs.
 
@@ -789,9 +851,15 @@ is deferred, and the UI must not imply otherwise.
 2. Disabling a launchd job directly from the process row that reported the restart, as a labelled and
    confirmed action rather than a side effect of terminating the process.
 3. Clean-VM validation of the System Tuning matrix on every supported macOS release.
-4. A negative tamper test for the runtime signature check, plus rejection cases for the helper's
-   PID/path/start-time revalidation against a disposable root-owned fixture. The positive path is now
-   proven; the rejection paths are not.
+4. **Decide what a failed runtime signature check should do.** The negative tamper test is done
+   (section 10) and it showed the check detects tampering and then does nothing about it. The
+   options are not equivalent and the choice is the user's: refuse to run; run with a persistent
+   non-dismissible banner and privileged actions disabled; or keep detection-only and stop
+   describing it as hardening. Whichever is chosen, the check should move earlier than
+   `applicationDidFinishLaunching` and be paired with a static check of the on-disk bundle, since
+   the dynamic check missed a `__LINKEDIT` modification that `codesign --verify` caught.
+5. Rejection cases for the helper's PID/path/start-time revalidation against a disposable
+   root-owned fixture. The positive path is proven; these rejection paths are not.
 
 ### Process-control reliability
 
