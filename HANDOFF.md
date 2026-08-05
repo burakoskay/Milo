@@ -428,6 +428,8 @@ Apple owns the final Background Items approval. Milo must not simulate, bypass, 
 | `Packages/MiloKit/Sources/MiloHardening/Integrity.c` | Runtime code-signature validation |
 | `Tests/integration/TargetBoundaryTests.swift` | Helper/preview/no-prompt regression assertions |
 | `Tools/build-development-preview.sh` | Canonical Preview build, signing, smoke, and DMG pipeline |
+| `Tools/vm-verify.sh` | Disposable-VM verification harness; destructive checks refuse to run off a marked VM |
+| `docs/vm-verification-runbook.md` | How to build the VM and what each blocked item needs |
 | `App/Milo/Runtime/SharedUI.swift` | Panel geometry constants and sheet window rounding |
 | `README.md` | Public product, install, architecture, and limitation guide |
 | `Screenshots/` | README imagery |
@@ -445,6 +447,27 @@ git diff --check
 Commit both `project.yml` and the regenerated `Milo.xcodeproj/project.pbxproj`.
 
 ## 10. Verification completed at this handoff
+
+### Disposable-VM verification harness, 2026-08-05
+
+`Tools/vm-verify.sh` exists because four section 18 items are blocked on the same missing thing,
+and one of them — the System Tuning matrix and Gatekeeper first launch — is blocked *structurally*:
+**SIP is disabled on this host**, so no amount of care makes a result here transfer to a user's
+Mac. This is also the machine that signs the builds, so it can never test a quarantined first
+launch honestly. See `docs/vm-verification-runbook.md`.
+
+Measured on this host, which is the only part that can be measured here:
+
+| Claim | Evidence |
+|---|---|
+| The destructive checks refuse to run on real hardware | `launchd-system` and `helper-restart` both print their refusal and exit `2` without running anything: `kern.hv_vmm_present` is `0` and `/etc/milo-disposable-vm` does not exist |
+| The guard needs **both** conditions, with no override | Adding a `MILO_VM_FORCE` early return fails 2 of the 5 `VMVerifyHarnessSafetyTests` |
+| `preflight` is safe anywhere and correctly condemns this host | Reports 3 passed, 3 failed: not a VM, no marker, **SIP disabled** — while correctly detecting Milo `0.2.0 (22)`, a valid signature, and the registered helper |
+| The harness parses | `bash -n` clean, asserted in CI by `testTheHarnessIsExecutableAndSyntacticallyValid` |
+
+**Nothing about Milo's behaviour was verified by this.** The harness is the instrument, not the
+measurement; the four blocked items stay blocked until it runs on an actual VM. It is recorded here
+so the next session builds the VM rather than rebuilding the harness.
 
 ### CI was red on `main` for eight consecutive merges, 2026-08-05
 
@@ -976,8 +999,17 @@ is deferred, and the UI must not imply otherwise.
    `DetectionOnlyIntegrityTests` pins it. When it is revisited, pair the response with a static
    check of the on-disk bundle — the dynamic check missed a `__LINKEDIT` modification that
    `codesign --verify` caught.
-5. Rejection cases for the helper's PID/path/start-time revalidation against a disposable
-   root-owned fixture. The positive path is proven; these rejection paths are not.
+5. **Build the verification VM.** `Tools/vm-verify.sh` and `docs/vm-verification-runbook.md`
+   are ready and tested; what does not exist is a guest to run them on. This is the highest-leverage
+   item on this list because it unblocks four others at once — Restart Helper recovery, the helper
+   rejection paths, the `system`-domain launchd disable, and the System Tuning matrix — and because
+   **SIP is disabled on this host**, which makes the last of those impossible here rather than
+   merely inconvenient. It is also the only honest route to nearest priority 1: this machine signs
+   the builds, so it cannot test a quarantined first launch.
+6. Rejection cases for the helper's PID/path/start-time revalidation against a disposable
+   root-owned fixture. The positive path is proven; these rejection paths are not. Not scriptable
+   from a shell — only signed Milo can open the XPC connection — so this belongs in
+   `SelfTestRunner`'s destructive suite, run on the VM from item 5.
 
 ### Process-control reliability
 
