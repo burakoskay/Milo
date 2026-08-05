@@ -51,6 +51,9 @@ node_modules/
 !.env.example
 *.generated.xcconfig
 
+# Coverage artifact dropped in the repository root by `swift test`
+default.profraw
+
 # Internal working files kept locally but not published
 July27plan.md
 rebrand.py

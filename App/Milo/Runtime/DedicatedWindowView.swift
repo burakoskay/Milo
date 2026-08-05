@@ -57,6 +57,32 @@ struct DedicatedWindowView: View {
         }
     }
 
+    /// Extracted from `body` so the two conditions stay inside the type checker's budget.
+    @ViewBuilder
+    private var helperBanners: some View {
+        if MiloBuildMode.isDevelopmentPreview, !appState.helperStatus.isEnabled {
+            BackgroundHelperBanner(
+                status: appState.helperStatus,
+                enable: appState.setupPrivileges,
+                openSettings: appState.openHelperApprovalSettings
+            )
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+        }
+
+        // Not gated on the Preview build: a helper left over from a previous install is a real
+        // condition in any build, not a preview affordance.
+        if case .stale(let reason) = appState.helperFreshness {
+            StaleHelperBanner(
+                reason: reason,
+                isRestarting: appState.isRestartingHelper,
+                restart: appState.restartHelper
+            )
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             topBar
@@ -64,15 +90,7 @@ struct DedicatedWindowView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 8)
 
-            if MiloBuildMode.isDevelopmentPreview, !appState.helperStatus.isEnabled {
-                BackgroundHelperBanner(
-                    status: appState.helperStatus,
-                    enable: appState.setupPrivileges,
-                    openSettings: appState.openHelperApprovalSettings
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
-            }
+            helperBanners
 
             // Content area — fills remaining space
             Group {

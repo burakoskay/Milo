@@ -104,6 +104,9 @@ final class AppState: ObservableObject {
     @Published var showingFirstLaunchPrivilegePrompt: Bool = false
     @Published var showingHelperRequiredAlert: Bool = false
     @Published private(set) var helperStatus: MiloHelperStatus = .notRegistered
+    @Published private(set) var helperFreshness: MiloHelperFreshness = .undetermined(.helperNotAnswering)
+    @Published private(set) var isRestartingHelper: Bool = false
+    private var isCheckingHelperFreshness = false
 
     // Memory management
     @Published var memoryStats: MemoryStats?
@@ -368,11 +371,88 @@ final class AppState: ObservableObject {
         helperStatus = PrivilegeManager.shared.status
         if helperStatus.isEnabled {
             privilegeError = nil
+            refreshHelperFreshness()
+        } else {
+            // Nothing is answering, so there is nothing to compare against. Clearing this
+            // stops a banner from outliving the helper it described.
+            helperFreshness = .undetermined(.helperNotAnswering)
+        }
+    }
+
+    /// True only when Milo positively measured that the running helper is not the one installed.
+    /// A measurement Milo could not make is never presented as a problem with the user's helper.
+    var helperIsStale: Bool {
+        helperFreshness.isStale
+    }
+
+    /// Asks which helper build is answering, off the main actor.
+    ///
+    /// The probe is a synchronous XPC round trip, so it never runs on the main actor.
+    /// Overlapping checks are suppressed: this is driven by `refreshHelperStatus()`, which runs
+    /// on every appearance, while the answer can only change when the helper restarts.
+    func refreshHelperFreshness() {
+        guard helperStatus.isEnabled, !isCheckingHelperFreshness else {
+            return
+        }
+        isCheckingHelperFreshness = true
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let measured = MiloPrivilegedHelperClient.shared.freshness()
+            Self.runOnMain {
+                guard let appState = self else { return }
+                appState.isCheckingHelperFreshness = false
+                appState.helperFreshness = measured
+            }
         }
     }
 
     func openHelperApprovalSettings() {
         PrivilegeManager.shared.openApprovalSettings()
+    }
+
+    /// Stops the stale helper and starts the one installed with this copy of Milo.
+    ///
+    /// These are the same two steps the user would take by hand: unregistering makes
+    /// `SMAppService` tear down the running process, and registering starts the installed
+    /// binary. Neither asks for a password, which is why this is the recovery Milo recommends
+    /// over `launchctl kickstart`.
+    ///
+    /// Registration is never retried on failure or approval — both are defined states, and
+    /// looping on them is what produces repeated permission prompts.
+    func restartHelper() {
+        guard helperStatus.isEnabled, !isRestartingHelper else {
+            return
+        }
+        isRestartingHelper = true
+        privilegeError = nil
+
+        PrivilegeManager.shared.removePrivileges { [weak self] unregistered in
+            guard let appState = self else {
+                return
+            }
+            guard unregistered else {
+                appState.isRestartingHelper = false
+                appState.refreshHelperStatus()
+                appState.privilegeError = "Milo could not stop the previous background helper. "
+                    + "Turn it off and on again under Settings."
+                return
+            }
+
+            PrivilegeManager.shared.configurePrivileges { result in
+                appState.isRestartingHelper = false
+                switch result {
+                case .enabled:
+                    appState.privilegeError = nil
+                case .requiresApproval:
+                    appState.privilegeError = "Approve Milo under System Settings › General › "
+                        + "Login Items, then return to Milo."
+                case .failed(let message):
+                    appState.privilegeError = message
+                }
+                // Re-measures once the registration has settled, so the banner clears only
+                // when the installed helper is actually the one answering.
+                appState.refreshHelperStatus()
+            }
+        }
     }
 
     func removeHelper() {
