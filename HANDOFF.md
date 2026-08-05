@@ -111,11 +111,11 @@ This table was re-verified on 2026-08-05. Confirm it again rather than trusting 
 | Repository | `/Volumes/Internal HD/Developer/Milo` |
 | Branch | `main` |
 | Upstream | `main` in sync with `origin/main` |
-| HEAD | `a990ca5` at the start of this session, the checkpoint-correction merge; `32a23fd` beneath it is the stale-helper detection merge. The published tag `v0.2.0-preview.2` is at `f2706e7`; HEAD is ahead of it by design, and **the installed `/Applications/Milo.app` (build `22`) predates stale-helper detection** — it cannot exercise the feature |
+| HEAD | `f4e0137`, the legacy-script cleanup merge. The published tag `v0.2.0-preview.2` is at `f2706e7`; HEAD is ahead of it by design, and **the installed `/Applications/Milo.app` (build `22`) predates stale-helper detection** — it cannot exercise the feature |
 | Main implementation commit | `11e9caf feat: ship Milo Public Preview (#9)` |
 | Preview delivery pull request | `#9 feat: ship Milo Public Preview`, **merged**; branch `fable/milo-test` no longer exists on `origin` |
-| Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0`, `#26` gonggong rebrand and single source of truth, `#27` preview.2 live-verification checkpoint, `#28` open discovery and uninstall, `#29` the preview.2 re-cut, `#30` release smoke-gate fix, `#31` the published-preview.2 record, `#32` stale-helper detection |
-| Open pull request | None. `#27` and `#28` merged 2026-08-04; `#29`, `#30`, `#31` and `#32` merged 2026-08-05 |
+| Later merged work | `#10` copyright terms, `#11` changelog, `#12` security policy, `#24` Public Preview rename, `#25` version scheme `0.2.0`, `#26` gonggong rebrand and single source of truth, `#27` preview.2 live-verification checkpoint, `#28` open discovery and uninstall, `#29` the preview.2 re-cut, `#30` release smoke-gate fix, `#31` the published-preview.2 record, `#32` stale-helper detection, `#34` the negative tamper test record, `#35` the launchctl critical-label refusal, `#37` disabling a respawning launch item (opened as `#36`, which GitHub auto-closed when `#35`'s branch was deleted), `#38` the conventional-commit gate fix, `#39` removal of the unreferenced legacy kill scripts |
+| Open pull request | None. `#27` and `#28` merged 2026-08-04; `#29`–`#35` and `#37`–`#39` merged 2026-08-05. `origin` carries no branch but `main` |
 | Published release | **`v0.2.0-preview.2`, published 2026-08-05** as a prerelease at `f2706e7`, build `22`, DMG SHA-256 `7d3e9dd9…88e6e91`. `v0.2.0-preview.1` remains published. The superseded preview.2 tag at `08a799a` (build `21`) was re-cut before publication and never pushed |
 | Remotes | `origin` → `https://github.com/burakoskay/Milo.git`, the only remote. The `gitlab` mirror and its scheduled `--mirror` workflow were retired on 2026-08-04 (decision 0004); there is no off-GitHub copy |
 | Tags | `origin` carries `v0.2.0-preview.1` and `v0.2.0-preview.2`. The local-only `v2.0.0-preview.1` was deleted on 2026-08-04: it recorded build `200` under the discarded numbering scheme, which would have permanently blocked the build-number check in `Tools/release.sh` |
@@ -137,9 +137,14 @@ today without them:
 2. MLP endpoints and the appcast served from `gonggong.tech`.
 
 A few `monomacaw` strings survive on purpose: the signed MLP-v1 golden fixture (the string is inside
-signed material), the MLP protocol name, and historical changelog entries. No GitHub secret needs
-renaming — every `MONOMACAW_*` secret and variable is now unreferenced and can simply be deleted. `docs/decisions/0001-rename-monomacaw-to-gonggong.md` lists each and why. Do not "finish the
+signed material), the MLP protocol name, and historical changelog entries.
+`docs/decisions/0001-rename-monomacaw-to-gonggong.md` lists each and why. Do not "finish the
 rename" by grepping and replacing them.
+
+**No GitHub secret or variable remains.** Verified 2026-08-05: `gh secret list` and
+`gh variable list` are both empty, and no workflow references `secrets.` or `vars.` at all. Earlier
+revisions of this file listed deleting the unreferenced `MONOMACAW_*` secrets as outstanding; it is
+done.
 
 ## 3. Host and toolchain snapshot
 
@@ -251,8 +256,8 @@ of `fd6b7d3` on 2026-08-04 produced `86972f70…` and `44ac31be…`, and the pub
 here, so a DMG hash identifies one specific build and never a commit. Verify a downloaded artifact
 against the hash published with that artifact.
 
-`dist/Milo-Development-Preview.dmg` is an abandoned pre-rename artifact from 2026-07-27 and is not
-produced by any current script; ignore it or delete it.
+`dist/Milo-Development-Preview.dmg`, an abandoned pre-rename artifact from 2026-07-27 produced by
+no current script, was deleted on 2026-08-05.
 
 `build/` and `dist/` are local artifact directories and are intentionally not committed. Rebuild the artifact rather than assuming it still corresponds to HEAD after any source change.
 
@@ -430,6 +435,22 @@ git diff --check
 Commit both `project.yml` and the regenerated `Milo.xcodeproj/project.pbxproj`.
 
 ## 10. Verification completed at this handoff
+
+### CI was red on `main` for eight consecutive merges, 2026-08-05
+
+`conventional-commits` runs on both pull requests and pushes to `main`. The push job validated
+every commit since the last tag — **merge commits included**. Since every change reaches `main`
+through a pull request, every push to `main` carries a `Merge pull request #N from …` subject that
+no conventional-commit pattern can match, so the job failed by construction on `#29`, `#30`, `#31`,
+`#32`, `#33`, `#34`, `#35` and `#37`.
+
+Nobody saw it, because the checks people watch are the ones on the pull request. **That is the
+finding, not the regex.** A gate that is always red teaches everyone to ignore it, so a real
+failure would have been ignored too. Fixed in `#38` with `--no-merges`; the loop now also reports
+every offending subject rather than stopping at the first. `main` went green on the `#38` merge —
+the first green push-to-`main` run since `#29`.
+
+When adding a branch-push gate, check what it does with a merge commit before trusting it.
 
 ### Disabling a respawning launchd job, measured on 2026-08-05
 
